@@ -59,8 +59,8 @@ class _MainScreenState extends State<MainScreen> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-5354629198133392~9779711737', // Test Ad Unit ID
-      size: AdSize.banner,
+      adUnitId: 'ca-app-pub-5354629198133392~9779711737', // Your real AdMob unit ID
+      size: AdSize.largeBanner, // Use Large Banner (100px height)
       request: AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
@@ -87,22 +87,42 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Aurana'),
-        centerTitle: true,
-        backgroundColor: Colors.purple,
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(50.0),
-          child: _isBannerAdLoaded
-              ? Container(
-                  height: _bannerAd!.size.height.toDouble(),
-                  width: _bannerAd!.size.width.toDouble(),
-                  child: AdWidget(ad: _bannerAd!),
-                )
-              : SizedBox.shrink(),
-        ),
+      body: Column(
+        children: [
+          // Blue banner at the top (Now matches Google's Large Banner size)
+          Container(
+            width: double.infinity,
+            height: 100, // Adjusted to Google's standard Large Banner size
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade100, Colors.blue.shade300], // Soft blue gradient
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: _isBannerAdLoaded
+                ? Center(
+                    child: SizedBox(
+                      height: _bannerAd!.size.height.toDouble(),
+                      width: _bannerAd!.size.width.toDouble(),
+                      child: AdWidget(ad: _bannerAd!),
+                    ),
+                  )
+                : Center(
+                    child: SizedBox(
+                      height: 100, // Matches increased height to prevent layout shifting
+                      child: Text(
+                        "Ad Loading...",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+          ),
+          Expanded(
+            child: _screens[_selectedIndex], // Display the selected screen
+          ),
+        ],
       ),
-      body: _screens[_selectedIndex], // Display the selected screen
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
