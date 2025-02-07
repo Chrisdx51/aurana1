@@ -60,7 +60,7 @@ class _MainScreenState extends State<MainScreen> {
   void _loadBannerAd() {
     _bannerAd = BannerAd(
       adUnitId: 'ca-app-pub-5354629198133392~9779711737', // Your real AdMob unit ID
-      size: AdSize.largeBanner, // Use Large Banner (100px height)
+      size: AdSize.largeBanner, // Ensures correct size
       request: AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
@@ -89,10 +89,11 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Blue banner at the top (Now matches Google's Large Banner size)
+          SizedBox(height: 25), // Moves banner down to avoid notification area
+          // Blue banner area for the ad
           Container(
             width: double.infinity,
-            height: 100, // Adjusted to Google's standard Large Banner size
+            height: 100, // Adjusted for large banner size
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.blue.shade100, Colors.blue.shade300], // Soft blue gradient
@@ -109,12 +110,9 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   )
                 : Center(
-                    child: SizedBox(
-                      height: 100, // Matches increased height to prevent layout shifting
-                      child: Text(
-                        "Ad Loading...",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                    child: Text(
+                      "Ad Loading...",
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
           ),
