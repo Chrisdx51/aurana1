@@ -9,7 +9,8 @@ import 'screens/spiritual_tools_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/sessions_screen.dart';
-import 'screens/ai_insights_screen.dart';
+import 'screens/spiritual_guidance_screen.dart'; // ✅ Fixed import
+import 'screens/spiritual_guidance_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +50,7 @@ class _MainScreenState extends State<MainScreen> {
     JournalScreen(),
     ChallengesScreen(),
     SessionsScreen(),
-    AIInsightsScreen(),
+    SpiritualGuidanceScreen(), // ✅ Fixed AI Insights Screen reference
     ProfileScreen(),
   ];
 
@@ -132,7 +133,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
           BottomNavigationBarItem(icon: Icon(Icons.directions_run), label: 'Challenges'),
           BottomNavigationBarItem(icon: Icon(Icons.live_tv), label: 'Sessions'),
-          BottomNavigationBarItem(icon: Icon(Icons.lightbulb), label: 'AI Insights'),
+          BottomNavigationBarItem(icon: Icon(Icons.lightbulb), label: 'Guidance'), // ✅ Renamed from AI Insights
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
         currentIndex: _selectedIndex,

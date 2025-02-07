@@ -1,57 +1,93 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
-class AIInsightsScreen extends StatefulWidget {
+class SpiritualGuidanceScreen extends StatefulWidget {
   @override
-  _AIInsightsScreenState createState() => _AIInsightsScreenState();
+  _SpiritualGuidanceScreenState createState() => _SpiritualGuidanceScreenState();
 }
 
-class _AIInsightsScreenState extends State<AIInsightsScreen> {
-  final TextEditingController _inputController = TextEditingController();
-  String _response = "Ask a question or share your thoughts...";
+class _SpiritualGuidanceScreenState extends State<SpiritualGuidanceScreen> {
+  String dailyMessage = "";
 
-  void _generateInsight() {
-    String userInput = _inputController.text.trim();
-    if (userInput.isNotEmpty) {
+  final List<String> spiritualMessages = [
+    "✨ Trust the journey. Everything is unfolding as it should.",
+    "🌿 Breathe deeply. The universe is guiding you.",
+    "💫 Your energy attracts your reality—choose your thoughts wisely.",
+    "🕊 Peace comes when we embrace the present moment fully.",
+    "🔮 Intuition is your soul speaking—listen closely.",
+    "🌙 The moon reminds us that even in darkness, we can shine.",
+    "🔥 Transformation begins when you step outside your comfort zone.",
+    "🌿 Nature heals—take a moment to feel its presence.",
+    "💖 Love is the highest vibration. Share it freely.",
+    "🌞 Today is a new day. Align your energy and step forward with purpose."
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDailyMessage();
+  }
+
+  // 📌 Load a saved message or generate a new one
+  Future<void> _loadDailyMessage() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? savedMessage = prefs.getString('dailyMessage');
+    if (savedMessage != null) {
       setState(() {
-        _response = "AI Response: Your spiritual journey is unfolding beautifully. Trust in the universe! 🌌";
-        _inputController.clear();
+        dailyMessage = savedMessage;
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Insight generated!')));
+    } else {
+      _generateNewMessage();
     }
+  }
+
+  // 📌 Generate a new daily message
+  void _generateNewMessage() async {
+    final prefs = await SharedPreferences.getInstance();
+    String newMessage = spiritualMessages[Random().nextInt(spiritualMessages.length)];
+    
+    setState(() {
+      dailyMessage = newMessage;
+    });
+
+    await prefs.setString('dailyMessage', newMessage);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('AI Insights & Guidance')),
+      appBar: AppBar(
+        title: Text("Divine Guidance"),
+        backgroundColor: Colors.deepPurple.shade300,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              "Ask for spiritual insights:",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              "Your Message for Today",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.deepPurple),
             ),
-            SizedBox(height: 10),
-            TextField(
-              controller: _inputController,
-              decoration: InputDecoration(
-                hintText: "Type your question here...",
-                border: OutlineInputBorder(),
+            SizedBox(height: 15),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade100,
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            SizedBox(height: 10),
-            Center(
-              child: ElevatedButton(
-                onPressed: _generateInsight,
-                child: Text('Get AI Insight'),
+              child: Text(
+                dailyMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
               ),
             ),
             SizedBox(height: 20),
-            Text(
-              _response,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.purple),
+            ElevatedButton(
+              onPressed: _generateNewMessage,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+              child: Text("Receive New Wisdom ✨"),
             ),
           ],
         ),
