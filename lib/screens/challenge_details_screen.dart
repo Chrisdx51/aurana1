@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../services/notification_service.dart';
 
 class ChallengeDetailsScreen extends StatefulWidget {
   final String title;
@@ -15,6 +16,7 @@ class ChallengeDetailsScreen extends StatefulWidget {
 
 class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
   late List<bool> taskCompletion;
+  bool isReminderSet = false; // ✅ Tracks if the reminder is enabled
 
   @override
   void initState() {
@@ -34,7 +36,6 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
           setState(() {
             taskCompletion = loadedProgress;
           });
-          return;
         }
       } catch (e) {
         print("Error loading progress: $e");
@@ -51,6 +52,25 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
   Future<void> _saveTaskProgress() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(widget.title, json.encode(taskCompletion));
+  }
+
+  // 📌 Toggle daily reminder notification
+  void _toggleReminder() async {
+    if (isReminderSet) {
+      await NotificationService.cancelNotification(widget.title.hashCode);
+    } else {
+      await NotificationService.scheduleDailyReminder(
+        widget.title.hashCode,
+        "Daily Challenge Reminder",
+        "Don't forget to complete your challenge: ${widget.title}!",
+        10, // 🔔 Default reminder time: 10 AM
+        0
+      );
+    }
+
+    setState(() {
+      isReminderSet = !isReminderSet;
+    });
   }
 
   @override
@@ -76,6 +96,19 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
             ),
             SizedBox(height: 10),
             Text("Progress: ${completedTasks}/${widget.tasks.length} completed", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+
+            SizedBox(height: 20),
+
+            // 📌 Reminder Button
+            Center(
+              child: ElevatedButton(
+                onPressed: _toggleReminder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isReminderSet ? Colors.red : Colors.blue,
+                ),
+                child: Text(isReminderSet ? "Disable Reminder" : "Enable Reminder"),
+              ),
+            ),
 
             SizedBox(height: 20),
 

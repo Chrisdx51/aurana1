@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'services/notification_service.dart'; // ✅ Added for notifications
 import 'screens/home_screen.dart';
 import 'screens/community_screen.dart';
 import 'screens/profile_screen.dart';
@@ -10,9 +11,10 @@ import 'screens/challenges_screen.dart';
 import 'screens/sessions_screen.dart';
 import 'screens/ai_insights_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MobileAds.instance.initialize();
+  await NotificationService.init(); // ✅ Initialize notifications
   runApp(AuranaApp());
 }
 
