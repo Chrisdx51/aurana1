@@ -1,9 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.kris.aurana">
     
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <!-- ✅ Allow exact alarms for scheduled notifications -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    
+
     <application
         android:label="aurana"
         android:name="${applicationName}"
