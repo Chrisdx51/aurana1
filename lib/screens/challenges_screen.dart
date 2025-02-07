@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'challenge_details_screen.dart';
 
-class ChallengesScreen extends StatefulWidget {
-  @override
-  _ChallengesScreenState createState() => _ChallengesScreenState();
-}
-
-class _ChallengesScreenState extends State<ChallengesScreen> {
+class ChallengesScreen extends StatelessWidget {
   final List<Map<String, dynamic>> challenges = [
     {
       "title": "7-Day Meditation Challenge",
@@ -17,34 +12,34 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
         "Day 3: Meditate for 15 minutes",
         "Day 4: Focus on deep breathing",
         "Day 5: Try guided meditation",
-        "Day 6: Meditate before sleep",
+        "Day 6: Meditate in nature",
         "Day 7: Reflect on your progress"
       ]
     },
     {
-      "title": "Gratitude Challenge",
-      "description": "Write three things you're grateful for every day.",
+      "title": "7-Day Gratitude Challenge",
+      "description": "Practice gratitude every day to improve mindset.",
       "tasks": [
-        "Day 1: Write 3 things you’re grateful for",
+        "Day 1: Write down 3 things you're grateful for",
         "Day 2: Express gratitude to someone",
-        "Day 3: Reflect on a past challenge with gratitude",
-        "Day 4: Find gratitude in small things",
-        "Day 5: Write a gratitude letter",
-        "Day 6: Spend time appreciating nature",
-        "Day 7: Meditate on gratitude"
+        "Day 3: Think about past blessings",
+        "Day 4: Keep a gratitude journal",
+        "Day 5: Find gratitude in challenges",
+        "Day 6: Practice mindful appreciation",
+        "Day 7: Reflect on how gratitude changed you"
       ]
     },
     {
-      "title": "Manifestation Journey",
-      "description": "Learn how to manifest positive energy.",
+      "title": "7-Day Self-Care Challenge",
+      "description": "Take time for self-care and relaxation.",
       "tasks": [
-        "Day 1: Visualize your ideal life",
-        "Day 2: Write affirmations",
-        "Day 3: Meditate on your goals",
-        "Day 4: Focus on positive thoughts",
-        "Day 5: Create a vision board",
-        "Day 6: Practice gratitude for your desires",
-        "Day 7: Reflect on your progress"
+        "Day 1: Drink more water today",
+        "Day 2: Do a 10-minute stretching session",
+        "Day 3: Get enough sleep tonight",
+        "Day 4: Take a relaxing bath",
+        "Day 5: Practice deep breathing",
+        "Day 6: Listen to calming music",
+        "Day 7: Do something that makes you happy"
       ]
     },
   ];
@@ -52,37 +47,32 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Guided Spiritual Challenges"), backgroundColor: Colors.blue.shade300),
-      body: Padding(
-        padding: EdgeInsets.all(12),
-        child: ListView.builder(
-          itemCount: challenges.length,
-          itemBuilder: (context, index) {
-            return Card(
-              elevation: 3,
-              margin: EdgeInsets.symmetric(vertical: 6),
-              child: ListTile(
-                title: Text(challenges[index]["title"], style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(challenges[index]["description"]),
-                trailing: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ChallengeDetailsScreen(
-                          title: challenges[index]["title"],
-                          description: challenges[index]["description"],
-                          tasks: List<String>.from(challenges[index]["tasks"]),
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text("Start"),
-                ),
-              ),
-            );
-          },
-        ),
+      appBar: AppBar(title: Text("Guided Challenges"), backgroundColor: Colors.blue.shade300),
+      body: ListView.builder(
+        itemCount: challenges.length,
+        itemBuilder: (context, index) {
+          return Card(
+            elevation: 3,
+            margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: ListTile(
+              title: Text(challenges[index]["title"], style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(challenges[index]["description"]),
+              trailing: Icon(Icons.arrow_forward, color: Colors.blue),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChallengeDetailsScreen(
+                      title: challenges[index]["title"],
+                      description: challenges[index]["description"],
+                      tasks: List<String>.from(challenges[index]["tasks"]),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }

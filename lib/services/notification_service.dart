@@ -1,6 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -24,9 +26,27 @@ class NotificationService {
     );
   }
 
-  // 📌 Schedule a daily notification (Fixed for flutter_local_notifications 18.0.1)
+  // 📌 Check & Request Exact Alarm Permission (Android 12+)
+  static Future<void> requestExactAlarmPermission() async {
+    if (Platform.isAndroid) {
+      final bool? granted = await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestExactAlarmsPermission();
+      
+      if (granted == false) {
+        print("🔴 Exact alarms permission DENIED by the user.");
+      } else {
+        print("✅ Exact alarms permission GRANTED.");
+      }
+    }
+  }
+
+  // 📌 Schedule a daily notification
   static Future<void> scheduleDailyReminder(
       int id, String title, String body, int hour, int minute) async {
+    await requestExactAlarmPermission(); // ✅ Ask for permission before scheduling
+
     await _notificationsPlugin.zonedSchedule(
       id,
       title,
@@ -34,7 +54,7 @@ class NotificationService {
       _nextInstanceOfTime(hour, minute),
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'challenge_reminder', // ✅ Unique Channel ID
+          'challenge_reminder',
           'Daily Challenge Reminder',
           channelDescription: 'Reminder for daily challenge completion.',
           importance: Importance.high,
@@ -42,7 +62,7 @@ class NotificationService {
           enableVibration: true,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // ✅ Correct replacement for androidAllowWhileIdle
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
@@ -67,9 +87,20 @@ class NotificationService {
     );
 
     if (scheduledTime.isBefore(now)) {
-      scheduledTime = scheduledTime.add(
-          const Duration(days: 1)); // ✅ Ensures correct next notification time
+      scheduledTime = scheduledTime.add(const Duration(days: 1));
     }
     return scheduledTime;
+  }
+
+  // 📌 Load Reminder State (Fix for challenge screen)
+  static Future<bool> loadReminderState(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key) ?? false;
+  }
+
+  // 📌 Save Reminder State (Fix for challenge screen)
+  static Future<void> saveReminderState(String key, bool state) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, state);
   }
 }

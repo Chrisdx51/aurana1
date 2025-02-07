@@ -15,16 +15,16 @@ class ChallengeDetailsScreen extends StatefulWidget {
 }
 
 class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
-  late List<bool> taskCompletion;
-  bool isReminderSet = false; // ✅ Tracks if the reminder is enabled
+  List<bool> taskCompletion = [];
+  bool isReminderSet = false;
 
   @override
   void initState() {
     super.initState();
     _initializeTaskProgress();
+    _loadReminderState();
   }
 
-  // 📌 Initialize task progress with proper error handling
   Future<void> _initializeTaskProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final String? savedProgress = prefs.getString(widget.title);
@@ -36,41 +36,97 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
           setState(() {
             taskCompletion = loadedProgress;
           });
+        } else {
+          setState(() {
+            taskCompletion = List<bool>.filled(widget.tasks.length, false);
+          });
         }
       } catch (e) {
         print("Error loading progress: $e");
+        setState(() {
+          taskCompletion = List<bool>.filled(widget.tasks.length, false);
+        });
       }
+    } else {
+      setState(() {
+        taskCompletion = List<bool>.filled(widget.tasks.length, false);
+      });
     }
-
-    // ✅ If no saved progress exists or data is corrupted, initialize correctly
-    setState(() {
-      taskCompletion = List<bool>.filled(widget.tasks.length, false);
-    });
   }
 
-  // 📌 Save progress when tasks are checked
   Future<void> _saveTaskProgress() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(widget.title, json.encode(taskCompletion));
   }
 
-  // 📌 Toggle daily reminder notification
+  Future<void> _loadReminderState() async {
+    isReminderSet = await NotificationService.loadReminderState('${widget.title}_reminder');
+    setState(() {});
+  }
+
   void _toggleReminder() async {
     if (isReminderSet) {
-      await NotificationService.cancelNotification(widget.title.hashCode);
+      await NotificationService.cancelNotification(widget.title.hashCode + 0);
+      await NotificationService.cancelNotification(widget.title.hashCode + 1);
+      await NotificationService.cancelNotification(widget.title.hashCode + 2);
+      await NotificationService.saveReminderState('${widget.title}_reminder', false);
     } else {
       await NotificationService.scheduleDailyReminder(
-        widget.title.hashCode,
-        "Daily Challenge Reminder",
-        "Don't forget to complete your challenge: ${widget.title}!",
-        10, // 🔔 Default reminder time: 10 AM
-        0
+        widget.title.hashCode + 0,
+        "Morning Challenge Reminder",
+        "Time to focus on your challenge: ${widget.title}!",
+        10,
+        0,
       );
+
+      await NotificationService.scheduleDailyReminder(
+        widget.title.hashCode + 1,
+        "Afternoon Challenge Reminder",
+        "Keep going! Have you completed your challenge today?",
+        14,
+        0,
+      );
+
+      await NotificationService.scheduleDailyReminder(
+        widget.title.hashCode + 2,
+        "Evening Challenge Reminder",
+        "Great job! Take a moment to reflect on your progress.",
+        18,
+        0,
+      );
+
+      await NotificationService.saveReminderState('${widget.title}_reminder', true);
     }
 
     setState(() {
       isReminderSet = !isReminderSet;
     });
+  }
+
+  // 📌 Update Completed Challenge Count
+  Future<void> _updateCompletedChallenges() async {
+    final prefs = await SharedPreferences.getInstance();
+    int completedChallenges = prefs.getInt("completedChallenges") ?? 0;
+    await prefs.setInt("completedChallenges", completedChallenges + 1);
+  }
+
+  void _checkCompletion() async {
+    if (taskCompletion.every((task) => task)) {
+      await _updateCompletedChallenges(); // ✅ Increases challenge count
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Challenge Completed 🎉"),
+          content: Text("Congratulations! You have completed '${widget.title}' and earned a new medal! 🏅"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -88,7 +144,6 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
             Text(widget.description, style: TextStyle(fontSize: 16, color: Colors.black87)),
             SizedBox(height: 20),
             
-            // 📌 Progress Bar
             LinearProgressIndicator(
               value: progress,
               backgroundColor: Colors.grey.shade300,
@@ -99,20 +154,18 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
 
             SizedBox(height: 20),
 
-            // 📌 Reminder Button
             Center(
               child: ElevatedButton(
                 onPressed: _toggleReminder,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isReminderSet ? Colors.red : Colors.blue,
                 ),
-                child: Text(isReminderSet ? "Disable Reminder" : "Enable Reminder"),
+                child: Text(isReminderSet ? "Disable Reminders" : "Enable Reminders"),
               ),
             ),
 
             SizedBox(height: 20),
 
-            // 📌 List of Tasks
             Expanded(
               child: ListView.builder(
                 itemCount: widget.tasks.length,
@@ -127,7 +180,8 @@ class _ChallengeDetailsScreenState extends State<ChallengeDetailsScreen> {
                           setState(() {
                             taskCompletion[index] = value ?? false;
                           });
-                          _saveTaskProgress(); // Save progress on change
+                          _saveTaskProgress();
+                          _checkCompletion(); // ✅ Check if the challenge is completed
                         },
                       ),
                       title: Text(widget.tasks[index]),
