@@ -39,8 +39,11 @@ dependencies:
   flutter_local_notifications: 18.0.1  # ✅ Manually added
   timezone: ^0.9.4
   url_launcher: ^6.3.1
-  http: ^1.3.0
+  http: ^1.3.0  # Ensure you add this line
   speech_to_text: ^7.0.0
+  image_picker: ^0.8.7+3  # ✅ Added image_picker dependency
+  encrypt: ^5.0.3
+  intl: ^0.18.0  # ✅ Added intl dependency
 
 dev_dependencies:
   flutter_test:
@@ -58,11 +61,11 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/tarot/
+    - assets/images/parchment_background.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
