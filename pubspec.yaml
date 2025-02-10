@@ -53,6 +53,12 @@ flutter:
     - family: Whisper
       fonts:
         - asset: assets/fonts/Whisper-Regular.ttf
-    - family: Chewy
+    - family: Ariana
       fonts:
-        - asset: assets/fonts/Chewy-Regular.ttf
+        - asset: assets/fonts/ArianaViolet.ttf
+    - family: Shade
+      fonts:
+        - asset: assets/fonts/ShadeBlue.ttf
+    - family: Short
+      fonts:
+        - asset: assets/fonts/ShortBaby.ttf
