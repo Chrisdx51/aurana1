@@ -1,42 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'services/notification_service.dart'; // ✅ Added for notifications
-import 'screens/astrology_updates_screen.dart'; // ✅ Added import
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart'; // ✅ Keep Firebase Core for Notifications if needed
+import 'services/notification_service.dart';
+import 'screens/astrology_updates_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/chat_screen.dart';
-import 'screens/friends_list_screen.dart'; // ✅ Added import
-import 'screens/guided_breathing_screen.dart'; // ✅ Added import
+import 'screens/friends_list_screen.dart';
+import 'screens/guided_breathing_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/journal_screen.dart';
-import 'screens/moon_cycle_screen.dart'; // ✅ Added import
+import 'screens/moon_cycle_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/sessions_screen.dart';
-import 'screens/social_feed_screen.dart'; // ✅ Updated import
-import 'screens/spiritual_guidance_screen.dart'; // ✅ Fixed import
+import 'screens/social_feed_screen.dart';
+import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
-import 'screens/tarot_reading_screen.dart'; // ✅ Added import
+import 'screens/tarot_reading_screen.dart';
+
+Future<void> resetProfileStatus() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  prefs.remove('isProfileComplete'); // This clears the saved profile status
+  print("Profile status reset!"); // This prints confirmation to the console
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // ✅ Initialize Firebase
+  await resetProfileStatus(); // Reset the saved profile status
   MobileAds.instance.initialize();
   await NotificationService.init(); // ✅ Initialize notifications
-  runApp(SacredConnectionsApp()); // ✅ Updated app name
+  runApp(SacredConnectionsApp());
 }
 
 class SacredConnectionsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sacred Connections', // ✅ Updated title
-      theme: ThemeData(primarySwatch: Colors.teal), // ✅ Updated theme
-      home: MainScreen(), // ✅ Set MainScreen as the default home
+      title: 'Sacred Connections',
+      theme: ThemeData(primarySwatch: Colors.teal),
+      home: MainScreen(), // ✅ Redirect to MainScreen directly
       routes: {
         '/tarot': (context) => TarotReadingScreen(),
-        '/moon': (context) => MoonCycleScreen(), // Added MoonCycleScreen route
-        '/breathing': (context) =>
-            GuidedBreathingScreen(), // Added GuidedBreathingScreen route
+        '/moon': (context) => MoonCycleScreen(),
+        '/breathing': (context) => GuidedBreathingScreen(),
         '/astrology': (context) => AstrologyUpdatesScreen(),
+        '/profile': (context) => ProfileScreen(), // Profile Screen remains
       },
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -53,15 +64,15 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = [
     HomeScreen(),
-    SocialFeedScreen(), // ✅ Replaced CommunityScreen
-    FriendsListScreen(), // Now navigating to the Friends List
+    SocialFeedScreen(),
+    FriendsListScreen(),
     SpiritualToolsScreen(),
     JournalScreen(),
     ChallengesScreen(),
     SessionsScreen(),
-    SpiritualGuidanceScreen(), // ✅ Fixed AI Insights Screen reference
+    SpiritualGuidanceScreen(),
     ProfileScreen(),
-    MoonCycleScreen(), // Added MoonCycleScreen
+    MoonCycleScreen(),
   ];
 
   @override
@@ -72,9 +83,8 @@ class _MainScreenState extends State<MainScreen> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId:
-          'ca-app-pub-5354629198133392~9779711737', // Corrected AdMob unit ID
-      size: AdSize.largeBanner, // Ensures correct size
+      adUnitId: 'ca-app-pub-5354629198133392~9779711737',
+      size: AdSize.largeBanner,
       request: AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
@@ -98,7 +108,6 @@ class _MainScreenState extends State<MainScreen> {
         _selectedIndex = index;
       });
     } else {
-      // Show modal or navigate to a new screen with the remaining tabs
       showModalBottomSheet(
         context: context,
         builder: (context) {
@@ -120,9 +129,8 @@ class _MainScreenState extends State<MainScreen> {
                 title: Text('Profile'),
                 onTap: () {
                   Navigator.pop(context);
-                  setState(() {
-                    _selectedIndex = 8;
-                  });
+                  Navigator.pushNamed(
+                      context, '/profile'); // Navigate to ProfileScreen
                 },
               ),
               ListTile(
@@ -147,17 +155,16 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: Column(
         children: [
-          SizedBox(height: 25), // Moves banner down to avoid notification area
-          // Blue banner area for the ad
+          SizedBox(height: 25),
           Container(
             width: double.infinity,
-            height: 100, // Adjusted for large banner size
+            height: 100,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   Colors.blue.shade100,
                   Colors.blue.shade300,
-                ], // Soft blue gradient
+                ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -178,18 +185,16 @@ class _MainScreenState extends State<MainScreen> {
                   ),
           ),
           Expanded(
-            child: _screens[_selectedIndex], // Display the selected screen
+            child: _screens[_selectedIndex],
           ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'Feed'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.public), // Spiritual icon for "Social Feed"
-              label: 'Feed'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.people_alt), label: 'Friends'), // ✅ Fixed icon
+              icon: Icon(Icons.people_alt), label: 'Friends'),
           BottomNavigationBarItem(icon: Icon(Icons.star), label: 'Tools'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
           BottomNavigationBarItem(
@@ -198,7 +203,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.more_horiz),
             label: 'More',
-          ), // Added More item
+          ),
         ],
         currentIndex: _selectedIndex < 7 ? _selectedIndex : 0,
         selectedItemColor: Colors.black,

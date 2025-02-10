@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "960260575633",
+    "project_id": "aurana-b3436",
+    "storage_bucket": "aurana-b3436.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:960260575633:android:db690f24caa29920f34a30",
+        "android_client_info": {
+          "package_name": "com.kris.aurana"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "960260575633-t1ost4tu9oo8fgjkd218glimh2eeajkf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kris.aurana",
+            "certificate_hash": "d467f4d0267c1e5fb68b68cde79c4ae30d91bc54"
+          }
+        },
+        {
+          "client_id": "960260575633-f36g7jqao57udu1canightlrm37hqh3u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDj2scxJHGb0zDRTj6uHpXY_DmH6Fap0So"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "960260575633-f36g7jqao57udu1canightlrm37hqh3u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

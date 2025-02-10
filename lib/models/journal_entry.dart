@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'dart:io';  // Import the dart:io library
 
 class JournalEntry {
   final String title;
   final String content;
   final String dateTime;
-  final String mood; // ✅ Required mood field
+  final String mood; // Required mood field
+  final String? imagePath; // Add image path
+  final List<String> tags; // Add tags
 
   JournalEntry({
     required this.title,
     required this.content,
     required this.dateTime,
-    required this.mood, // ✅ Add mood here
+    required this.mood,
+    this.imagePath, // Initialize image path
+    this.tags = const [], // Initialize tags
   });
 
   Map<String, dynamic> toJson() => {
@@ -18,26 +23,31 @@ class JournalEntry {
         'content': content,
         'dateTime': dateTime,
         'mood': mood,
+        'imagePath': imagePath,
+        'tags': tags,
       };
 
   static JournalEntry fromJson(Map<String, dynamic> json) => JournalEntry(
         title: json['title'],
         content: json['content'],
         dateTime: json['dateTime'],
-        mood: json['mood'], // ✅ Parse mood from JSON
+        mood: json['mood'],
+        imagePath: json['imagePath'],
+        tags: List<String>.from(json['tags']),
       );
 }
 
 // Example function to add a new journal entry
-void addJournalEntry(
-    List<JournalEntry> journalEntries, String content, String mood) {
+void addJournalEntry(List<JournalEntry> journalEntries, String content, String mood, String? imagePath, List<String> tags) {
   journalEntries.insert(
     0,
     JournalEntry(
       title: "Entry",
       content: content,
       dateTime: DateTime.now().toString(),
-      mood: mood, // Use the selected mood value
+      mood: mood,
+      imagePath: imagePath,
+      tags: tags,
     ),
   );
 }
@@ -50,6 +60,8 @@ class JournalEntryForm extends StatefulWidget {
 class _JournalEntryFormState extends State<JournalEntryForm> {
   String selectedMood = "Happy";
   final TextEditingController contentController = TextEditingController();
+  File? selectedImage;
+  final List<String> tags = [];
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +90,7 @@ class _JournalEntryFormState extends State<JournalEntryForm> {
             // Assuming you have a list of journal entries
             List<JournalEntry> journalEntries = [];
             addJournalEntry(
-                journalEntries, contentController.text, selectedMood);
+                journalEntries, contentController.text, selectedMood, selectedImage?.path, tags);
           },
           child: Text('Add Journal Entry'),
         ),

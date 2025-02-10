@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
@@ -20,6 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<String> earnedMedals = [];
   bool _isSidebarCollapsed = false;
   String _selectedNameType = 'Real Name';
+  String? _zodiacSign; // Variable to store zodiac sign
   final List<String> interests = [
     'Meditation',
     'Tarot',
@@ -50,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _nicknameController.text = prefs.getString('nickname') ?? '';
       _bioController.text = prefs.getString('bio') ?? '';
       _dobController.text = prefs.getString('dob') ?? '';
+      _zodiacSign = prefs.getString('zodiacSign'); // Load zodiac sign
       selectedInterests = prefs.getStringList('interests') ?? [];
       completedChallenges = prefs.getInt('completedChallenges') ?? 0;
       final savedImagePath = prefs.getString('profileImage');
@@ -78,6 +79,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_profileImage != null) {
       await prefs.setString('profileImage', _profileImage!.path);
     }
+
+    // Save Zodiac Sign if DOB is provided
+    if (_dobController.text.isNotEmpty) {
+      DateTime dob = DateTime.parse(_dobController.text);
+      String zodiacSign = _calculateZodiacSign(dob);
+      await prefs.setString('zodiacSign', zodiacSign);
+      setState(() {
+        _zodiacSign = zodiacSign; // Update UI with zodiac sign
+      });
+    }
+
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text("Profile Saved!")));
   }
@@ -99,18 +111,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
     );
-    if (picked != null && picked != DateTime.now()) {
+    if (picked != null) {
       setState(() {
         _dobController.text = "${picked.toLocal()}".split(' ')[0];
       });
     }
   }
 
+  String _calculateZodiacSign(DateTime dob) {
+    int day = dob.day;
+    int month = dob.month;
+
+    if ((month == 1 && day >= 20) || (month == 2 && day <= 18)) return "Aquarius";
+    if ((month == 2 && day >= 19) || (month == 3 && day <= 20)) return "Pisces";
+    if ((month == 3 && day >= 21) || (month == 4 && day <= 19)) return "Aries";
+    if ((month == 4 && day >= 20) || (month == 5 && day <= 20)) return "Taurus";
+    if ((month == 5 && day >= 21) || (month == 6 && day <= 20)) return "Gemini";
+    if ((month == 6 && day >= 21) || (month == 7 && day <= 22)) return "Cancer";
+    if ((month == 7 && day >= 23) || (month == 8 && day <= 22)) return "Leo";
+    if ((month == 8 && day >= 23) || (month == 9 && day <= 22)) return "Virgo";
+    if ((month == 9 && day >= 23) || (month == 10 && day <= 22)) return "Libra";
+    if ((month == 10 && day >= 23) || (month == 11 && day <= 21)) return "Scorpio";
+    if ((month == 11 && day >= 22) || (month == 12 && day <= 21)) return "Sagittarius";
+    if ((month == 12 && day >= 22) || (month == 1 && day <= 19)) return "Capricorn";
+
+    return "Unknown";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Profile'),
+        title: Text('Soul Essence'), // Spiritual name
         backgroundColor: Colors.blue.shade300,
         actions: [
           IconButton(
@@ -119,210 +151,171 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      body: Row(
-        children: [
-          // Sidebar
-          AnimatedContainer(
-            duration: Duration(milliseconds: 300),
-            width: _isSidebarCollapsed ? 50 : 100, // Sidebar size toggle
-            color: Colors.blue.shade100,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                SizedBox(height: 20),
-                IconButton(
-                  icon: Icon(_isSidebarCollapsed
-                      ? Icons.arrow_forward
-                      : Icons.arrow_back),
-                  onPressed: () {
-                    setState(() {
-                      _isSidebarCollapsed = !_isSidebarCollapsed;
-                    });
-                  },
-                ),
-                if (!_isSidebarCollapsed) ...[
-                  Text(
-                    'Medals',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  ...earnedMedals.map((medal) {
-                    return Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(medal, style: TextStyle(fontSize: 24)),
-                    );
-                  }).toList(),
-                ],
-                Spacer(),
-              ],
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.blue.shade200,
+              Colors.purple.shade100,
+              Colors.pink.shade50,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          // Profile Content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
                 children: [
-                  GestureDetector(
-                    onTap: _updateProfileImage,
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundImage: _profileImage != null
-                          ? FileImage(_profileImage!)
-                          : null,
-                      backgroundColor: Colors.grey.shade300,
-                      child: _profileImage == null
-                          ? Icon(Icons.person, size: 50, color: Colors.white)
-                          : null,
+                  // Sidebar for Medals
+                  AnimatedContainer(
+                    duration: Duration(milliseconds: 300),
+                    width: _isSidebarCollapsed ? 50 : 120,
+                    color: Colors.blue.shade100.withOpacity(0.6),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 20),
+                        IconButton(
+                          icon: Icon(_isSidebarCollapsed
+                              ? Icons.arrow_forward
+                              : Icons.arrow_back),
+                          onPressed: () {
+                            setState(() {
+                              _isSidebarCollapsed = !_isSidebarCollapsed;
+                            });
+                          },
+                        ),
+                        if (!_isSidebarCollapsed) ...[
+                          Text(
+                            'Medals',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          ...earnedMedals.map((medal) {
+                            return Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(medal,
+                                  style: TextStyle(fontSize: 12)),
+                            );
+                          }).toList(),
+                        ],
+                      ],
                     ),
                   ),
-                  SizedBox(height: 10),
-                  TextField(
-                    controller: _realNameController,
-                    decoration: InputDecoration(labelText: 'Real Name'),
-                  ),
-                  TextField(
-                    controller: _nicknameController,
-                    decoration: InputDecoration(labelText: 'Nickname'),
-                  ),
-                  TextField(
-                    controller: _bioController,
-                    decoration: InputDecoration(labelText: 'Bio'),
-                  ),
-                  TextField(
-                    controller: _dobController,
-                    decoration: InputDecoration(
-                      labelText: 'Date of Birth',
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.calendar_today),
-                        onPressed: () {
-                          _selectDate(context);
-                        },
-                      ),
+                  // Profile Content
+                  Expanded(
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: _updateProfileImage,
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _profileImage != null
+                                ? FileImage(_profileImage!)
+                                : null,
+                            backgroundColor: Colors.grey.shade300,
+                            child: _profileImage == null
+                                ? Icon(Icons.person,
+                                    size: 50, color: Colors.white)
+                                : null,
+                          ),
+                        ),
+                        TextField(
+                          controller: _realNameController,
+                          decoration: InputDecoration(labelText: 'Real Name'),
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        TextField(
+                          controller: _nicknameController,
+                          decoration: InputDecoration(labelText: 'Nickname'),
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        TextField(
+                          controller: _bioController,
+                          decoration: InputDecoration(labelText: 'Bio'),
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        TextField(
+                          controller: _dobController,
+                          decoration: InputDecoration(
+                            labelText: 'Date of Birth',
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.calendar_today),
+                              onPressed: () {
+                                _selectDate(context);
+                              },
+                            ),
+                          ),
+                          readOnly: true,
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        if (_zodiacSign != null)
+                          Text(
+                            "Your Zodiac Sign: $_zodiacSign",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        SizedBox(height: 10),
+                        Text(
+                          'Completed Challenges: $completedChallenges',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        // Friends Buttons
+                        ElevatedButton(
+                          onPressed: () {
+                            // Add friend functionality
+                          },
+                          child: Text('Add Friend'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            // Manage friends functionality
+                          },
+                          child: Text('Manage Friends'),
+                        ),
+                        SizedBox(height: 10),
+                        // Interests at the Bottom
+                        Text(
+                          'Select Interests',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Wrap(
+                          spacing: 8.0,
+                          runSpacing: 4.0,
+                          children: interests.map((interest) {
+                            return FilterChip(
+                              label: Text(interest,
+                                  style: TextStyle(fontSize: 12)),
+                              selected: selectedInterests.contains(interest),
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    selectedInterests.add(interest);
+                                  } else {
+                                    selectedInterests.remove(interest);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
-                    readOnly: true,
-                  ),
-                  SizedBox(height: 20),
-                  Wrap(
-                    spacing: 8.0,
-                    children: interests.map((interest) {
-                      return FilterChip(
-                        label: Text(interest),
-                        selected: selectedInterests.contains(interest),
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              selectedInterests.add(interest);
-                            } else {
-                              selectedInterests.remove(interest);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 20),
-                  Text('Completed Challenges: $completedChallenges'),
-                  SizedBox(height: 20),
-                  // Name Type Selection
-                  Text(
-                    'Display Name',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  ListTile(
-                    title: const Text('Real Name'),
-                    leading: Radio<String>(
-                      value: 'Real Name',
-                      groupValue: _selectedNameType,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedNameType = value!;
-                        });
-                      },
-                    ),
-                  ),
-                  ListTile(
-                    title: const Text('Nickname'),
-                    leading: Radio<String>(
-                      value: 'Nickname',
-                      groupValue: _selectedNameType,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedNameType = value!;
-                        });
-                      },
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  // Statistics Section
-                  Text(
-                    'Statistics',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  Text('Total Posts: 50'),
-                  Text('Likes Received: 120'),
-                  Text('Comments Written: 30'),
-                  Text('Challenges Completed: $completedChallenges'),
-                  SizedBox(height: 20),
-                  // Progress Tracker
-                  Text(
-                    'Spiritual Growth',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  LinearProgressIndicator(value: 0.7),
-                  SizedBox(height: 20),
-                  // Profile Highlights
-                  Text(
-                    'Profile Highlights',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  Text('Top Post: "Achieved Inner Peace"'),
-                  Text('Meaningful Quote: "Be the change you wish to see."'),
-                  SizedBox(height: 20),
-                  // Recent Activity Feed
-                  Text(
-                    'Recent Activity',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  Text('Liked a post: "Meditation Tips"'),
-                  Text('Commented on: "Astrology Insights"'),
-                  Text('Posted: "My Journey with Mindfulness"'),
-                  Text('Completed Challenge: "30 Days of Yoga"'),
-                  Text('Received Medal: "Mindfulness Master"'),
-                  SizedBox(height: 20),
-                  // Friends System
-                  Text(
-                    'Friends',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Add friend functionality
-                    },
-                    child: Text('Add Friend'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Manage friends functionality
-                    },
-                    child: Text('Manage Friends'),
-                  ),
-                  SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _saveProfile,
-                    child: Text('Save Profile'),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
