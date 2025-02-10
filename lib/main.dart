@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_core/firebase_core.dart'; // ✅ Keep Firebase Core for Notifications if needed
 import 'services/notification_service.dart';
 import 'screens/astrology_updates_screen.dart';
 import 'screens/challenges_screen.dart';
@@ -18,18 +17,11 @@ import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/tarot_reading_screen.dart';
 
-Future<void> resetProfileStatus() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  prefs.remove('isProfileComplete'); // This clears the saved profile status
-  print("Profile status reset!"); // This prints confirmation to the console
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // ✅ Initialize Firebase
-  await resetProfileStatus(); // Reset the saved profile status
+  await Firebase.initializeApp();
   MobileAds.instance.initialize();
-  await NotificationService.init(); // ✅ Initialize notifications
+  await NotificationService.init();
   runApp(SacredConnectionsApp());
 }
 
@@ -39,15 +31,13 @@ class SacredConnectionsApp extends StatelessWidget {
     return MaterialApp(
       title: 'Sacred Connections',
       theme: ThemeData(primarySwatch: Colors.teal),
-      home: MainScreen(), // ✅ Redirect to MainScreen directly
+      home: MainScreen(),
       routes: {
         '/tarot': (context) => TarotReadingScreen(),
         '/moon': (context) => MoonCycleScreen(),
         '/breathing': (context) => GuidedBreathingScreen(),
         '/astrology': (context) => AstrologyUpdatesScreen(),
-        '/profile': (context) => ProfileScreen(), // Profile Screen remains
       },
-      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -129,8 +119,9 @@ class _MainScreenState extends State<MainScreen> {
                 title: Text('Profile'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.pushNamed(
-                      context, '/profile'); // Navigate to ProfileScreen
+                  setState(() {
+                    _selectedIndex = 8;
+                  });
                 },
               ),
               ListTile(
@@ -193,17 +184,12 @@ class _MainScreenState extends State<MainScreen> {
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.public), label: 'Feed'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.people_alt), label: 'Friends'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
           BottomNavigationBarItem(icon: Icon(Icons.star), label: 'Tools'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.directions_run), label: 'Challenges'),
+          BottomNavigationBarItem(icon: Icon(Icons.directions_run), label: 'Challenges'),
           BottomNavigationBarItem(icon: Icon(Icons.live_tv), label: 'Sessions'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz),
-            label: 'More',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
         ],
         currentIndex: _selectedIndex < 7 ? _selectedIndex : 0,
         selectedItemColor: Colors.black,
