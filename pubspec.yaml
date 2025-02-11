@@ -46,19 +46,22 @@ flutter:
     - assets/images/bg10.png
 
   fonts:
-    - family: CabinSketch
+    - family: Fo
       fonts:
-        - asset: assets/fonts/CabinSketch-Bold.ttf
-        - asset: assets/fonts/CabinSketch-Regular.ttf
-    - family: Whisper
-      fonts:
-        - asset: assets/fonts/Whisper-Regular.ttf
-    - family: Ariana
-      fonts:
-        - asset: assets/fonts/ArianaViolet.ttf
-    - family: Shade
-      fonts:
-        - asset: assets/fonts/ShadeBlue.ttf
-    - family: Short
-      fonts:
-        - asset: assets/fonts/ShortBaby.ttf
+        - asset: assets/fonts/fo1.ttf
+        - asset: assets/fonts/fo2.ttf
+        - asset: assets/fonts/fo3.ttf
+        - asset: assets/fonts/fo4.ttf
+        - asset: assets/fonts/fo5.ttf
+        - asset: assets/fonts/fo7.ttf
+        - asset: assets/fonts/fo8.ttf
+        - asset: assets/fonts/fo9.ttf
+        - asset: assets/fonts/fo10.ttf
+        - asset: assets/fonts/fo11.ttf
+        - asset: assets/fonts/fo12.ttf
+        - asset: assets/fonts/fo13.ttf
+        - asset: assets/fonts/fo14.ttf
+        - asset: assets/fonts/fo15.ttf
+        - asset: assets/fonts/fo16.ttf
+        - asset: assets/fonts/fo17.ttf
+        - asset: assets/fonts/fo18.ttf
