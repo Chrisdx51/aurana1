@@ -16,20 +16,21 @@ import 'screens/social_feed_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/tarot_reading_screen.dart';
+import 'aura_snapshot.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   MobileAds.instance.initialize();
   await NotificationService.init();
-  runApp(SacredConnectionsApp());
+  runApp(AuranaApp());
 }
 
-class SacredConnectionsApp extends StatelessWidget {
+class AuranaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sacred Connections',
+      title: 'Aurana App',
       theme: ThemeData(primarySwatch: Colors.teal),
       home: MainScreen(),
       routes: {
@@ -162,18 +163,18 @@ class _MainScreenState extends State<MainScreen> {
             ),
             child: _isBannerAdLoaded
                 ? Center(
-                    child: SizedBox(
-                      height: _bannerAd!.size.height.toDouble(),
-                      width: _bannerAd!.size.width.toDouble(),
-                      child: AdWidget(ad: _bannerAd!),
-                    ),
-                  )
+              child: SizedBox(
+                height: _bannerAd!.size.height.toDouble(),
+                width: _bannerAd!.size.width.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            )
                 : Center(
-                    child: Text(
-                      "Ad Loading...",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
+              child: Text(
+                "Ad Loading...",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
           ),
           Expanded(
             child: _screens[_selectedIndex],
