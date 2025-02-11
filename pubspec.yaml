@@ -22,6 +22,8 @@ dependencies:
   image_picker: ^0.8.7+3
   encrypt: ^5.0.3
   intl: ^0.18.0
+  camera: ^0.11.1
+  ar_flutter_plugin: ^0.7.3
 
 dev_dependencies:
   flutter_test:
