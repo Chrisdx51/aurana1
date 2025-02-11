@@ -16,6 +16,7 @@ import 'screens/social_feed_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/tarot_reading_screen.dart';
+import 'screens/aura_snapshot_screen.dart'; // Added import statement
 import 'aura_snapshot.dart';
 
 void main() async {
@@ -38,6 +39,7 @@ class AuranaApp extends StatelessWidget {
         '/moon': (context) => MoonCycleScreen(),
         '/breathing': (context) => GuidedBreathingScreen(),
         '/astrology': (context) => AstrologyUpdatesScreen(),
+        '/aura_snapshot': (context) => AuraSnapshotScreen(), // Added new route
       },
     );
   }

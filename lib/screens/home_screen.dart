@@ -191,6 +191,14 @@ class HomeScreen extends StatelessWidget {
                   SizedBox(height: 20),
                   // Aura Snapshot
                   AuraSnapshot(),
+                  SizedBox(height: 20),
+                  // Go to Aura Snapshot Button
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/aura_snapshot');
+                    },
+                    child: Text('Go to Aura Snapshot'),
+                  ),
                 ],
               ),
             ),
