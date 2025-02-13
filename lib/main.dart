@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'screens/astrology_updates_screen.dart';
+import 'screens/horoscope_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/friends_list_screen.dart';
@@ -16,6 +16,7 @@ import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/tarot_reading_screen.dart';
 import 'screens/aura_catcher.dart'; // Added import for Aura Catcher
+import 'screens/astrology_updates_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
