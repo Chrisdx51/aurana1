@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'tarot_reading_screen.dart'; // Import all the screens
 import 'moon_cycle_screen.dart';
 import 'guided_breathing_screen.dart';
-import 'astrology_updates_screen.dart';
+import 'horoscope_screen.dart';
 
 class SpiritualToolsScreen extends StatelessWidget {
   final List<Map<String, dynamic>> tools = [

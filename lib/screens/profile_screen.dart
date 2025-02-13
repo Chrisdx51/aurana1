@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'horoscope_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -96,7 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _updateProfileImage() async {
     final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+    await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _profileImage = File(pickedFile.path);
@@ -222,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             backgroundColor: Colors.grey.shade300,
                             child: _profileImage == null
                                 ? Icon(Icons.person,
-                                    size: 50, color: Colors.white)
+                                size: 50, color: Colors.white)
                                 : null,
                           ),
                         ),
@@ -280,6 +281,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // Manage friends functionality
                           },
                           child: Text('Manage Friends'),
+                        ),
+                        SizedBox(height: 10),
+                        // View Daily Horoscope Button
+                        ElevatedButton(
+                          onPressed: () {
+                            if (_zodiacSign != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => HoroscopeScreen(zodiacSign: _zodiacSign!),
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Please provide your Date of Birth.")),
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: Text('View Daily Horoscope'),
                         ),
                         SizedBox(height: 10),
                         // Interests at the Bottom

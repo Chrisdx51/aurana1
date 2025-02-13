@@ -10,7 +10,7 @@ class AstrologyUpdatesScreen extends StatelessWidget {
       ),
       body: Center(
         child: Text(
-          'Astrology Updates Feature Coming Soon!',
+          'Daily Astrology Updates Coming Soon!',
           style: TextStyle(fontSize: 20),
         ),
       ),
