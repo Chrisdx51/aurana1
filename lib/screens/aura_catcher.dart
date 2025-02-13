@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:path_provider/path_provider.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
-import 'package:intl/intl.dart'; // Add this for formatting timestamps
-import '../database/aura_database_helper.dart'; // Added database helper import
-import 'aura_history_screen.dart'; // Import for the Aura History Screen
-import 'aura_analysis_screen.dart'; // Import for the Aura Analysis Screen
+import 'package:intl/intl.dart';
+import '../database/aura_database_helper.dart';
+import 'aura_history_screen.dart';
+import 'aura_analysis_screen.dart';
 
 class AuraCatcherScreen extends StatefulWidget {
   const AuraCatcherScreen({Key? key}) : super(key: key);
@@ -21,8 +21,7 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
   XFile? _capturedImage;
-  Color _auraColor = Colors.transparent; // Default transparent color
-  bool _personDetected = false;
+  Color _auraColor = Colors.transparent;
   int _currentCameraIndex = 0;
 
   @override
@@ -31,6 +30,7 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     _initializeCamera();
   }
 
+  // Initialize the camera
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
@@ -42,6 +42,7 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     }
   }
 
+  // Set the active camera
   Future<void> _setCamera(CameraDescription cameraDescription) async {
     if (_cameraController != null) {
       await _cameraController!.dispose();
@@ -57,36 +58,37 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     });
   }
 
+  // Capture image and navigate to analysis page
   Future<void> _captureImage() async {
     try {
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         final image = await _cameraController!.takePicture();
-        final isPerson = await _detectPerson(image.path); // Check for human presence
-        setState(() {
-          _capturedImage = image;
-          _personDetected = isPerson;
-          if (_personDetected) {
-            _auraColor = _analyzeAuraWithAI(image.path); // Use the new AI-based function
-          } else {
-            _auraColor = Colors.transparent; // No aura color if no person detected
-          }
-        });
 
-        // Navigate to Aura Analysis Screen
-        if (_personDetected) {
+        // Detect if a person is in the image
+        bool isPersonDetected = await _detectPerson(image.path);
+
+        if (isPersonDetected) {
+          setState(() {
+            _capturedImage = image;
+            _auraColor = _generateRandomColor(); // Generate a random aura color
+          });
+
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => AuraAnalysisScreen(
                 imagePath: image.path,
-                auraColor: _auraColor,
-                auraMeaning: _getAuraMeaning(_auraColor),
+                auraColor: _auraColor, // Pass the generated aura color
+                auraMeaning: _getAuraMeaning(_auraColor), // Pass the calculated aura meaning
+                affirmations: _generateAffirmations(_auraColor), // Generate random affirmations
               ),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No person detected in the image!')),
+            SnackBar(
+              content: Text("No person detected in the image. Please try again."),
+            ),
           );
         }
       }
@@ -100,69 +102,26 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
       final inputImage = InputImage.fromFilePath(imagePath);
       final poseDetector = GoogleMlKit.vision.poseDetector();
       final poses = await poseDetector.processImage(inputImage);
-
       await poseDetector.close();
-      return poses.isNotEmpty; // Returns true if a pose (human) is detected
+      return poses.isNotEmpty; // Return true if a pose is detected
     } catch (e) {
       print("Error detecting person: $e");
       return false;
     }
   }
 
-  Future<void> _saveAuraImage() async {
-    if (_capturedImage != null) {
-      try {
-        final directory = await getApplicationDocumentsDirectory();
-        final imagePath = File(_capturedImage!.path);
-        final newImagePath =
-            '${directory.path}/aura_image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await imagePath.copy(newImagePath);
-
-        // Save to the database
-        final auraMeaning = _personDetected ? _getAuraMeaning(_auraColor) : "No Aura Detected";
-        final auraColorHex = '#${_auraColor.value.toRadixString(16).substring(2)}'; // Convert color to hex
-        final timestamp = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
-        final dbHelper = AuraDatabaseHelper();
-        await dbHelper.saveAuraDetail(newImagePath, auraMeaning, auraColorHex, timestamp);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Aura image and details saved!'),
-          ),
-        );
-      } catch (e) {
-        print("Error saving image: $e");
-      }
-    }
+  // Generate a random aura color
+  Color _generateRandomColor() {
+    final math.Random random = math.Random();
+    return Color.fromARGB(
+      255,
+      random.nextInt(256),
+      random.nextInt(256),
+      random.nextInt(256),
+    );
   }
 
-  void _resetForNewPhoto() {
-    setState(() {
-      _capturedImage = null;
-      _auraColor = Colors.transparent; // Reset aura color
-      _personDetected = false; // Reset detection
-    });
-  }
-
-  void _switchCamera() {
-    setState(() {
-      _isCameraInitialized = false;
-      _currentCameraIndex = (_currentCameraIndex + 1) % _cameras!.length;
-      _setCamera(_cameras![_currentCameraIndex]);
-    });
-  }
-
-  Color _analyzeAuraWithAI(String imagePath) {
-    // Simulated AI-based analysis for now.
-    // This can be enhanced with a pre-trained model for actual analysis.
-    final hash = imagePath.hashCode;
-    final r = (hash & 0xFF0000) >> 16;
-    final g = (hash & 0x00FF00) >> 8;
-    final b = (hash & 0x0000FF);
-    return Color.fromARGB(200, r, g, b); // Generated aura color
-  }
-
+  // Get meaning of the aura color
   String _getAuraMeaning(Color color) {
     if (color.red > color.green && color.red > color.blue) {
       return "Energetic and Passionate";
@@ -172,6 +131,56 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
       return "Calm and Peaceful";
     }
     return "Unique Energy Detected";
+  }
+
+  // Generate affirmations for the aura color
+  List<String> _generateAffirmations(Color color) {
+    List<String> affirmations = [];
+    if (color.red > color.green && color.red > color.blue) {
+      affirmations = [
+        "I am bold and full of energy.",
+        "My passion drives me to success.",
+        "I embrace my vibrant energy."
+      ];
+    } else if (color.green > color.red && color.green > color.blue) {
+      affirmations = [
+        "I am in harmony with myself and nature.",
+        "I feel balanced and whole.",
+        "My heart radiates love and compassion."
+      ];
+    } else if (color.blue > color.red && color.blue > color.green) {
+      affirmations = [
+        "I am calm, peaceful, and centered.",
+        "I communicate with clarity and confidence.",
+        "My inner voice guides me."
+      ];
+    } else {
+      affirmations = [
+        "I embrace my unique energy.",
+        "I trust the path unfolding before me.",
+        "My spirit shines bright and free."
+      ];
+    }
+
+    affirmations.shuffle(); // Randomize the affirmations
+    return affirmations.take(2).toList(); // Return a few affirmations
+  }
+
+  // Reset for a new photo
+  void _resetForNewPhoto() {
+    setState(() {
+      _capturedImage = null;
+      _auraColor = Colors.transparent;
+    });
+  }
+
+  // Switch between front and back cameras
+  void _switchCamera() {
+    setState(() {
+      _isCameraInitialized = false;
+      _currentCameraIndex = (_currentCameraIndex + 1) % _cameras!.length;
+      _setCamera(_cameras![_currentCameraIndex]);
+    });
   }
 
   @override
@@ -224,57 +233,19 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                               ),
                             ),
                           ),
-                          if (_personDetected)
-                            Container(
-                              width: MediaQuery.of(context).size.width * 0.8,
-                              height: MediaQuery.of(context).size.height * 0.4,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(15),
-                                gradient: RadialGradient(
-                                  colors: [
-                                    _auraColor,
-                                    Colors.transparent,
-                                  ],
-                                  radius: 1.0,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _auraColor.withOpacity(0.6),
-                                    blurRadius: 15,
-                                    spreadRadius: 5,
-                                  ),
-                                ],
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.8,
+                            height: MediaQuery.of(context).size.height * 0.4,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(15),
+                              gradient: RadialGradient(
+                                colors: [_auraColor, Colors.transparent],
+                                radius: 1.0,
                               ),
                             ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        _personDetected
-                            ? _getAuraMeaning(_auraColor)
-                            : "No person detected",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade900,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (_personDetected)
-                        ElevatedButton(
-                          onPressed: _saveAuraImage,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                          child: const Text(
-                            'Save Aura',
-                            style: TextStyle(fontSize: 12, color: Colors.white),
-                          ),
-                        ),
                       const SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: _resetForNewPhoto,
@@ -283,7 +254,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         child: const Text(
                           'Retake',
@@ -298,17 +268,11 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                     height: MediaQuery.of(context).size.height * 0.4,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: Colors.blue.shade700,
-                        width: 2,
-                      ),
+                      border: Border.all(color: Colors.blue.shade700, width: 2),
                     ),
-                    child: Transform.rotate(
-                      angle: 0,
-                      child: AspectRatio(
-                        aspectRatio: _cameraController!.value.aspectRatio,
-                        child: CameraPreview(_cameraController!),
-                      ),
+                    child: AspectRatio(
+                      aspectRatio: _cameraController!.value.aspectRatio,
+                      child: CameraPreview(_cameraController!),
                     ),
                   )
                 else
@@ -324,10 +288,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
-                        ),
                       ),
                       child: const Text(
                         'Capture Aura',
@@ -340,10 +300,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                         backgroundColor: Colors.blue.shade700,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
                         ),
                       ),
                       child: const Text(
@@ -368,7 +324,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   child: const Text(
                     'View Aura History',

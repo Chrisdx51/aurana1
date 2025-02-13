@@ -7,6 +7,7 @@ plugins {
 
 android {
     namespace = "com.kris.aurana"
+    compileSdkVersion 33          // Ensure this matches your project settings
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
