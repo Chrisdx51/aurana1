@@ -3,19 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:gallery_saver/gallery_saver.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:confetti/confetti.dart';
-import 'package:particles_flutter/particles_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AuraAnalysisScreen extends StatefulWidget {
   final String imagePath;
   final Color auraColor;
   final String auraMeaning;
+  final List<String> affirmations; // Accept affirmations as a parameter
 
   const AuraAnalysisScreen({
     Key? key,
     required this.imagePath,
     required this.auraColor,
     required this.auraMeaning,
+    required this.affirmations,
   }) : super(key: key);
 
   @override
@@ -57,27 +58,10 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Aura Image with Particle Effects
+              // Aura Image with Color Overlay
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Particle Effects
-                  CircularParticle(
-                    awayRadius: 80,
-                    numberOfParticles: 100,
-                    speedOfParticles: 2,
-                    height: MediaQuery.of(context).size.height * 0.4,
-                    width: MediaQuery.of(context).size.width * 0.8,
-                    onTapAnimation: true,
-                    particleColor: widget.auraColor.withOpacity(0.7),
-                    awayAnimationDuration: const Duration(milliseconds: 600),
-                    maxParticleSize: 5,
-                    isRandSize: true,
-                    isRandColor: true,
-                    connectDots: false,
-                  ),
-
-                  // Aura Image with Color Overlay
                   Container(
                     width: MediaQuery.of(context).size.width * 0.8,
                     height: MediaQuery.of(context).size.height * 0.4,
@@ -183,7 +167,7 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
     );
   }
 
-  // Method to Build Chakra Analysis Section with Animated Emojis
+  // Chakra Analysis Section
   Widget _buildChakraAnalysis() {
     final chakraInsights = _getChakraAnalysis(widget.auraColor);
     return Card(
@@ -305,10 +289,9 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
     );
   }
 
-  // Method to Calculate Energy Level Based on Aura Color
   double _calculateEnergyLevel(Color color) {
     final totalColorValue = color.red + color.green + color.blue;
-    return (totalColorValue / (255 * 3)) * 100;
+    return (totalColorValue / (255 * 3)) * 100; // Normalize to 100%
   }
 
   // Spiritual Recommendations
@@ -345,7 +328,7 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
 
   // Daily Affirmations Section
   Widget _buildDailyAffirmations() {
-    final affirmations = _getDailyAffirmations(widget.auraColor);
+    final affirmations = widget.affirmations; // Use provided affirmations
     return Card(
       elevation: 5,
       shape: RoundedRectangleBorder(
@@ -433,34 +416,6 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
       "Embrace your unique aura with daily affirmations.",
       "Explore spiritual books or resources to deepen your journey.",
       "Engage in creative visualization exercises.",
-    ];
-  }
-
-  // Daily Affirmations Based on Aura Color
-  List<String> _getDailyAffirmations(Color color) {
-    if (color.red > color.green && color.red > color.blue) {
-      return [
-        "I am full of energy and capable of achieving greatness.",
-        "My passion fuels my success and happiness.",
-        "I am grounded and balanced in my pursuits.",
-      ];
-    } else if (color.green > color.red && color.green > color.blue) {
-      return [
-        "I am at peace with myself and the world around me.",
-        "I am in harmony with nature and its rhythms.",
-        "I cultivate balance in all aspects of my life.",
-      ];
-    } else if (color.blue > color.red && color.blue > color.green) {
-      return [
-        "I trust my intuition and embrace my inner wisdom.",
-        "I am calm, serene, and centered in all that I do.",
-        "I am open to the universe's guidance and support.",
-      ];
-    }
-    return [
-      "I am unique and my energy is a gift to the world.",
-      "I embrace my individuality and celebrate my journey.",
-      "I radiate positivity and attract beautiful opportunities.",
     ];
   }
 }

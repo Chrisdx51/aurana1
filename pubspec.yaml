@@ -5,7 +5,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.6.1
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -25,15 +25,16 @@ dependencies:
   camera: ^0.10.0+4
   path_provider: ^2.0.11
   win32: 5.5.3
-  google_ml_kit: ^0.7.0 # Use the latest version available
+  google_ml_kit: ^0.19.0 # Use the latest version available
   sqflite: ^2.2.0
   path: ^1.8.0
   fluttertoast: ^8.2.1
-  share_plus: ^10.1.4
-  gallery_saver: ^2.1.1
+  share_plus: 10.1.4
+  gallery_saver: ^2.3.0
   flutter_animate: ^4.5.2
-  confetti: ^0.8.0
-  particles_flutter: ^1.0.1
+  confetti: ^0.7.0
+  tflite: ^1.1.2
+
 
 dev_dependencies:
   flutter_test:
@@ -56,7 +57,8 @@ flutter:
     - assets/images/bg8.png
     - assets/images/bg9.png
     - assets/images/bg10.png
-
+    - assets/images/profile.png
+    - assets/model.tflite
   fonts:
     - family: Fo
       fonts:
