@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'services/notification_service.dart';
 import 'screens/astrology_updates_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/chat_screen.dart';
@@ -16,14 +15,12 @@ import 'screens/social_feed_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/tarot_reading_screen.dart';
-import 'screens/aura_snapshot_screen.dart'; // Added import statement
-import 'aura_snapshot.dart';
+import 'screens/aura_catcher.dart'; // Added import for Aura Catcher
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   MobileAds.instance.initialize();
-  await NotificationService.init();
   runApp(AuranaApp());
 }
 
@@ -39,7 +36,6 @@ class AuranaApp extends StatelessWidget {
         '/moon': (context) => MoonCycleScreen(),
         '/breathing': (context) => GuidedBreathingScreen(),
         '/astrology': (context) => AstrologyUpdatesScreen(),
-        '/aura_snapshot': (context) => AuraSnapshotScreen(), // Added new route
       },
     );
   }
@@ -66,6 +62,7 @@ class _MainScreenState extends State<MainScreen> {
     SpiritualGuidanceScreen(),
     ProfileScreen(),
     MoonCycleScreen(),
+    AuraCatcherScreen(), // Added Aura Catcher Screen to the navigation list
   ];
 
   @override
@@ -134,6 +131,16 @@ class _MainScreenState extends State<MainScreen> {
                   Navigator.pop(context);
                   setState(() {
                     _selectedIndex = 9;
+                  });
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.camera),
+                title: Text('Aura Catcher'), // Added Aura Catcher in modal
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _selectedIndex = 10; // Updated index for Aura Catcher
                   });
                 },
               ),
@@ -208,5 +215,61 @@ class _MainScreenState extends State<MainScreen> {
   void dispose() {
     _bannerAd?.dispose();
     super.dispose();
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  @override
+  _SettingsPageState createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _notificationsEnabled = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Settings'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Settings',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.notifications),
+              title: const Text('Notifications'),
+              subtitle: const Text('Manage notification preferences'),
+              onTap: () {
+                // Navigate to Notification Settings
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.lock),
+              title: const Text('Privacy'),
+              subtitle: const Text('Privacy settings and options'),
+              onTap: () {
+                // Navigate to Privacy Settings
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Enable Daily Notifications'),
+              value: _notificationsEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _notificationsEnabled = value;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

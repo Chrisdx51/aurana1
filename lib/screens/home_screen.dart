@@ -1,4 +1,3 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'social_feed_screen.dart'; // Update the paths based on actual locations
 import 'profile_screen.dart'; // Update the paths based on actual locations
@@ -68,7 +67,8 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 30,
-                          backgroundImage: AssetImage('assets/images/profile.png'),
+                          backgroundImage:
+                          AssetImage('assets/images/profile.png'),
                         ),
                         SizedBox(width: 10),
                         Column(
@@ -188,17 +188,6 @@ class HomeScreen extends StatelessWidget {
                       '“The journey of a thousand miles begins with one step.” - Lao Tzu',
                     ),
                   ),
-                  SizedBox(height: 20),
-                  // Aura Snapshot
-                  AuraSnapshot(),
-                  SizedBox(height: 20),
-                  // Go to Aura Snapshot Button
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/aura_snapshot');
-                    },
-                    child: Text('Go to Aura Snapshot'),
-                  ),
                 ],
               ),
             ),
@@ -284,92 +273,6 @@ class HomeScreen extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ),
-    );
-  }
-}
-
-class AuraSnapshot extends StatefulWidget {
-  @override
-  _AuraSnapshotState createState() => _AuraSnapshotState();
-}
-
-class _AuraSnapshotState extends State<AuraSnapshot> {
-  CameraController? _cameraController;
-  bool _isCameraInitialized = false;
-  String auraColor = ""; // Holds the aura color name.
-  String auraMessage = ""; // Holds the spiritual guidance message.
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeCamera();
-  }
-
-  Future<void> _initializeCamera() async {
-    final cameras = await availableCameras();
-    _cameraController = CameraController(cameras[0], ResolutionPreset.medium);
-
-    await _cameraController!.initialize();
-    setState(() {
-      _isCameraInitialized = true;
-    });
-  }
-
-  void _scanAura() {
-    // Randomly generate an aura color (you can add logic for actual detection later).
-    final List<String> auraColors = ["Blue", "Green", "Red", "Purple", "Yellow"];
-    final Map<String, String> auraMessages = {
-      "Blue": "You are calm and peaceful today. Focus on mindfulness.",
-      "Green": "Growth and healing are in your energy field.",
-      "Red": "Passion and strength are driving your day.",
-      "Purple": "Your intuition is heightened—trust your instincts.",
-      "Yellow": "Joy and positivity radiate around you."
-    };
-
-    final selectedColor = (auraColors..shuffle()).first;
-
-    setState(() {
-      auraColor = selectedColor;
-      auraMessage = auraMessages[selectedColor]!;
-    });
-  }
-
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (_isCameraInitialized)
-          AspectRatio(
-            aspectRatio: _cameraController!.value.aspectRatio,
-            child: CameraPreview(_cameraController!),
-          )
-        else
-          CircularProgressIndicator(),
-        SizedBox(height: 10),
-        ElevatedButton(
-          onPressed: _scanAura,
-          child: Text("Scan Aura"),
-        ),
-        if (auraColor.isNotEmpty)
-          Column(
-            children: [
-              Text(
-                "Aura Color: $auraColor",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                auraMessage,
-                style: TextStyle(fontSize: 16),
-              ),
-            ],
-          ),
-      ],
     );
   }
 }

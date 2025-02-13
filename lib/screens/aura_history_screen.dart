@@ -42,9 +42,16 @@ class AuraHistoryScreen extends StatelessWidget {
                 final auraMeaning = aura['auraMeaning'];
                 final timestamp = aura['timestamp'] ?? 'Unknown Date';
                 final String colorString = aura['auraColor'] ?? '#000000';
-                final auraColor = Color(
-                  int.parse(colorString.replaceFirst('#', '0xFF')),
-                );
+                late Color auraColor;
+
+                try {
+                  auraColor = Color(
+                    int.parse(colorString.replaceFirst('#', '0xFF')),
+                  );
+                } catch (e) {
+                  auraColor = Colors.black; // Fallback color
+                  print('Error parsing color: $e');
+                }
 
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
