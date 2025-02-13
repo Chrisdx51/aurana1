@@ -307,6 +307,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           child: Text('View Daily Horoscope'),
                         ),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (_zodiacSign != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => HoroscopeScreen(zodiacSign: _zodiacSign!),
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Please set your Date of Birth to see your horoscope.")),
+                              );
+                            }
+                          },
+                          child: Text('View Horoscope'),
+                        ),
                         SizedBox(height: 10),
                         // Interests at the Bottom
                         Text(
