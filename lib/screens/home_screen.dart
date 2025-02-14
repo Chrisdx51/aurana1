@@ -4,6 +4,8 @@ import 'profile_screen.dart'; // Update the paths based on actual locations
 import 'spiritual_tools_screen.dart'; // Assuming a valid existing screen
 
 class HomeScreen extends StatelessWidget {
+  final String userName = 'John Doe'; // Replace this with the actual user's name source.
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -56,7 +58,7 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Profile Section
+                  // Profile Section with Greeting
                   Container(
                     padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
@@ -75,7 +77,7 @@ class HomeScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'John Doe',
+                              'Welcome back, $userName!',
                               style: TextStyle(
                                 fontFamily: 'fo18',
                                 fontSize: 16,
