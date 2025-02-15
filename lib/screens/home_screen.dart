@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
-import 'social_feed_screen.dart'; // Update the paths based on actual locations
-import 'profile_screen.dart'; // Update the paths based on actual locations
-import 'spiritual_tools_screen.dart'; // Assuming a valid existing screen
+import 'social_feed_screen.dart';
+import 'profile_screen.dart';
+import 'spiritual_tools_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  final String userName = 'John Doe'; // Replace this with the actual user's name source.
+  final String userName;
+
+  HomeScreen({required this.userName}); // Accept userName dynamically
+
+  // List of rotating backgrounds
+  final List<String> backgroundImages = [
+    'assets/images/bg1.png',
+    'assets/images/bg2.png',
+    'assets/images/bg3.png',
+  ];
+
+  // Function to calculate the current background index based on the date
+  String getRotatingBackground() {
+    int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
+    return backgroundImages[(day ~/ 3) % backgroundImages.length];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Home',
+          'Celestial Path',
           style: TextStyle(
             fontFamily: 'fo18',
             fontWeight: FontWeight.bold,
@@ -24,7 +36,7 @@ class HomeScreen extends StatelessWidget {
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blue, Colors.white],
+              colors: [Colors.blueAccent, Colors.white],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -33,12 +45,12 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          // Background Image with Gradient Overlay
+          // Rotating background image
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/bg2.png'),
+                  image: AssetImage(getRotatingBackground()),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -56,140 +68,43 @@ class HomeScreen extends StatelessWidget {
           SafeArea(
             child: SingleChildScrollView(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Profile Section with Greeting
-                  Container(
-                    padding: const EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 30,
-                          backgroundImage:
-                          AssetImage('assets/images/profile.png'),
-                        ),
-                        SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome back, $userName!',
-                              style: TextStyle(
-                                fontFamily: 'fo18',
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                            Text(
-                              'Empower Your Journey',
-                              style: TextStyle(
-                                fontFamily: 'fo18',
-                                fontSize: 14,
-                                color: Colors.black.withOpacity(0.8),
-                                backgroundColor: Colors.white.withOpacity(0.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Welcome Text
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Welcome to Aurana!',
-                        style: TextStyle(
-                          fontFamily: 'fo18',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 24,
-                          color: Colors.black,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  SizedBox(height: 10),
+                  // Greeting Section
+                  _buildGreetingSection(),
+                  SizedBox(height: 10),
+                  // Daily Affirmation Section
+                  _buildCardSection(
+                    title: "Today's Affirmation",
+                    content: '“I am in alignment with my higher purpose.”',
+                    icon: Icons.lightbulb_outline,
                   ),
                   SizedBox(height: 10),
-                  // Quick Access Buttons
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _quickAccessButton(
-                          'Feed',
-                          Icons.public,
-                          screenWidth,
-                              () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SocialFeedScreen(),
-                              ),
-                            );
-                          },
+                  // Daily Challenge Section
+                  _buildCardSection(
+                    title: "Today's Challenge",
+                    content: "Take 5 minutes to meditate and breathe deeply.",
+                    icon: Icons.check_circle_outline,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Challenge marked as complete!'),
                         ),
-                        _quickAccessButton(
-                          'Profile',
-                          Icons.person,
-                          screenWidth,
-                              () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProfileScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                        _quickAccessButton(
-                          'Tools',
-                          Icons.star,
-                          screenWidth,
-                              () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SpiritualToolsScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
+                  SizedBox(height: 10),
+                  // Spiritual Insight Section
+                  _buildCardSection(
+                    title: "Today's Insight",
+                    content:
+                        "The energy of the universe flows within you. Take a moment to connect with your inner light.",
+                    icon: Icons.self_improvement,
+                  ),
+                  SizedBox(height: 10),
+                  // Trending Topics Section
+                  _buildTrendingTopicsSection(),
                   SizedBox(height: 20),
-                  // Featured Content Slider
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: SizedBox(
-                      height: screenHeight * 0.25,
-                      child: PageView(
-                        children: [
-                          _featuredContent(
-                              'Explore Features', 'assets/images/feature1.png'),
-                          _featuredContent(
-                              'Your Daily Insight', 'assets/images/feature2.png'),
-                          _featuredContent(
-                              'Guided Meditations', 'assets/images/feature3.png'),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  // Motivational Quote
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _cardWithText(
-                      '“The journey of a thousand miles begins with one step.” - Lao Tzu',
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -199,81 +114,164 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _quickAccessButton(
-      String text, IconData icon, double screenWidth, VoidCallback onPressed) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18, color: Colors.purple),
-      label: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'fo18',
-          fontSize: screenWidth * 0.035,
-          fontWeight: FontWeight.w600,
-        ),
+  Widget _buildGreetingSection() {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
       ),
-      style: ElevatedButton.styleFrom(
-        minimumSize: Size(80, 40),
-        backgroundColor: Colors.white.withOpacity(0.9),
-        foregroundColor: Colors.black,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    );
-  }
-
-  Widget _featuredContent(String title, String assetPath) {
-    return Column(
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontFamily: 'fo18',
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundImage: AssetImage('assets/images/profile.png'),
           ),
-        ),
-        SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.asset(
-            assetPath,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: Colors.grey[300],
-              child: Center(
-                child: Icon(
-                  Icons.broken_image,
-                  size: 50,
-                  color: Colors.grey,
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome back, $userName!',
+                  style: TextStyle(
+                    fontFamily: 'fo18',
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
+                Text(
+                  'Illuminate Your Path',
+                  style: TextStyle(
+                    fontFamily: 'fo18',
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _cardWithText(String text) {
-    return Card(
-      color: Colors.white.withOpacity(0.8),
-      shape: RoundedRectangleBorder(
+  Widget _buildCardSection({
+    required String title,
+    required String content,
+    IconData? icon,
+    VoidCallback? onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontFamily: 'fo18',
-            fontSize: 16,
-            color: Colors.black,
+      child: Row(
+        children: [
+          if (icon != null) Icon(icon, size: 28, color: Colors.blueAccent),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'fo18',
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  content,
+                  style: TextStyle(
+                    fontFamily: 'fo18',
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.8),
+                  ),
+                ),
+              ],
+            ),
           ),
-          textAlign: TextAlign.center,
-        ),
+          if (onTap != null)
+            IconButton(
+              icon: Icon(Icons.done, color: Colors.blue),
+              onPressed: onTap,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendingTopicsSection() {
+    final List<Map<String, String>> trendingTopics = [
+      {"topic": "#Mindfulness", "posts": "324 posts"},
+      {"topic": "#Gratitude", "posts": "289 posts"},
+      {"topic": "#SpiritualGrowth", "posts": "415 posts"},
+      {"topic": "#InnerPeace", "posts": "198 posts"},
+      {"topic": "#DailyAffirmations", "posts": "350 posts"},
+    ];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Trending Topics",
+            style: TextStyle(
+              fontFamily: 'fo18',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          SizedBox(height: 10),
+          Column(
+            children: trendingTopics.map((topic) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        topic["topic"]!,
+                        style: TextStyle(
+                          fontFamily: 'fo18',
+                          fontSize: 12,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      topic["posts"]!,
+                      style: TextStyle(
+                        fontFamily: 'fo18',
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }

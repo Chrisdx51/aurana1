@@ -53,7 +53,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isBannerAdLoaded = false;
 
   final List<Widget> _screens = [
-    HomeScreen(),
+    HomeScreen(userName: 'John Doe'), // Pass the userName here
     SocialFeedScreen(),
     FriendsListScreen(),
     SpiritualToolsScreen(),
@@ -173,18 +173,18 @@ class _MainScreenState extends State<MainScreen> {
             ),
             child: _isBannerAdLoaded
                 ? Center(
-              child: SizedBox(
-                height: _bannerAd!.size.height.toDouble(),
-                width: _bannerAd!.size.width.toDouble(),
-                child: AdWidget(ad: _bannerAd!),
-              ),
-            )
+                    child: SizedBox(
+                      height: _bannerAd!.size.height.toDouble(),
+                      width: _bannerAd!.size.width.toDouble(),
+                      child: AdWidget(ad: _bannerAd!),
+                    ),
+                  )
                 : Center(
-              child: Text(
-                "Ad Loading...",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
+                    child: Text(
+                      "Ad Loading...",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
           ),
           Expanded(
             child: _screens[_selectedIndex],
