@@ -1,0 +1,2 @@
+C:/Users/krist/Desktop/aurana1/android/app/.cxx/Debug/2y2j2m6v/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/krist/Desktop/aurana1/android/app/.cxx/Debug/2y2j2m6v/armeabi-v7a/CMakeFiles/rebuild_cache.dir
