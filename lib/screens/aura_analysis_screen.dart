@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:gallery_saver/gallery_saver.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -9,7 +8,7 @@ class AuraAnalysisScreen extends StatefulWidget {
   final String imagePath;
   final Color auraColor;
   final String auraMeaning;
-  final List<String> affirmations; // Accept affirmations as a parameter
+  final List<String> affirmations;
 
   const AuraAnalysisScreen({
     Key? key,
@@ -58,7 +57,6 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Aura Image with Color Overlay
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -92,7 +90,6 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Aura Meaning
               Text(
                 'Aura Meaning: ${widget.auraMeaning}',
                 style: TextStyle(
@@ -104,30 +101,19 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Aura Energy Level Section
-              _buildEnergyLevelIndicator(widget.auraColor),
-
+              _buildEnergyLevelIndicator(),
               const SizedBox(height: 20),
-
-              // Chakra Analysis Section
-              _buildChakraAnalysis(),
-
-              const SizedBox(height: 20),
-
-              // Spiritual Recommendations Section
               _buildSpiritualRecommendations(),
-
               const SizedBox(height: 20),
-
-              // Daily Affirmations Section
               _buildDailyAffirmations(),
-
               const SizedBox(height: 20),
 
-              // Save to Gallery Button
+              // Save to Gallery Button (Currently Disabled)
               ElevatedButton(
-                onPressed: () async {
-                  await _saveImageToGallery(context);
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Save to Gallery feature is currently disabled.')),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
@@ -145,9 +131,7 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
 
               // Share Aura Button
               ElevatedButton(
-                onPressed: () {
-                  _shareAuraDetails();
-                },
+                onPressed: _shareAuraDetails,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue.shade700,
                   shape: RoundedRectangleBorder(
@@ -167,85 +151,19 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
     );
   }
 
-  // Chakra Analysis Section
-  Widget _buildChakraAnalysis() {
-    final chakraInsights = _getChakraAnalysis(widget.auraColor);
-    return Card(
-      elevation: 5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Chakra Analysis",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              chakraInsights,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Animated Emojis Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildAnimatedEmoji('❤️'), // Root Chakra
-                _buildAnimatedEmoji('💚'), // Heart Chakra
-                _buildAnimatedEmoji('💙'), // Throat Chakra
-                _buildAnimatedEmoji('💜'), // Crown Chakra
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Helper Method to Create Animated Emojis
-  Widget _buildAnimatedEmoji(String emoji) {
-    return Animate(
-      onPlay: (controller) => controller.repeat(reverse: true),
-      effects: [
-        ScaleEffect(
-          duration: const Duration(milliseconds: 800),
-          begin: Offset(1.0, 1.0),
-          end: Offset(1.2, 1.2),
-        ),
-      ],
-      child: Text(
-        emoji,
-        style: const TextStyle(fontSize: 30),
-      ),
-    );
-  }
-
-  // Method to Get Chakra Insights Based on Aura Color
-  String _getChakraAnalysis(Color color) {
-    if (color.red > color.green && color.red > color.blue) {
-      return "Root Chakra (Muladhara) is dominant. Focus on grounding and stability. Practice meditation and connect with nature.";
-    } else if (color.green > color.red && color.green > color.blue) {
-      return "Heart Chakra (Anahata) is dominant. Focus on love, compassion, and balance. Practice heart-opening yoga poses.";
-    } else if (color.blue > color.red && color.blue > color.green) {
-      return "Throat Chakra (Vishuddha) is dominant. Focus on communication and self-expression. Chant affirmations or sing.";
+  void _shareAuraDetails() async {
+    try {
+      await Share.shareXFiles(
+        [XFile(widget.imagePath)],
+        text: 'Check out my aura! It\'s ${widget.auraMeaning}. What does your aura look like?',
+      );
+    } catch (e) {
+      print("Error sharing aura details: $e");
     }
-    return "Crown Chakra (Sahasrara) is dominant. Focus on spiritual connection and enlightenment. Engage in deep meditation.";
   }
 
-  // Method to Build Energy Level Indicator
-  Widget _buildEnergyLevelIndicator(Color color) {
-    final energyLevel = _calculateEnergyLevel(color);
+  Widget _buildEnergyLevelIndicator() {
+    final energyLevel = _calculateEnergyLevel(widget.auraColor);
 
     return Card(
       elevation: 5,
@@ -291,29 +209,22 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
 
   double _calculateEnergyLevel(Color color) {
     final totalColorValue = color.red + color.green + color.blue;
-    return (totalColorValue / (255 * 3)) * 100; // Normalize to 100%
+    return (totalColorValue / (255 * 3)) * 100;
   }
 
-  // Spiritual Recommendations
   Widget _buildSpiritualRecommendations() {
     final recommendations = _getSpiritualRecommendations(widget.auraColor);
     return Card(
       elevation: 5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Spiritual Practices for Your Aura",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              "Spiritual Recommendations",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
             ),
             const SizedBox(height: 10),
             ...recommendations.map((rec) => ListTile(
@@ -326,26 +237,19 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
     );
   }
 
-  // Daily Affirmations Section
   Widget _buildDailyAffirmations() {
-    final affirmations = widget.affirmations; // Use provided affirmations
+    final affirmations = widget.affirmations;
     return Card(
       elevation: 5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Daily Spiritual Affirmations",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              "Daily Affirmations",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
             ),
             const SizedBox(height: 10),
             ...affirmations.map((aff) => ListTile(
@@ -358,64 +262,12 @@ class _AuraAnalysisScreenState extends State<AuraAnalysisScreen> {
     );
   }
 
-  // Save Image to Gallery
-  Future<void> _saveImageToGallery(BuildContext context) async {
-    try {
-      final result = await GallerySaver.saveImage(widget.imagePath, albumName: 'AuraAnalysis');
-      if (result == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image saved to gallery!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save image.')),
-        );
-      }
-    } catch (e) {
-      print('Error saving image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('An error occurred while saving the image.')),
-      );
-    }
-  }
-
-  // Share Aura Details
-  void _shareAuraDetails() async {
-    try {
-      await Share.shareXFiles(
-        [XFile(widget.imagePath)],
-        text: 'Check out my aura! It\'s ${widget.auraMeaning}. What does your aura look like?',
-      );
-    } catch (e) {
-      print("Error sharing aura details: $e");
-    }
-  }
-
-  // Spiritual Recommendations Based on Aura Color
   List<String> _getSpiritualRecommendations(Color color) {
     if (color.red > color.green && color.red > color.blue) {
-      return [
-        "Practice mindfulness to channel your energy.",
-        "Engage in a creative activity like painting or writing.",
-        "Focus on grounding exercises to balance your passions.",
-      ];
+      return ["Practice mindfulness.", "Engage in creative activities.", "Focus on grounding exercises."];
     } else if (color.green > color.red && color.green > color.blue) {
-      return [
-        "Spend time in nature to recharge.",
-        "Practice yoga or tai chi to maintain balance.",
-        "Engage in a gratitude journaling exercise.",
-      ];
-    } else if (color.blue > color.red && color.blue > color.green) {
-      return [
-        "Meditate to connect with your inner self.",
-        "Listen to calming music or nature sounds.",
-        "Explore introspective journaling prompts.",
-      ];
+      return ["Spend time in nature.", "Practice yoga or tai chi.", "Start a gratitude journal."];
     }
-    return [
-      "Embrace your unique aura with daily affirmations.",
-      "Explore spiritual books or resources to deepen your journey.",
-      "Engage in creative visualization exercises.",
-    ];
+    return ["Meditate daily.", "Listen to calming music.", "Explore spiritual books."];
   }
 }

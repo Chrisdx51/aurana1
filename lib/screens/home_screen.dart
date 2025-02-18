@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'social_feed_screen.dart';
-import 'profile_screen.dart';
+import 'soul_page.dart';
 import 'spiritual_tools_screen.dart';
 
 class HomeScreen extends StatelessWidget {

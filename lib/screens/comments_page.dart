@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'dart:io'; // Import the dart:io package for File
-import '../models/comment_model.dart'; // Import the shared Comment model
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/comment_model.dart';
 
 class CommentsPage extends StatefulWidget {
+  final String postId; // Added postId
   final String postUser;
   final String postContent;
-  final File? postImage; // Add postImage here
   final List<Comment> comments;
 
   CommentsPage({
+    required this.postId, // Accept postId
     required this.postUser,
     required this.postContent,
-    this.postImage, // Initialize it here
     required this.comments,
   });
 
@@ -21,40 +21,41 @@ class CommentsPage extends StatefulWidget {
 
 class _CommentsPageState extends State<CommentsPage> {
   final TextEditingController _commentController = TextEditingController();
-  Comment? _replyingTo; // Tracks which comment the user is replying to
+  List<Map<String, dynamic>> comments = [];
 
-  void _addComment() {
-    if (_commentController.text.isNotEmpty) {
-      setState(() {
-        if (_replyingTo == null) {
-          // Add a top-level comment
-          widget.comments.add(
-            Comment(
-              user: "You",
-              content: _commentController.text,
-              replies: [],
-            ),
-          );
-        } else {
-          // Add a reply to a specific comment
-          _replyingTo!.replies.add(
-            Comment(
-              user: "You",
-              content: _commentController.text,
-              replies: [],
-            ),
-          );
-        }
-      });
-      _commentController.clear();
-      _replyingTo = null; // Reset reply mode
-    }
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
   }
 
-  void _startReplying(Comment comment) {
+  Future<void> _loadComments() async {
+    final response = await Supabase.instance.client
+        .from('comments')
+        .select()
+        .eq('post_id', widget.postId)
+        .order('created_at', ascending: true);
+
     setState(() {
-      _replyingTo = comment;
+      comments = response;
     });
+  }
+
+  void _addComment() async {
+    if (_commentController.text.isNotEmpty) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      await Supabase.instance.client.from('comments').insert({
+        'post_id': widget.postId,
+        'user_id': user.id,
+        'content': _commentController.text,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      _commentController.clear();
+      _loadComments(); // Refresh comments
+    }
   }
 
   @override
@@ -62,7 +63,7 @@ class _CommentsPageState extends State<CommentsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Comments'),
-        backgroundColor: Colors.lightBlueAccent,
+        backgroundColor: Colors.black87,
       ),
       body: Column(
         children: [
@@ -70,6 +71,7 @@ class _CommentsPageState extends State<CommentsPage> {
           Card(
             margin: EdgeInsets.all(10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            color: Colors.blueGrey.shade800,
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -77,23 +79,13 @@ class _CommentsPageState extends State<CommentsPage> {
                 children: [
                   Text(
                     widget.postUser,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                   ),
                   SizedBox(height: 5),
-                  if (widget.postContent.isNotEmpty)
-                    Text(
-                      widget.postContent,
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  if (widget.postImage != null) // Show the post image
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Image.file(
-                        widget.postImage!,
-                        height: 150,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                  Text(
+                    widget.postContent,
+                    style: TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
                 ],
               ),
             ),
@@ -101,45 +93,41 @@ class _CommentsPageState extends State<CommentsPage> {
 
           // Comments List
           Expanded(
-            child: ListView.builder(
-              itemCount: widget.comments.length,
-              itemBuilder: (context, index) {
-                final comment = widget.comments[index];
-                return _buildCommentTile(comment);
-              },
-            ),
+            child: comments.isEmpty
+                ? Center(child: Text("No comments yet!", style: TextStyle(color: Colors.white54)))
+                : ListView.builder(
+                    itemCount: comments.length,
+                    itemBuilder: (context, index) {
+                      final comment = comments[index];
+                      return _buildCommentTile(comment);
+                    },
+                  ),
           ),
 
           // Add Comment Bar
           Container(
             padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.black87,
               border: Border(
-                top: BorderSide(color: Colors.grey.shade300, width: 1),
+                top: BorderSide(color: Colors.white24, width: 1),
               ),
             ),
             child: Row(
               children: [
-                if (_replyingTo != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Text(
-                      "Replying to ${_replyingTo!.user}",
-                      style: TextStyle(color: Colors.teal.shade300, fontSize: 12),
-                    ),
-                  ),
                 Expanded(
                   child: TextField(
                     controller: _commentController,
                     decoration: InputDecoration(
                       hintText: "Write a comment...",
                       border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.white54),
                     ),
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.send, color: Colors.teal.shade300),
+                  icon: Icon(Icons.send, color: Colors.blue),
                   onPressed: _addComment,
                 ),
               ],
@@ -150,49 +138,26 @@ class _CommentsPageState extends State<CommentsPage> {
     );
   }
 
-  Widget _buildCommentTile(Comment comment, {int depth = 0}) {
+  Widget _buildCommentTile(Map<String, dynamic> comment) {
     return Padding(
-      padding: EdgeInsets.only(left: depth * 20.0, top: 8.0, bottom: 8.0),
+      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 10),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: EdgeInsets.symmetric(horizontal: 10),
-        color: Colors.grey.shade100,
+        color: Colors.blueGrey.shade700,
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                comment.user,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                comment['user_id'],
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
               ),
               SizedBox(height: 5),
               Text(
-                comment.content,
-                style: TextStyle(fontSize: 14),
+                comment['content'],
+                style: TextStyle(fontSize: 14, color: Colors.white70),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => _startReplying(comment),
-                    child: Text(
-                      "Reply",
-                      style: TextStyle(color: Colors.teal.shade300),
-                    ),
-                  ),
-                ],
-              ),
-              // Display Replies
-              if (comment.replies.isNotEmpty)
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  itemCount: comment.replies.length,
-                  itemBuilder: (context, index) {
-                    return _buildCommentTile(comment.replies[index], depth: depth + 1);
-                  },
-                ),
             ],
           ),
         ),

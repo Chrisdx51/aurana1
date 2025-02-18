@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'comments_page.dart';
-import '../models/comment_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:aurana/screens/create_post_screen.dart';
+import 'package:aurana/screens/comments_page.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   @override
@@ -12,10 +9,7 @@ class SocialFeedScreen extends StatefulWidget {
 }
 
 class _SocialFeedScreenState extends State<SocialFeedScreen> {
-  List<Post> posts = [];
-  File? _selectedImage;
-  final TextEditingController _textController = TextEditingController();
-  final Set<int> likedPosts = {}; // Track liked posts by index
+  List<Map<String, dynamic>> posts = [];
 
   @override
   void initState() {
@@ -24,263 +18,174 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
   }
 
   Future<void> _loadPosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedPosts = prefs.getString('posts');
-    if (savedPosts != null) {
-      setState(() {
-        posts = (json.decode(savedPosts) as List)
-            .map((post) => Post.fromJson(post))
-            .toList();
-      });
-    }
-  }
+    final response = await Supabase.instance.client
+        .from('posts')
+        .select('id, content, user_id, image_url, created_at, profiles(name, profile_pic)')
+        .order('created_at', ascending: false);
 
-  Future<void> _savePosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString(
-        'posts', json.encode(posts.map((post) => post.toJson()).toList()));
-  }
-
-  void _createPost({DateTime? scheduledTime}) {
-    if (_textController.text.isNotEmpty || _selectedImage != null) {
-      final newPost = Post(
-        user: "You",
-        content: _textController.text,
-        image: _selectedImage,
-        likes: 0,
-        comments: [],
-        timestamp: scheduledTime ?? DateTime.now(),
-      );
-      if (scheduledTime == null || scheduledTime.isBefore(DateTime.now())) {
-        setState(() {
-          posts.insert(0, newPost);
-        });
-      } else {
-        Future.delayed(scheduledTime.difference(DateTime.now()), () {
-          setState(() {
-            posts.insert(0, newPost);
-          });
-          _savePosts();
-        });
-      }
-      _textController.clear();
-      _selectedImage = null;
-      _savePosts();
-    }
-  }
-
-  Future<void> _pickImage() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
-    }
-  }
-
-  void _deletePost(int index) {
     setState(() {
-      posts.removeAt(index);
+      posts = response;
     });
-    _savePosts();
   }
 
-  void _reportPost(Post post) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Post reported."),
-      duration: Duration(seconds: 2),
-    ));
+  Future<void> _likePost(String postId) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    await Supabase.instance.client.from('likes').insert({
+      'post_id': postId,
+      'user_id': user.id,
+    });
+
+    _loadPosts(); // Refresh posts after like
   }
 
-  void _schedulePost() async {
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(Duration(days: 365)),
-    );
-    if (selectedDate != null) {
-      final selectedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-      );
-      if (selectedTime != null) {
-        final scheduledDateTime = DateTime(
-          selectedDate.year,
-          selectedDate.month,
-          selectedDate.day,
-          selectedTime.hour,
-          selectedTime.minute,
-        );
-        _createPost(scheduledTime: scheduledDateTime);
-      }
-    }
+  bool _hasUserLikedPost(String postId) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return false;
+
+    return posts.any((post) =>
+        post['likes'] != null &&
+        (post['likes'] as List).any((like) => like['user_id'] == user.id));
   }
 
   @override
   Widget build(BuildContext context) {
-    final mostLikedPost = posts.isNotEmpty
-        ? posts.reduce((a, b) => a.likes > b.likes ? a : b)
-        : null;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Social Feed'),
-        backgroundColor: Colors.lightBlueAccent,
+        title: Text("Eternal Stream", style: TextStyle(fontFamily: "MysticFont", fontSize: 24)),
+        backgroundColor: Colors.black87,
       ),
-      body: Column(
-        children: [
-          if (mostLikedPost != null)
-            Card(
-              margin: EdgeInsets.all(10),
-              color: Colors.yellow.shade100,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Text(
-                  "🌟 Daily Highlight: ${mostLikedPost.content}",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.black87, Colors.blueGrey.shade900],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: posts.isEmpty
+            ? Center(child: CircularProgressIndicator())
+            : ListView.builder(
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  final post = posts[index];
+                  return _buildPostCard(post);
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue.shade700,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => CreatePostScreen()),
+          ).then((_) => _loadPosts()); // Reload after posting
+        },
+        child: Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildPostCard(Map<String, dynamic> post) {
+    return Card(
+      color: Colors.blueGrey.shade800,
+      elevation: 5,
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // User Profile Section
+            ListTile(
+              leading: CircleAvatar(
+                backgroundImage: post['profiles']['profile_pic'] != null
+                    ? NetworkImage(post['profiles']['profile_pic'])
+                    : AssetImage("assets/default_avatar.png") as ImageProvider,
+              ),
+              title: Text(
+                post['profiles']['name'] ?? "Unknown User",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                _formatTimestamp(post['created_at']),
+                style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: posts.length,
-              itemBuilder: (context, index) {
-                final post = posts[index];
-                final isLiked = likedPosts.contains(index);
-                return Card(
-                  margin: EdgeInsets.all(10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15)),
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              post.user,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deletePost(index),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          "${post.timestamp.hour}:${post.timestamp.minute}, ${post.timestamp.day}/${post.timestamp.month}/${post.timestamp.year}",
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
-                        ),
-                        SizedBox(height: 10),
-                        if (post.content.isNotEmpty)
-                          Text(
-                            post.content,
-                            style: TextStyle(fontSize: 14),
-                          ),
-                        if (post.image != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Image.file(post.image!,
-                                height: 150, fit: BoxFit.cover),
-                          ),
-                        SizedBox(height: 10),
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            TextButton.icon(
-                              onPressed: isLiked
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        post.likes++;
-                                        likedPosts.add(index);
-                                      });
-                                      _savePosts();
-                                    },
-                              icon: Icon(Icons.favorite,
-                                  color: isLiked
-                                      ? Colors.teal.shade300
-                                      : Colors.grey),
-                              label: Text("${post.likes} Likes"),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => CommentsPage(
-                                      postUser: post.user,
-                                      postContent: post.content,
-                                      postImage:
-                                          post.image, // Pass the image here
-                                      comments: post.comments,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: Icon(Icons.comment_outlined,
-                                  color: Colors.teal.shade300, size: 18),
-                              label: Text("Comment"),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _reportPost(post),
-                              icon: Icon(Icons.flag, color: Colors.red),
-                              label: Text("Report"),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+
+            // Post Content (Image, Video, or Text)
+            if (post['image_url'] != null)
+              Container(
+                margin: EdgeInsets.symmetric(vertical: 10),
+                width: double.infinity,
+                height: 250,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  image: DecorationImage(
+                    image: NetworkImage(post['image_url']),
+                    fit: BoxFit.cover,
                   ),
-                );
-              },
+                ),
+              ),
+
+            Text(
+              post['content'],
+              style: TextStyle(color: Colors.white, fontSize: 16),
             ),
-          ),
-          Container(
-            padding: EdgeInsets.all(8),
-            child: Row(
+            const SizedBox(height: 10),
+
+            // Like & Comment Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Like Button
                 IconButton(
-                  icon: Icon(Icons.image, color: Colors.teal.shade300),
-                  onPressed: _pickImage,
-                ),
-                if (_selectedImage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Image.file(
-                      _selectedImage!,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                    ),
+                  icon: Icon(
+                    _hasUserLikedPost(post['id']) ? Icons.favorite : Icons.favorite_border,
+                    color: _hasUserLikedPost(post['id']) ? Colors.red : Colors.white,
                   ),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    decoration:
-                        InputDecoration(hintText: "What's on your mind?"),
-                  ),
+                  onPressed: () => _likePost(post['id']),
                 ),
+
+                // Comment Button
                 IconButton(
-                  icon: Icon(Icons.send, color: Colors.teal.shade300),
-                  onPressed: _createPost,
-                ),
-                IconButton(
-                  icon: Icon(Icons.schedule, color: Colors.teal.shade300),
-                  onPressed: _schedulePost,
+                  icon: Icon(Icons.comment, color: Colors.white),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CommentsPage(
+                          postId: post['id'],
+                          postUser: post['profiles']['name'] ?? "Unknown User",
+                          postContent: post['content'],
+                          comments: [], // Initially empty, will load from Supabase
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  String _formatTimestamp(String timestamp) {
+    final DateTime dateTime = DateTime.parse(timestamp);
+    final Duration difference = DateTime.now().difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return '${difference.inSeconds} seconds ago';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} minutes ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hours ago';
+    } else {
+      return '${difference.inDays} days ago';
+    }
   }
 }
