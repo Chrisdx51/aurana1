@@ -1,68 +1,75 @@
 import 'dart:io';
 
 class Comment {
-  final String user;
+  final String id;
+  final String postId; // Link comment to a post
+  final String userId; // Identify the commenter
   final String content;
-  final List<Comment> replies;
+  final DateTime timestamp;
 
   Comment({
-    required this.user,
+    required this.id,
+    required this.postId,
+    required this.userId,
     required this.content,
-    required this.replies,
+    required this.timestamp,
   });
 
   Map<String, dynamic> toJson() => {
-        'user': user,
+        'id': id,
+        'post_id': postId,
+        'user_id': userId,
         'content': content,
-        'replies': replies.map((reply) => reply.toJson()).toList(),
+        'timestamp': timestamp.toIso8601String(),
       };
 
   static Comment fromJson(Map<String, dynamic> json) => Comment(
-        user: json['user'],
+        id: json['id'],
+        postId: json['post_id'],
+        userId: json['user_id'],
         content: json['content'],
-        replies: (json['replies'] as List)
-            .map((reply) => Comment.fromJson(reply))
-            .toList(),
+        timestamp: DateTime.parse(json['timestamp']),
       );
 }
 
 class Post {
-  final String user;
+  final String id;
+  final String userId;
   final String content;
-  final File? image; // Added image property here
+  final String? imageUrl;
   int likes;
-  List<String> reactions;
   List<Comment> comments;
   final DateTime timestamp;
 
   Post({
-    required this.user,
+    required this.id,
+    required this.userId,
     required this.content,
-    this.image,
+    this.imageUrl,
     this.likes = 0,
-    this.reactions = const [],
     List<Comment>? comments,
     required this.timestamp,
   }) : comments = comments ?? [];
 
   Map<String, dynamic> toJson() => {
-        'user': user,
+        'id': id,
+        'user_id': userId,
         'content': content,
-        'image': image?.path, // Serialize image as path
+        'image_url': imageUrl,
         'likes': likes,
-        'reactions': reactions,
         'comments': comments.map((c) => c.toJson()).toList(),
         'timestamp': timestamp.toIso8601String(),
       };
 
   static Post fromJson(Map<String, dynamic> json) => Post(
-        user: json['user'],
+        id: json['id'],
+        userId: json['user_id'],
         content: json['content'],
-        image: json['image'] != null ? File(json['image']) : null,
+        imageUrl: json['image_url'],
         likes: json['likes'],
-        reactions: List<String>.from(json['reactions']),
-        comments:
-            (json['comments'] as List).map((c) => Comment.fromJson(c)).toList(),
+        comments: (json['comments'] as List)
+            .map((c) => Comment.fromJson(c))
+            .toList(),
         timestamp: DateTime.parse(json['timestamp']),
       );
 }

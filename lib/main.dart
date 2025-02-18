@@ -1,26 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'screens/horoscope_screen.dart';
-import 'screens/challenges_screen.dart';
-import 'screens/chat_screen.dart';
-import 'screens/friends_list_screen.dart';
-import 'screens/guided_breathing_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'screens/auth_screen.dart'; // Authentication screen
 import 'screens/home_screen.dart';
-import 'screens/journal_screen.dart';
-import 'screens/moon_cycle_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/sessions_screen.dart';
+import 'screens/soul_page.dart';
 import 'screens/social_feed_screen.dart';
-import 'screens/spiritual_guidance_screen.dart';
+import 'screens/friends_list_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
-import 'screens/tarot_reading_screen.dart';
-import 'screens/aura_catcher.dart'; // Added import for Aura Catcher
+import 'screens/journal_screen.dart';
+import 'screens/challenges_screen.dart';
+import 'screens/sessions_screen.dart';
+import 'screens/spiritual_guidance_screen.dart';
+import 'screens/moon_cycle_screen.dart';
+import 'screens/aura_catcher.dart';
 import 'screens/astrology_updates_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: 'https://rhapqmquxypczswwmzun.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJoYXBxbXF1eHlwY3pzd3dtenVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk3NDI1NTUsImV4cCI6MjA1NTMxODU1NX0.NRq2V6A03bF5pWyoHMXgWwnbdX0fRXgMVm-08w_X5D0',
+  );
+
   MobileAds.instance.initialize();
   runApp(AuranaApp());
 }
@@ -29,20 +33,60 @@ class AuranaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Aurana App',
       theme: ThemeData(primarySwatch: Colors.teal),
-      home: MainScreen(),
-      routes: {
-        '/tarot': (context) => TarotReadingScreen(),
-        '/moon': (context) => MoonCycleScreen(),
-        '/breathing': (context) => GuidedBreathingScreen(),
-        '/astrology': (context) => AstrologyUpdatesScreen(),
-      },
+      home: AuthGate(), // Checks if the user is logged in
     );
   }
 }
 
+// 🟢 Checks if a user is logged in and redirects them
+class AuthGate extends StatefulWidget {
+  @override
+  _AuthGateState createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    await Future.delayed(Duration(seconds: 2)); // Simulate app loading time
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainScreen(
+            userName: Supabase.instance.client.auth.currentUser?.email ?? "Guest",
+          ),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => AuthScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(child: CircularProgressIndicator()), // Show loading screen
+    );
+  }
+}
+
+// 🟢 Main App Navigation
 class MainScreen extends StatefulWidget {
+  final String userName;
+  MainScreen({required this.userName});
+
   @override
   _MainScreenState createState() => _MainScreenState();
 }
@@ -53,7 +97,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isBannerAdLoaded = false;
 
   final List<Widget> _screens = [
-    HomeScreen(userName: 'John Doe'), // Pass the userName here
+    HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "Guest"),
     SocialFeedScreen(),
     FriendsListScreen(),
     SpiritualToolsScreen(),
@@ -61,9 +105,10 @@ class _MainScreenState extends State<MainScreen> {
     ChallengesScreen(),
     SessionsScreen(),
     SpiritualGuidanceScreen(),
-    ProfileScreen(),
+    SoulPage(),
     MoonCycleScreen(),
-    AuraCatcherScreen(), // Added Aura Catcher Screen to the navigation list
+    AuraCatcherScreen(),
+    SettingsPage(), // Added Settings Screen
   ];
 
   @override
@@ -117,7 +162,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               ListTile(
                 leading: Icon(Icons.person),
-                title: Text('Profile'),
+                title: Text('Soul Page'),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -137,11 +182,21 @@ class _MainScreenState extends State<MainScreen> {
               ),
               ListTile(
                 leading: Icon(Icons.camera),
-                title: Text('Aura Catcher'), // Added Aura Catcher in modal
+                title: Text('Aura Catcher'),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedIndex = 10; // Updated index for Aura Catcher
+                    _selectedIndex = 10;
+                  });
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.settings),
+                title: Text('Settings'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _selectedIndex = 11;
                   });
                 },
               ),
@@ -200,7 +255,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
           BottomNavigationBarItem(icon: Icon(Icons.directions_run), label: 'Challenges'),
           BottomNavigationBarItem(icon: Icon(Icons.live_tv), label: 'Sessions'),
-          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
         currentIndex: _selectedIndex < 7 ? _selectedIndex : 0,
         selectedItemColor: Colors.black,
@@ -219,6 +274,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
+// 🟢 Settings Page (Fully Included)
 class SettingsPage extends StatefulWidget {
   @override
   _SettingsPageState createState() => _SettingsPageState();
@@ -230,37 +286,16 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Settings'),
-      ),
+      appBar: AppBar(title: Text('Settings')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Settings',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+            const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.notifications),
-              title: const Text('Notifications'),
-              subtitle: const Text('Manage notification preferences'),
-              onTap: () {
-                // Navigate to Notification Settings
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.lock),
-              title: const Text('Privacy'),
-              subtitle: const Text('Privacy settings and options'),
-              onTap: () {
-                // Navigate to Privacy Settings
-              },
-            ),
             SwitchListTile(
-              title: const Text('Enable Daily Notifications'),
+              title: const Text('Enable Notifications'),
               value: _notificationsEnabled,
               onChanged: (value) {
                 setState(() {
