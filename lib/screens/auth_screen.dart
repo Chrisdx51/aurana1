@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart'; // Ensure correct import path for MainScreen
+import 'soul_page.dart'; // Import SoulPage
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -58,6 +59,24 @@ class _AuthScreenState extends State<AuthScreen> {
         response = await supabase.auth.signUp(email: email, password: password);
 
         if (response.user != null) {
+          final userId = response.user!.id;
+
+          // Create a new profile in Supabase
+          await supabase.from('profiles').insert({
+            'id': userId,
+            'real_name': 'New User',
+            'nickname': email.split('@')[0], // Use part of email as nickname
+            'bio': 'Welcome to Aurana!',
+            'dob': null, // User can update later
+            'profile_pic': '', // Empty for now
+            'background_color': '0xFF673AB7', // Default purple
+            'soulmate_count': 0,
+            'following_count': 0,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+
+          print("✅ New profile created for $email!");
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("✅ Account Created! Please log in.")),
           );
@@ -71,7 +90,7 @@ class _AuthScreenState extends State<AuthScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => MainScreen(userName: response.user!.email ?? "Guest"),
+              builder: (context) => SoulPage(userId: response.user!.id ?? ''),
             ),
           );
         }

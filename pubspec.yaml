@@ -33,7 +33,7 @@ dependencies:
   confetti: ^0.7.0
   supabase_flutter: ^2.8.3
   flutter_svg: ^2.0.9
-
+  flutter_dotenv: ^5.2.1
 
 
 dev_dependencies:
