@@ -18,10 +18,9 @@ import 'screens/astrology_updates_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     print("🔄 Loading environment variables...");
-    await dotenv.load();
+    await dotenv.load(fileName: ".env");
     print("✅ Environment variables loaded!");
 
     print("🔄 Initializing Supabase...");
@@ -195,7 +194,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedIndex = 10);
+                    _selectedIndex = 10;
                   });
                 },
               ),
@@ -205,7 +204,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedIndex = 11);
+                    _selectedIndex = 11;
                   });
                 },
               ),
