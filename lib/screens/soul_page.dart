@@ -1,191 +1,171 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:aurana/screens/create_post_screen.dart';
-import 'package:aurana/screens/comments_page.dart';
 
-class SocialFeedScreen extends StatefulWidget {
+class SoulPage extends StatefulWidget {
+  final String userId; // User's unique ID
+  const SoulPage({Key? key, required this.userId}) : super(key: key);
+
   @override
-  _SocialFeedScreenState createState() => _SocialFeedScreenState();
+  _SoulPageState createState() => _SoulPageState();
 }
 
-class _SocialFeedScreenState extends State<SocialFeedScreen> {
-  List<Map<String, dynamic>> posts = [];
+class _SoulPageState extends State<SoulPage> {
+  final SupabaseClient supabase = Supabase.instance.client;
+  Map<String, dynamic>? userProfile;
+  bool isLoading = true;
+  Color? headerColor;
 
   @override
   void initState() {
     super.initState();
-    _loadPosts();
+    fetchUserProfile();
   }
 
-  Future<void> _loadPosts() async {
-    final response = await Supabase.instance.client
-        .from('posts')
-        .select('uuid, caption, user_id, image_url, created_at, profiles(name, profile_pic)')
-        .order('created_at', ascending: false);
+  Future<void> fetchUserProfile() async {
+    try {
+      print("Fetching profile for user ID: ${widget.userId}"); // Debugging: Print User ID
 
-    setState(() {
-      posts = List<Map<String, dynamic>>.from(response);
-    });
-  }
+      final response = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', widget.userId)
+          .single();
 
-  Future<void> _likePost(String postId) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+      print("Supabase Response: $response"); // Debugging: Print Raw Supabase Response
 
-    await Supabase.instance.client.from('likes').insert({
-      'post_id': postId,
-      'user_id': user.id,
-    });
-
-    _loadPosts(); // Refresh posts after like
-  }
-
-  bool _hasUserLikedPost(String postId) {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return false;
-
-    return posts.any((post) =>
-        post['likes'] != null &&
-        (post['likes'] as List).any((like) => like['user_id'] == user.id));
+      if (response != null) {
+        setState(() {
+          userProfile = response;
+          headerColor = Color(int.parse(userProfile?['background_color'] ?? '0xFF673AB7')); // Default purple
+          isLoading = false;
+        });
+      } else {
+        print("⚠️ No profile data found for this user.");
+        setState(() {
+          isLoading = false; // Stop loading, show an error
+        });
+      }
+    } catch (error) {
+      print("❌ Supabase Error: $error"); // Debugging: Print error if any
+      setState(() {
+        isLoading = false; // Stop loading if there's an error
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Eternal Stream", style: TextStyle(fontFamily: "MysticFont", fontSize: 24)),
-        backgroundColor: Colors.black87,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.black87, Colors.blueGrey.shade900],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: posts.isEmpty
-            ? Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                itemCount: posts.length,
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return _buildPostCard(post);
-                },
-              ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue.shade700,
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => CreatePostScreen()),
-          ).then((_) => _loadPosts()); // Reload after posting
-        },
-        child: Icon(Icons.add, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildPostCard(Map<String, dynamic> post) {
-    return Card(
-      color: Colors.blueGrey.shade800,
-      elevation: 5,
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // User Profile Section
-            ListTile(
-              leading: CircleAvatar(
-                backgroundImage: post['profiles']['profile_pic'] != null
-                    ? NetworkImage(post['profiles']['profile_pic'])
-                    : AssetImage("assets/default_avatar.png") as ImageProvider,
-              ),
-              title: Text(
-                post['profiles']['name'] ?? "Unknown User",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                _formatTimestamp(post['created_at']),
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-            ),
-
-            // Post Content (Image, Video, or Text)
-            if (post['image_url'] != null)
-              Container(
-                margin: EdgeInsets.symmetric(vertical: 10),
-                width: double.infinity,
-                height: 250,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  image: DecorationImage(
-                    image: NetworkImage(post['image_url']),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-
-            Text(
-              post['caption'] ?? '',
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-
-            // Like & Comment Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Like Button
-                IconButton(
-                  icon: Icon(
-                    _hasUserLikedPost(post['uuid']) ? Icons.favorite : Icons.favorite_border,
-                    color: _hasUserLikedPost(post['uuid']) ? Colors.red : Colors.white,
-                  ),
-                  onPressed: () => _likePost(post['uuid']),
-                ),
-
-                // Comment Button
-                IconButton(
-                  icon: Icon(Icons.comment, color: Colors.white),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CommentsPage(
-                          postId: post['uuid'],
-                          postUser: post['profiles']['name'] ?? "Unknown User",
-                          postContent: post['caption'] ?? '',
-                          comments: [], // Initially empty, will load from Supabase
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTimestamp(String timestamp) {
-    final DateTime dateTime = DateTime.parse(timestamp);
-    final Duration difference = DateTime.now().difference(dateTime);
-
-    if (difference.inSeconds < 60) {
-      return '${difference.inSeconds} seconds ago';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} minutes ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} hours ago';
-    } else {
-      return '${difference.inDays} days ago';
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
+
+    return Scaffold(
+      backgroundColor: Colors.black, // Dark spiritual theme
+      body: Column(
+        children: [
+          // Profile Header with Background Color
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                height: 150,
+                decoration: BoxDecoration(
+                  color: headerColor ?? Colors.purple,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: -40,
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundImage: NetworkImage(userProfile?['profile_pic'] ?? ''),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 50), // Push content below profile picture
+
+          // User Details
+          Text(
+            userProfile?['real_name'] ?? '',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          Text(
+            "@${userProfile?['nickname'] ?? ''}",
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Bio
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              userProfile?['bio'] ?? '',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Buttons (Like & Friend Request)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _actionButton("🌟 Like"),
+              const SizedBox(width: 10),
+              _actionButton("🔮 Friend Request"),
+            ],
+          ),
+
+          const SizedBox(height: 30),
+
+          // Profile Info (DOB, Followers)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _infoCard("Born", userProfile?['dob'] ?? ''),
+              _infoCard("Soulmates", userProfile?['soulmate_count'].toString() ?? '0'),
+              _infoCard("Following", userProfile?['following_count'].toString() ?? '0'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Custom Button
+  Widget _actionButton(String label) {
+    return ElevatedButton(
+      onPressed: () {},
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.deepPurpleAccent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.white)),
+    );
+  }
+
+  // Profile Info Card
+  Widget _infoCard(String title, String value) {
+    return Column(
+      children: [
+        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+        const SizedBox(height: 5),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
   }
 }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Added import for dotenv
 import 'screens/auth_screen.dart'; // Authentication screen
 import 'screens/home_screen.dart';
-import 'screens/soul_page.dart';
+import 'screens/soul_page.dart'; // Import SoulPage
 import 'screens/social_feed_screen.dart';
 import 'screens/friends_list_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
@@ -18,15 +19,23 @@ import 'screens/astrology_updates_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: 'https://rhapqmquxypczswwmzun.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJoYXBxbXF1eHlwY3pzd3dtenVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk3NDI1NTUsImV4cCI6MjA1NTMxODU1NX0.NRq2V6A03bF5pWyoHMXgWwnbdX0fRXgMVm-08w_X5D0',
-  );
+  try {
+    print("🔄 Loading environment variables...");
+    await dotenv.load();
+    print("✅ Environment variables loaded!");
 
-  MobileAds.instance.initialize();
-  runApp(AuranaApp());
+    print("🔄 Initializing Supabase...");
+    await Supabase.initialize(
+      url: dotenv.env['SUPABASE_URL']!,
+      anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    );
+    print("✅ Supabase initialized!");
+
+    MobileAds.instance.initialize();
+    runApp(AuranaApp());
+  } catch (error) {
+    print("❌ ERROR in main.dart: $error");
+  }
 }
 
 class AuranaApp extends StatelessWidget {
@@ -105,7 +114,7 @@ class _MainScreenState extends State<MainScreen> {
     ChallengesScreen(),
     SessionsScreen(),
     SpiritualGuidanceScreen(),
-    SoulPage(),
+    SoulPage(userId: Supabase.instance.client.auth.currentUser?.id ?? ''), // Provide userId
     MoonCycleScreen(),
     AuraCatcherScreen(),
     SettingsPage(), // Added Settings Screen
@@ -186,7 +195,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedIndex = 10;
+                    _selectedIndex = 10);
                   });
                 },
               ),
@@ -196,7 +205,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedIndex = 11;
+                    _selectedIndex = 11);
                   });
                 },
               ),
