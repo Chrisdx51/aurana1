@@ -27,8 +27,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _selectedImage;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
+  final TextEditingController _spiritualPathController = TextEditingController();
   DateTime? _selectedDOB;
   String? _zodiacSign;
+  String? _selectedElement;
+  String? _selectedSpiritualPath;
 
   @override
   void initState() {
@@ -52,6 +55,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (profile.dob != null) {
             _selectedDOB = DateTime.tryParse(profile.dob!);
             _zodiacSign = _selectedDOB != null ? _getZodiacSign(_selectedDOB!) : null;
+          }
+          if (profile.spiritualPath != null) {
+            _spiritualPathController.text = profile.spiritualPath!;
+          }
+          if (profile.element != null) {
+            _selectedElement = profile.element!;
           }
           _isLoading = false;
         });
@@ -85,6 +94,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _bioController.text,
         _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
         imageUrl,
+        _spiritualPathController.text, // ✅ Spiritual Path
+        _selectedElement, // ✅ Elemental Connection
       );
 
       if (success) {
@@ -127,11 +138,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
       await supabaseService.updateUserProfile(
-        widget.userId,
-        _nameController.text,
-        _bioController.text,
-        DateFormat('yyyy-MM-dd').format(pickedDate),
-        user?.icon ?? '',
+          widget.userId,
+          _nameController.text,
+          _bioController.text,
+          DateFormat('yyyy-MM-dd').format(pickedDate),
+          user?.icon ?? '',
+          _spiritualPathController.text, // ✅ Save spiritual path
+          _selectedElement // ✅ Save element
       );
     }
   }
@@ -158,11 +171,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user == null) return;
 
     bool success = await supabaseService.updateUserProfile(
-      widget.userId,
-      _nameController.text,
-      _bioController.text,
-      _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
-      user?.icon ?? '',
+        widget.userId,
+        _nameController.text,
+        _bioController.text,
+        _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+        user?.icon ?? '',
+        _spiritualPathController.text, // ✅ Save spiritual path
+        _selectedElement // ✅ Save element
     );
 
     if (success) {
@@ -174,80 +189,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SnackBar(content: Text("❌ Failed to update profile. Try again!")),
       );
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('My Profile', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(icon: Icon(Icons.logout, color: Colors.red), onPressed: _logout),
-        ],
-      ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade300, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(height: 20),
-                GestureDetector(
-                  onTap: _changeProfilePicture,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 65,
-                        backgroundColor: Colors.white,
-                        backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
-                            ? NetworkImage(user!.icon!)
-                            : AssetImage('assets/default_avatar.png') as ImageProvider,
-                      ),
-                      Positioned(
-                        bottom: 5,
-                        right: 5,
-                        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20),
-                _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
-                SizedBox(height: 10),
-                _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),    SizedBox(height: 10),
-                _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
-                SizedBox(height: 10),
-                _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _updateProfile,
-                  child: Text("Save Changes"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildBubbleField(String label, TextEditingController controller, IconData icon, String hint) {
@@ -319,4 +260,142 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
+
+  Widget _buildDropdownField(String label, String? value, List<String> options, ValueChanged<String?> onChanged) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: options.contains(value) ? value : null, // ✅ Fix to avoid value mismatch
+          hint: Text(label, style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+          isExpanded: true,
+          items: options.map((String option) {
+            return DropdownMenuItem<String>(
+              value: option,
+              child: Text(option, style: TextStyle(fontSize: 16)),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('My Profile', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(icon: Icon(Icons.logout, color: Colors.red), onPressed: _logout),
+        ],
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade300, Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(height: 20),
+                GestureDetector(
+                  onTap: _changeProfilePicture,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 65,
+                        backgroundColor: Colors.white,
+                        backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
+                            ? NetworkImage(user!.icon!)
+                            : AssetImage('assets/default_avatar.png') as ImageProvider,
+                      ),
+                      Positioned(
+                        bottom: 5,
+                        right: 5,
+                        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
+                SizedBox(height: 10),
+                _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
+                SizedBox(height: 10),
+
+                // 🔥 Spiritual Path Dropdown
+                _buildDropdownField(
+                  "Choose your Spiritual Path",
+                  _selectedSpiritualPath ?? spiritualPaths.first, // Ensures value is valid
+                  spiritualPaths,
+                      (newValue) {
+                    setState(() {
+                      _selectedSpiritualPath = newValue;
+                    });
+                  },
+                ),
+                SizedBox(height: 10),
+
+                // 🌍 Element Dropdown
+                _buildDropdownField(
+                  "Select Your Element",
+                  _selectedElement ?? elements.first, // Ensures value is valid
+                  elements,
+                      (newValue) {
+                    setState(() {
+                      _selectedElement = newValue;
+                    });
+                  },
+                ),
+
+                SizedBox(height: 10),
+                _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
+                SizedBox(height: 10),
+                _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _updateProfile,
+                  child: Text("Save Changes"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+// List of spiritual paths (Modify as needed)
+final List<String> spiritualPaths = [
+  "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
+];
+
+// List of elements (Modify as needed)
+final List<String> elements = [
+  "Fire 🔥", "Water 💧", "Earth 🌍", "Air 🌬️", "Spirit ✨"
+];
