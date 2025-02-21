@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../main.dart'; // Ensure correct import path for MainScreen
-import 'soul_page.dart'; // Import SoulPage
+import 'home_screen.dart';
+import 'profile_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -12,104 +12,113 @@ class _AuthScreenState extends State<AuthScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _isSignUp = false; // Toggle between Sign-Up & Login
-  bool _isLoading = false; // Loading indicator
+  bool _isSignUp = false;
+  bool _isLoading = false;
 
-  // Function to validate email format
+  // 🔥 Validate email format
   bool _isValidEmail(String email) {
     final RegExp emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
     return emailRegex.hasMatch(email);
   }
 
-  // Function to handle authentication
+  // 🔍 Check if user has a profile
+  Future<bool> _doesProfileExist(String userId) async {
+    final response = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+    return response != null; // Returns true if a profile exists
+  }
+
+  // 🔥 Handle authentication
   Future<void> _authenticate() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // Check for empty fields
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Please enter both email and password.")),
-      );
+      _showMessage("⚠️ Please enter both email and password.");
       return;
     }
 
-    // Validate email format
     if (!_isValidEmail(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Please enter a valid email address.")),
-      );
+      _showMessage("⚠️ Please enter a valid email address.");
       return;
     }
 
-    // Check password length (Min 6 characters)
     if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Password must be at least 6 characters long.")),
-      );
+      _showMessage("⚠️ Password must be at least 6 characters long.");
       return;
     }
 
-    setState(() => _isLoading = true); // Show loading indicator
+    setState(() => _isLoading = true);
 
     try {
       final AuthResponse response;
       if (_isSignUp) {
-        // Sign-Up Logic
+        // 🔥 Sign-Up Logic
         response = await supabase.auth.signUp(email: email, password: password);
 
         if (response.user != null) {
-          final userId = response.user!.id;
+          final String userId = response.user!.id;
 
-          // Create a new profile in Supabase
+          // 🔥 Ensure the profile is created
           await supabase.from('profiles').insert({
-            'id': userId,
-            'real_name': 'New User',
-            'nickname': email.split('@')[0], // Use part of email as nickname
-            'bio': 'Welcome to Aurana!',
-            'dob': null, // User can update later
-            'profile_pic': '', // Empty for now
-            'background_color': '0xFF673AB7', // Default purple
-            'soulmate_count': 0,
-            'following_count': 0,
-            'created_at': DateTime.now().toIso8601String(),
+            'id': userId, // Use Supabase Auth UUID as ID
+            'name': 'New User',
+            'status': 'Active',
+            'bio': '',
+            'dob': null,
+            'email': email,
           });
 
-          print("✅ New profile created for $email!");
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("✅ Account Created! Please log in.")),
+          _showMessage("✅ Account Created! Redirecting to Profile...");
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
           );
-          setState(() => _isSignUp = false); // Switch to login mode
+          return;
+        } else {
+          _showMessage("⚠️ Failed to create account.");
         }
       } else {
-        // Log-In Logic
+        // 🔥 Log-In Logic
         response = await supabase.auth.signInWithPassword(email: email, password: password);
 
         if (response.user != null) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SoulPage(userId: response.user!.id ?? ''),
-            ),
-          );
+          final String userId = response.user!.id;
+
+          // 🔍 Check if the profile exists
+          bool profileExists = await _doesProfileExist(userId);
+
+          if (profileExists) {
+            // ✅ Redirect to Home if profile exists
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => HomeScreen(userName: email)),
+            );
+          } else {
+            // 🚀 Redirect to Profile Setup if profile is missing
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
+            );
+          }
+        } else {
+          _showMessage("⚠️ Invalid login credentials.");
         }
       }
     } catch (error) {
-      // Check if error is "user already exists"
-      if (error.toString().contains("user_already_exists")) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("⚠️ Account already exists. Switching to login mode.")),
-        );
-        setState(() => _isSignUp = false);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("⚠️ Authentication Error: ${error.toString()}")),
-        );
-      }
+      _showMessage("⚠️ Authentication Error: ${error.toString()}");
     }
 
-    setState(() => _isLoading = false); // Hide loading indicator
+    setState(() => _isLoading = false);
+  }
+
+  // 🔥 Show messages
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -132,17 +141,17 @@ class _AuthScreenState extends State<AuthScreen> {
             _isLoading
                 ? CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _authenticate,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF22A45D),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(_isSignUp ? "Sign Up" : "Log In"),
-                  ),
+              onPressed: _authenticate,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF22A45D),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 40),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(_isSignUp ? "Sign Up" : "Log In"),
+            ),
             const SizedBox(height: 10),
             TextButton(
               onPressed: () => setState(() => _isSignUp = !_isSignUp),
@@ -151,35 +160,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 style: TextStyle(color: Colors.blue),
               ),
             ),
-            const SizedBox(height: 10),
-
-            // Social Logins
-            const Divider(),
-            const SizedBox(height: 10),
-            _buildSocialButton(
-              text: "Continue with Google",
-              icon: Icons.g_mobiledata,
-              color: Colors.redAccent,
-              onTap: () {
-                print("Google Login");
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildSocialButton(
-              text: "Continue with Facebook",
-              icon: Icons.facebook,
-              color: Colors.blue,
-              onTap: () {
-                print("Facebook Login");
-              },
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInputField(TextEditingController controller, String label, IconData icon, {bool obscureText = false}) {
+  Widget _buildInputField(TextEditingController controller, String label, IconData icon,
+      {bool obscureText = false}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -194,23 +182,6 @@ class _AuthScreenState extends State<AuthScreen> {
           prefixIcon: Icon(icon, color: Colors.blue),
           border: InputBorder.none,
           labelText: label,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton({required String text, required IconData icon, required Color color, required VoidCallback onTap}) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, color: Colors.white),
-        label: Text(text),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 40),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );

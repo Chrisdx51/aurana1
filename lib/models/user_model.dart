@@ -1,51 +1,40 @@
-import 'dart:convert';
-
 class UserModel {
   final String id;
-  final String realName;
-  final String nickname;
+  final String name;
   final String bio;
-  final String dob;
-  final String zodiac;
-  final String profilePic;
-  final List<String> interests;
+  final String? icon;
+  final String? dob; // ✅ Added Date of Birth
 
   UserModel({
     required this.id,
-    required this.realName,
-    required this.nickname,
+    required this.name,
     required this.bio,
-    required this.dob,
-    required this.zodiac,
-    required this.profilePic,
-    required this.interests,
+    this.icon,
+    this.dob, // ✅ Added to constructor
   });
 
-  // Convert a Supabase row to a UserModel
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'],
-      realName: json['real_name'] ?? '',
-      nickname: json['nickname'] ?? '',
+      name: json['name'] ?? '',
       bio: json['bio'] ?? '',
-      dob: json['dob'] ?? '',
-      zodiac: json['zodiac'] ?? '',
-      profilePic: json['profile_pic'] ?? '',
-      interests: (json['interests'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      icon: json['icon'],
+      dob: json['dob'], // ✅ Fetching DOB from database
     );
   }
 
-  // Convert UserModel to a Supabase row format
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'real_name': realName,
-      'nickname': nickname,
-      'bio': bio,
-      'dob': dob,
-      'zodiac': zodiac,
-      'profile_pic': profilePic,
-      'interests': interests,
-    };
+  UserModel copyWith({
+    String? name,
+    String? bio,
+    String? icon,
+    String? dob, // ✅ Allow updating DOB
+  }) {
+    return UserModel(
+      id: this.id,
+      name: name ?? this.name,
+      bio: bio ?? this.bio,
+      icon: icon ?? this.icon,
+      dob: dob ?? this.dob, // ✅ Update DOB when needed
+    );
   }
 }

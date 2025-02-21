@@ -1,115 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import '../utils/encryption.dart'; // Import encryption utility
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class ChatScreen extends StatefulWidget {
-  final String friendName;
-
-  ChatScreen({required this.friendName});
-
+class ChatsScreen extends StatefulWidget {
   @override
-  _ChatScreenState createState() => _ChatScreenState();
+  _ChatsScreenState createState() => _ChatsScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  List<String> messages = [];
-  final TextEditingController _messageController = TextEditingController();
+class _ChatsScreenState extends State<ChatsScreen> {
+  final SupabaseClient supabase = Supabase.instance.client;
+  List<dynamic> chats = [];
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
+    fetchChats();
   }
 
-  Future<void> _loadMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedMessages = prefs.getString(widget.friendName);
-    if (savedMessages != null) {
+  Future<void> fetchChats() async {
+    final response = await supabase.from('chats').select('*');
+
+    if (response.isNotEmpty) {
       setState(() {
-        messages = (json.decode(savedMessages) as List)
-            .map((msg) => decryptMessage(msg))
-            .toList();
+        chats = response;
       });
-    }
-  }
-
-  Future<void> _saveMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString(
-      widget.friendName,
-      json.encode(messages.map((msg) => encryptMessage(msg)).toList()),
-    );
-  }
-
-  void _sendMessage() {
-    String text = _messageController.text.trim();
-    if (text.isNotEmpty) {
-      setState(() {
-        messages.insert(0, 'You: $text');
-        _messageController.clear();
-      });
-      _saveMessages();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Chat with ${widget.friendName}'),
-        backgroundColor: Colors.teal.shade300,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              reverse: true,
-              padding: EdgeInsets.all(16.0),
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                final message = messages[index];
-                final isMe = message.startsWith('You:');
-                return Align(
-                  alignment:
-                      isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    padding: EdgeInsets.all(12),
-                    margin: EdgeInsets.symmetric(vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isMe
-                          ? Colors.teal.shade200
-                          : Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      message,
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(hintText: 'Type a message...'),
-                  ),
-                ),
-                SizedBox(width: 10),
-                IconButton(
-                  icon: Icon(Icons.send, color: Colors.teal.shade300),
-                  onPressed: _sendMessage,
-                ),
-              ],
-            ),
-          ),
-        ],
+      appBar: AppBar(title: Text('Chats')),
+      body: chats.isEmpty
+          ? Center(child: Text('No chats available'))
+          : ListView.builder(
+        itemCount: chats.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text("Chat between ${chats[index]['user_one']} and ${chats[index]['user_two']}"),
+          );
+        },
       ),
     );
   }
