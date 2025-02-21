@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'social_feed_screen.dart';
 
 class CreatePostScreen extends StatefulWidget {
   @override
@@ -15,6 +16,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   final ImagePicker _picker = ImagePicker();
 
+  // 🔥 Pick Image or Video
   Future<void> _pickMedia(ImageSource source, {bool isVideo = false}) async {
     final XFile? pickedFile = isVideo
         ? await _picker.pickVideo(source: source)
@@ -27,6 +29,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  // 🔥 Upload Image/Video to Supabase Storage
   Future<String?> _uploadMedia() async {
     if (_selectedMedia == null) return null;
 
@@ -70,6 +73,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  // 🔥 Submit Post to Supabase
   Future<void> _postContent() async {
     if (_textController.text.isEmpty && _selectedMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +109,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       const SnackBar(content: Text("Post successfully uploaded!")),
     );
 
-    Navigator.pop(context);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => SocialFeedScreen()), // ✅ Redirect to Feed
+    );
   }
 
   @override
@@ -169,9 +176,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       image: _selectedMedia!.path.endsWith('.mp4')
                           ? null
                           : DecorationImage(
-                              image: FileImage(_selectedMedia!),
-                              fit: BoxFit.cover,
-                            ),
+                        image: FileImage(_selectedMedia!),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                     child: _selectedMedia!.path.endsWith('.mp4')
                         ? const Center(child: Icon(Icons.video_collection, size: 50, color: Colors.white))

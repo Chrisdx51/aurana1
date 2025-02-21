@@ -1,21 +1,73 @@
 import 'package:flutter/material.dart';
-import 'social_feed_screen.dart';
-import 'soul_page.dart';
-import 'spiritual_tools_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/supabase_service.dart';
+import '../models/user_model.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final String userName;
 
   HomeScreen({required this.userName}); // Accept userName dynamically
 
-  // List of rotating backgrounds
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final SupabaseService supabaseService = SupabaseService();
+  UserModel? user;
+  bool _isLoading = true;
+  bool _hasError = false;
+
   final List<String> backgroundImages = [
     'assets/images/bg1.png',
     'assets/images/bg2.png',
     'assets/images/bg3.png',
   ];
 
-  // Function to calculate the current background index based on the date
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  // 🔥 Fetch User Profile from Supabase
+  Future<void> _loadUserProfile() async {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+        return;
+      }
+
+      final profile = await supabaseService.getUserProfile(userId);
+      if (profile != null) {
+        setState(() {
+          user = profile;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _hasError = true;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 🔄 Get background image based on the date
   String getRotatingBackground() {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
@@ -45,7 +97,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          // Rotating background image
+          // 🔄 Rotating background image
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -70,17 +122,18 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 children: [
                   SizedBox(height: 10),
-                  // Greeting Section
-                  _buildGreetingSection(),
+                  _isLoading
+                      ? Center(child: CircularProgressIndicator(color: Colors.purple))
+                      : _hasError
+                      ? _buildErrorMessage()
+                      : _buildGreetingSection(),
                   SizedBox(height: 10),
-                  // Daily Affirmation Section
                   _buildCardSection(
                     title: "Today's Affirmation",
                     content: '“I am in alignment with my higher purpose.”',
                     icon: Icons.lightbulb_outline,
                   ),
                   SizedBox(height: 10),
-                  // Daily Challenge Section
                   _buildCardSection(
                     title: "Today's Challenge",
                     content: "Take 5 minutes to meditate and breathe deeply.",
@@ -94,15 +147,13 @@ class HomeScreen extends StatelessWidget {
                     },
                   ),
                   SizedBox(height: 10),
-                  // Spiritual Insight Section
                   _buildCardSection(
                     title: "Today's Insight",
                     content:
-                        "The energy of the universe flows within you. Take a moment to connect with your inner light.",
+                    "The energy of the universe flows within you. Take a moment to connect with your inner light.",
                     icon: Icons.self_improvement,
                   ),
                   SizedBox(height: 10),
-                  // Trending Topics Section
                   _buildTrendingTopicsSection(),
                   SizedBox(height: 20),
                 ],
@@ -114,6 +165,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // 🟢 Greeting Section with Dynamic Data
   Widget _buildGreetingSection() {
     return Container(
       padding: const EdgeInsets.all(12.0),
@@ -126,7 +178,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 25,
-            backgroundImage: AssetImage('assets/images/profile.png'),
+            backgroundImage: AssetImage('assets/images/default_avatar.png'),
           ),
           SizedBox(width: 10),
           Expanded(
@@ -134,7 +186,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome back, $userName!',
+                  'Welcome back, ${user?.name ?? "Guest"}!',
                   style: TextStyle(
                     fontFamily: 'fo18',
                     fontSize: 14,
@@ -159,6 +211,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // 🟢 Card Section for Daily Messages
   Widget _buildCardSection({
     required String title,
     required String content,
@@ -211,6 +264,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // 🟢 Trending Topics Section
   Widget _buildTrendingTopicsSection() {
     final List<Map<String, String>> trendingTopics = [
       {"topic": "#Mindfulness", "posts": "324 posts"},
@@ -228,51 +282,18 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Trending Topics",
-            style: TextStyle(
-              fontFamily: 'fo18',
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-          SizedBox(height: 10),
-          Column(
-            children: trendingTopics.map((topic) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        topic["topic"]!,
-                        style: TextStyle(
-                          fontFamily: 'fo18',
-                          fontSize: 12,
-                          color: Colors.black,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      topic["posts"]!,
-                      style: TextStyle(
-                        fontFamily: 'fo18',
-                        fontSize: 12,
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+        children: trendingTopics.map((topic) {
+          return ListTile(
+            title: Text(topic["topic"]!, style: TextStyle(fontSize: 12, color: Colors.black)),
+            subtitle: Text(topic["posts"]!, style: TextStyle(fontSize: 12, color: Colors.grey)),
+          );
+        }).toList(),
       ),
     );
+  }
+
+  // 🔥 Error Message UI
+  Widget _buildErrorMessage() {
+    return Center(child: Text("Error loading profile", style: TextStyle(color: Colors.red)));
   }
 }
