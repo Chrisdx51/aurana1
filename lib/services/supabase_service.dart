@@ -30,7 +30,7 @@ class SupabaseService {
           .from('profiles')
           .select('name, bio, dob')
           .eq('id', userId)
-          .maybeSingle(); // ✅ FIX: Use `maybeSingle()` to avoid errors when no row exists
+          .maybeSingle(); // ✅ Avoids errors when no row exists
 
       if (response == null) return false;
 
@@ -43,17 +43,29 @@ class SupabaseService {
     }
   }
 
-  // 🔥 Update Profile Picture URL in Supabase
-  Future<bool> updateUserProfilePicture(String userId, String imageUrl) async {
+  // 🔥 Update User Profile in Supabase
+  Future<bool> updateUserProfile(String userId, String name, String bio, String? dob, String? icon) async {
     try {
       final response = await supabase
           .from('profiles')
-          .update({'icon': imageUrl})
-          .eq('id', userId);
+          .update({
+        'name': name,
+        'bio': bio,
+        'dob': dob,
+        'icon': icon, // ✅ Ensure profile picture updates
+      })
+          .eq('id', userId)
+          .select();
 
-      return response.error == null;
+      if (response.isEmpty) {
+        print('❌ Failed to update profile: No rows modified.');
+        return false;
+      }
+
+      print('✅ Profile updated successfully!');
+      return true;
     } catch (error) {
-      print("❌ Error updating profile picture: $error");
+      print('❌ Error updating profile: $error');
       return false;
     }
   }
@@ -61,21 +73,35 @@ class SupabaseService {
   // 🔥 Upload Profile Picture to Supabase Storage
   Future<String?> uploadProfilePicture(String userId, File imageFile) async {
     try {
-      final String fileName = "avatars/$userId.png";
+      final String fileName = "avatars/$userId-${DateTime.now().millisecondsSinceEpoch}.png";
 
+      // ✅ First, remove any old profile pictures for this user
+      final listResponse = await supabase.storage.from('profile_pictures').list(path: "avatars/");
+
+      for (var file in listResponse) {
+        if (file.name.startsWith("$userId-")) {
+          await supabase.storage.from('profile_pictures').remove(["avatars/${file.name}"]);
+        }
+      }
+
+      // ✅ Upload the new image
       await supabase.storage.from('profile_pictures').upload(
         fileName,
         imageFile,
         fileOptions: FileOptions(upsert: true),
       );
 
+      // ✅ Retrieve and return the new public URL
       final String publicUrl = supabase.storage.from('profile_pictures').getPublicUrl(fileName);
+      print("✅ Image uploaded: $publicUrl");
+
       return publicUrl;
     } catch (error) {
       print("❌ Error uploading profile picture: $error");
       return null;
     }
   }
+
 
   // 🔥 Upload Feed Photo to Supabase Storage
   Future<String?> uploadFeedPhoto(String userId, File imageFile) async {
