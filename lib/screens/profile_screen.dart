@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
@@ -35,7 +36,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserProfile();
   }
 
-  // 🔥 Fetch User Profile
   Future<void> _loadUserProfile() async {
     setState(() {
       _isLoading = true;
@@ -70,29 +70,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // 🔥 Pick and Upload Profile Picture (Auto-Save)
   Future<void> _changeProfilePicture() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image == null) return;
 
     File imageFile = File(image.path);
+
     final imageUrl = await supabaseService.uploadProfilePicture(widget.userId, imageFile);
 
     if (imageUrl != null) {
-      await supabaseService.updateUserProfilePicture(widget.userId, imageUrl);
-      setState(() {
-        user = user?.copyWith(icon: imageUrl);
-      });
+      bool success = await supabaseService.updateUserProfile(
+        widget.userId,
+        _nameController.text,
+        _bioController.text,
+        _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+        imageUrl,
+      );
+
+      if (success) {
+        setState(() {
+          user = user?.copyWith(icon: imageUrl);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("✅ Profile picture updated successfully!")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ Failed to save profile picture in database.")),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Failed to upload image to Supabase storage.")),
+      );
     }
   }
 
-  // 🔥 Log Out Function
   void _logout() async {
     await Supabase.instance.client.auth.signOut();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AuthScreen()));
   }
 
-  // 🔥 Date Picker for DOB
   Future<void> _pickDate() async {
     DateTime? pickedDate = await showDatePicker(
       context: context,
@@ -106,10 +125,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _selectedDOB = pickedDate;
         _zodiacSign = _getZodiacSign(pickedDate);
       });
+
+      await supabaseService.updateUserProfile(
+        widget.userId,
+        _nameController.text,
+        _bioController.text,
+        DateFormat('yyyy-MM-dd').format(pickedDate),
+        user?.icon ?? '',
+      );
     }
   }
 
-  // 🔥 Get Zodiac Sign from DOB
   String _getZodiacSign(DateTime dob) {
     int day = dob.day;
     int month = dob.month;
@@ -128,9 +154,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "♓ Pisces";
   }
 
+  Future<void> _updateProfile() async {
+    if (user == null) return;
+
+    bool success = await supabaseService.updateUserProfile(
+      widget.userId,
+      _nameController.text,
+      _bioController.text,
+      _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+      user?.icon ?? '',
+    );
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("✅ Profile updated successfully!")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Failed to update profile. Try again!")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text('My Profile', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(icon: Icon(Icons.logout, color: Colors.red), onPressed: _logout),
+        ],
+      ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -143,45 +199,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(height: 20), // ✅ Added space for ad banner
+                SizedBox(height: 20),
                 GestureDetector(
                   onTap: _changeProfilePicture,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       CircleAvatar(
-                        radius: 55,
+                        radius: 65,
                         backgroundColor: Colors.white,
                         backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
                             ? NetworkImage(user!.icon!)
-                            : AssetImage('assets/spiritual_avatar.png') as ImageProvider, // ✅ Spiritual-style default image
+                            : AssetImage('assets/default_avatar.png') as ImageProvider,
                       ),
                       Positioned(
                         bottom: 5,
                         right: 5,
-                        child: Icon(Icons.camera_alt, color: Colors.black),
+                        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
                       ),
                     ],
                   ),
                 ),
                 SizedBox(height: 20),
-                _buildBubbleField("Name", _nameController, Icons.person),
+                _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
                 SizedBox(height: 10),
-                _buildBubbleField("Bio", _bioController, Icons.book),
+                _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),    SizedBox(height: 10),
+                _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
                 SizedBox(height: 10),
-                _buildBubbleField(
-                  "Date of Birth",
-                  TextEditingController(text: _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : "Not Set"),
-                  Icons.calendar_today,
-                  isReadOnly: true,
-                  onTap: _pickDate,
+                _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _updateProfile,
+                  child: Text("Save Changes"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-                SizedBox(height: 10),
-                _buildBubbleText(_zodiacSign ?? "Not Set", Icons.star),
               ],
             ),
           ),
@@ -190,27 +250,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildBubbleField(String label, TextEditingController controller, IconData icon,
-      {bool isReadOnly = false, VoidCallback? onTap}) {
+  Widget _buildBubbleField(String label, TextEditingController controller, IconData icon, String hint) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.purpleAccent),
+          SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBubbleDateField(String label, DateTime? date, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(25),
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, color: Colors.blueAccent),
-            SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                readOnly: isReadOnly,
-                decoration: InputDecoration(border: InputBorder.none),
-                controller: controller,
-              ),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, color: Colors.blueAccent),
+                SizedBox(width: 10),
+                Text(
+                  date != null ? DateFormat('yyyy-MM-dd').format(date) : label,
+                  style: TextStyle(fontSize: 16),
+                ),
+              ],
             ),
+            Icon(Icons.arrow_drop_down, color: Colors.grey),
           ],
         ),
       ),
