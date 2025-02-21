@@ -43,8 +43,16 @@ class SupabaseService {
     }
   }
 
-  // 🔥 Update User Profile in Supabase
-  Future<bool> updateUserProfile(String userId, String name, String bio, String? dob, String? icon) async {
+  // ✅ Update User Profile in Supabase (Now Includes Spiritual Path & Element)
+  Future<bool> updateUserProfile(
+      String userId,
+      String name,
+      String bio,
+      String? dob,
+      String? icon,
+      String? spiritualPath,
+      String? element,
+      ) async {
     try {
       final response = await supabase
           .from('profiles')
@@ -52,7 +60,9 @@ class SupabaseService {
         'name': name,
         'bio': bio,
         'dob': dob,
-        'icon': icon, // ✅ Ensure profile picture updates
+        'icon': icon,
+        'spiritual_path': spiritualPath, // ✅ Saving Spiritual Path
+        'element': element, // ✅ Saving Elemental Connection
       })
           .eq('id', userId)
           .select();
@@ -101,7 +111,6 @@ class SupabaseService {
       return null;
     }
   }
-
 
   // 🔥 Upload Feed Photo to Supabase Storage
   Future<String?> uploadFeedPhoto(String userId, File imageFile) async {
