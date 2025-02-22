@@ -13,7 +13,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final TextEditingController _textController = TextEditingController();
   File? _selectedMedia;
   bool _isUploading = false;
-
+  String _visibility = "everyone"; // Visibility selector
   final ImagePicker _picker = ImagePicker();
 
   // 🔥 Pick Image or Video
@@ -47,21 +47,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
 
       final fileName = _selectedMedia!.path.split('/').last;
-      final filePath = 'posts/${user.id}/$fileName';
+      final String filePath = 'posts/${user.id}/$fileName'; // ✅ Correct file path
 
       await Supabase.instance.client.storage
           .from('post_media')
           .upload(filePath, _selectedMedia!, fileOptions: FileOptions(upsert: true));
 
-      final publicUrl = Supabase.instance.client.storage
-          .from('post_media')
-          .getPublicUrl(filePath);
-
-      setState(() {
-        _isUploading = false;
-      });
-
-      return publicUrl;
+      return filePath; // ✅ Returning filePath (not URL) to be used in `_postContent`
     } catch (e) {
       setState(() {
         _isUploading = false;
@@ -89,172 +81,161 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _isUploading = true;
     });
 
-    String? mediaUrl;
+    String? filePath;
     if (_selectedMedia != null) {
-      mediaUrl = await _uploadMedia();
+      filePath = await _uploadMedia();
     }
 
     await Supabase.instance.client.from('posts').insert({
       'user_id': user.id,
       'content': _textController.text,
-      'image_url': mediaUrl,
+      'image_url': filePath != null
+          ? 'https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/post_media/$filePath'
+          : null,
+      'visibility': _visibility,
       'created_at': DateTime.now().toIso8601String(),
     });
 
     setState(() {
       _isUploading = false;
+      _textController.clear();
+      _selectedMedia = null;
     });
 
+    // ✅ Show Success Message
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Post successfully uploaded!")),
+      const SnackBar(content: Text("✅ Post successfully uploaded!")),
     );
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => SocialFeedScreen()), // ✅ Redirect to Feed
-    );
+    // ✅ Navigate back to the feed
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         title: const Text("Create Post"),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.black, // ✅ Status bar area is now black
         elevation: 0,
         centerTitle: true,
       ),
-      body: Stack(
-        children: [
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1E1B4B), Color(0xFF3A2F7A)], // Smooth mystical theme
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight, // ✅ Prevents overflow
               ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 90), // Space for AppBar
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 50), // ✅ Lowered for ad banner space
 
-                // Text Input
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white30),
-                  ),
-                  child: TextField(
-                    controller: _textController,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: "Write something...",
-                      hintStyle: TextStyle(color: Colors.white70),
-                      border: InputBorder.none,
+                    // 🌟 Visibility Selector
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("Visibility: ", style: TextStyle(color: Colors.black87, fontSize: 16)),
+                        DropdownButton<String>(
+                          dropdownColor: Colors.white,
+                          value: _visibility,
+                          items: [
+                            DropdownMenuItem(value: "everyone", child: Text("Everyone")),
+                            DropdownMenuItem(value: "friends", child: Text("Friends Only")),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _visibility = value!;
+                            });
+                          },
+                        ),
+                      ],
                     ),
-                    maxLines: 5,
-                  ),
-                ),
-                const SizedBox(height: 15),
 
-                // Media Preview
-                if (_selectedMedia != null)
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    width: double.infinity,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade700, width: 2),
-                      image: _selectedMedia!.path.endsWith('.mp4')
-                          ? null
-                          : DecorationImage(
-                        image: FileImage(_selectedMedia!),
-                        fit: BoxFit.cover,
+                    // 📜 Text Input
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey),
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        decoration: InputDecoration(
+                          hintText: "Write something...",
+                          border: InputBorder.none,
+                        ),
+                        maxLines: 5,
                       ),
                     ),
-                    child: _selectedMedia!.path.endsWith('.mp4')
-                        ? const Center(child: Icon(Icons.video_collection, size: 50, color: Colors.white))
-                        : null,
-                  ),
+                    const SizedBox(height: 15),
 
-                // Upload Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildMysticalButton(
-                      label: "Image",
-                      icon: Icons.image,
-                      color1: Colors.blue,
-                      color2: Colors.purple,
-                      onPressed: () => _pickMedia(ImageSource.gallery),
-                      size: 50,
+                    // 📸 Media Preview (Fixed Overflow)
+                    if (_selectedMedia != null)
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        width: double.infinity,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade700, width: 2),
+                          image: DecorationImage(
+                            image: FileImage(_selectedMedia!),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+
+                    // 📂 Upload Buttons (Icons)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          onPressed: () => _pickMedia(ImageSource.gallery),
+                          icon: Icon(Icons.image, size: 35, color: Colors.blue),
+                          tooltip: "Upload Image",
+                        ),
+                        const SizedBox(width: 20),
+                        IconButton(
+                          onPressed: () => _pickMedia(ImageSource.gallery, isVideo: true),
+                          icon: Icon(Icons.video_library, size: 35, color: Colors.teal),
+                          tooltip: "Upload Video",
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    _buildMysticalButton(
-                      label: "Video",
-                      icon: Icons.video_library,
-                      color1: Colors.green,
-                      color2: Colors.teal,
-                      onPressed: () => _pickMedia(ImageSource.gallery, isVideo: true),
-                      size: 50,
+                    const SizedBox(height: 10),
+
+                    // 🚀 Post Button (Fixed Overflow)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20), // ✅ Ensures it never gets cut off
+                      child: ElevatedButton.icon(
+                        onPressed: _isUploading ? null : _postContent,
+                        icon: Icon(Icons.send, size: 24, color: Colors.white),
+                        label: Text(
+                          _isUploading ? "Posting..." : "Post",
+                          style: TextStyle(fontSize: 18, color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade900, // ✅ Kept same color
+                          padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-
-                // Post Button
-                _buildMysticalButton(
-                  label: _isUploading ? "Posting..." : "Post",
-                  icon: Icons.send,
-                  color1: Colors.orange,
-                  color2: Colors.red,
-                  onPressed: _isUploading ? null : _postContent,
-                  size: 60,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMysticalButton({
-    required String label,
-    required IconData icon,
-    required Color color1,
-    required Color color2,
-    required VoidCallback? onPressed,
-    double size = 60,
-  }) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: LinearGradient(
-            colors: [color1, color2],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: size * 0.4),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: Colors.white, fontSize: 14)),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
