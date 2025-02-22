@@ -12,6 +12,7 @@ import 'aura_analysis_screen.dart';
 class AuraCatcherScreen extends StatefulWidget {
   const AuraCatcherScreen({Key? key}) : super(key: key);
 
+
   @override
   _AuraCatcherScreenState createState() => _AuraCatcherScreenState();
 }

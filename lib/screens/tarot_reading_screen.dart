@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TarotReadingScreen extends StatefulWidget {
+
   @override
   _TarotReadingScreenState createState() => _TarotReadingScreenState();
 }

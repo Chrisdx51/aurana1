@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import '../main.dart';
 import 'auth_screen.dart';
-import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -94,8 +94,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _bioController.text,
         _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
         imageUrl,
-        _spiritualPathController.text, // ✅ Spiritual Path
-        _selectedElement, // ✅ Elemental Connection
+        _spiritualPathController.text,
+        _selectedElement,
       );
 
       if (success) {
@@ -143,8 +143,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _bioController.text,
           DateFormat('yyyy-MM-dd').format(pickedDate),
           user?.icon ?? '',
-          _spiritualPathController.text, // ✅ Save spiritual path
-          _selectedElement // ✅ Save element
+          _spiritualPathController.text,
+          _selectedElement
       );
     }
   }
@@ -176,8 +176,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _bioController.text,
         _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
         user?.icon ?? '',
-        _spiritualPathController.text, // ✅ Save spiritual path
-        _selectedElement // ✅ Save element
+        _spiritualPathController.text,
+        _selectedElement
     );
 
     if (success) {
@@ -272,7 +272,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: options.contains(value) ? value : null, // ✅ Fix to avoid value mismatch
+          value: options.contains(value) ? value : null,
           hint: Text(label, style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
           isExpanded: true,
           items: options.map((String option) {
@@ -344,7 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // 🔥 Spiritual Path Dropdown
                 _buildDropdownField(
                   "Choose your Spiritual Path",
-                  _selectedSpiritualPath ?? spiritualPaths.first, // Ensures value is valid
+                  _selectedSpiritualPath ?? spiritualPaths.first,
                   spiritualPaths,
                       (newValue) {
                     setState(() {
@@ -357,7 +357,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // 🌍 Element Dropdown
                 _buildDropdownField(
                   "Select Your Element",
-                  _selectedElement ?? elements.first, // Ensures value is valid
+                  _selectedElement ?? elements.first,
                   elements,
                       (newValue) {
                     setState(() {
