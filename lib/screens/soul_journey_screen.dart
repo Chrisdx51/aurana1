@@ -82,128 +82,166 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Soul Journey"),
-        backgroundColor: Colors.deepPurple,
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _milestones.isEmpty
-          ? Center(child: Text("No milestones yet. Start your journey!"))
-          : ListView.builder(
-        itemCount: _milestones.length,
-        itemBuilder: (context, index) {
-          var milestone = _milestones[index];
-
-          return Card(
-            margin: EdgeInsets.all(10),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                    milestone.icon != null && milestone.icon!.isNotEmpty
-                        ? NetworkImage(milestone.icon!)
-                        : AssetImage('assets/default_avatar.png')
-                    as ImageProvider,
-                  ),
-                  title: Text(
-                    milestone.username ?? "Unknown Seeker",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                      "${milestone.milestoneType} • ${milestone.createdAt.toLocal()}"),
-                  trailing: milestone.userId ==
-                      Supabase.instance.client.auth.currentUser?.id
-                      ? IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () async {
-                      await _deleteMilestone(milestone.id);
-                    },
-                  )
-                      : null,
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Text(milestone.content,
-                      style: TextStyle(fontSize: 16)),
-                ),
-
-                // ✅ Fixed Media Display Logic
-                if (milestone.mediaUrl != null && milestone.mediaUrl!.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: milestone.mediaUrl!.endsWith('.mp4')
-                          ? AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: VideoWidget(videoUrl: milestone.mediaUrl!),
-                      )
-                          : Image.network(
-                        milestone.mediaUrl!,
-                        width: double.infinity, // ✅ Full width
-                        height: null, // ✅ No fixed height (auto scales)
-                        fit: BoxFit.contain, // ✅ Ensures the whole image fits in frame
-                        alignment: Alignment.center, // ✅ Centers the image properly
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) =>
-                            Icon(Icons.broken_image, size: 100, color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.local_fire_department,
-                          color: milestone.userHasBoosted
-                              ? Colors.orange
-                              : Colors.grey,
-                        ),
-                        onPressed: milestone.userHasBoosted
-                            ? null
-                            : () async {
-                          bool success =
-                          await _supabaseService
-                              .addEnergyBoost(milestone.id);
-                          if (success) {
-                            setState(() {
-                              _milestones[index] =
-                                  milestone.copyWith(
-                                    energyBoosts:
-                                    milestone.energyBoosts + 1,
-                                    userHasBoosted: true,
-                                  );
-                            });
-                          }
-                        },
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        "Boost ${milestone.energyBoosts}",
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      body: Stack(
+        children: [
+          // 🔹 Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/bg10.png',
+              fit: BoxFit.cover, // ✅ Ensures full coverage without distortion
             ),
-          );
-        },
+          ),
+
+          // 🔹 Main Content
+          Column(
+            children: [
+              AppBar(
+                title: Text("Your Soul Journey"),
+                backgroundColor: Colors.white, // ✅ Makes AppBar blend in
+                elevation: 0, // ✅ Removes shadow
+              ),
+              Expanded(
+                child: _isLoading
+                    ? Center(child: CircularProgressIndicator())
+                    : _milestones.isEmpty
+                    ? Center(
+                    child: Text("No milestones yet. Start your journey!"))
+                    : ListView.builder(
+                  itemCount: _milestones.length,
+                  itemBuilder: (context, index) {
+                    var milestone = _milestones[index];
+
+                    return Card(
+                      margin: EdgeInsets.all(10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: milestone.icon !=
+                                  null &&
+                                  milestone.icon!.isNotEmpty
+                                  ? NetworkImage(milestone.icon!)
+                                  : AssetImage(
+                                  'assets/default_avatar.png')
+                              as ImageProvider,
+                            ),
+                            title: Text(
+                              milestone.username ?? "Unknown Seeker",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                                "${milestone.milestoneType} • ${milestone.createdAt.toLocal()}"),
+                            trailing: milestone.userId ==
+                                Supabase.instance.client.auth
+                                    .currentUser?.id
+                                ? IconButton(
+                              icon: Icon(Icons.delete,
+                                  color: Colors.red),
+                              onPressed: () async {
+                                await _deleteMilestone(
+                                    milestone.id);
+                              },
+                            )
+                                : null,
+                          ),
+                          Padding(
+                            padding:
+                            EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(milestone.content,
+                                style: TextStyle(fontSize: 16)),
+                          ),
+
+                          // ✅ Fixed Media Display Logic
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: milestone.mediaUrl != null &&
+                                  milestone.mediaUrl!.isNotEmpty
+                                  ? Container(
+                                height: 250, // ✅ Fixed Height
+                                width: double.infinity, // ✅ Auto Adjust Width
+                                child: milestone.mediaUrl!
+                                    .endsWith('.mp4')
+                                    ? VideoWidget(
+                                    videoUrl: milestone
+                                        .mediaUrl!)
+                                    : Image.network(
+                                  milestone.mediaUrl!,
+                                  fit: BoxFit.contain, // ✅ Keeps the whole image visible
+                                  errorBuilder: (context,
+                                      error,
+                                      stackTrace) =>
+                                      Icon(
+                                          Icons
+                                              .broken_image,
+                                          size: 100,
+                                          color: Colors
+                                              .grey),
+                                ),
+                              )
+                                  : SizedBox(), // ✅ Prevents empty space if no media
+                            ),
+                          ),
+
+                          Padding(
+                            padding: EdgeInsets.all(10),
+                            child: Row(
+                              mainAxisAlignment:
+                              MainAxisAlignment.start,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.local_fire_department,
+                                    color: milestone.userHasBoosted
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                  ),
+                                  onPressed: milestone.userHasBoosted
+                                      ? null
+                                      : () async {
+                                    bool success =
+                                    await _supabaseService
+                                        .addEnergyBoost(
+                                        milestone.id);
+                                    if (success) {
+                                      setState(() {
+                                        _milestones[index] =
+                                            milestone.copyWith(
+                                              energyBoosts:
+                                              milestone
+                                                  .energyBoosts +
+                                                  1,
+                                              userHasBoosted: true,
+                                            );
+                                      });
+                                    }
+                                  },
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  "Boost ${milestone.energyBoosts}",
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -216,7 +254,7 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
             _loadMilestones();
           }
         },
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.lightBlue,
         child: Icon(Icons.add, color: Colors.white),
       ),
     );
