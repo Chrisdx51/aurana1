@@ -2,27 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'services/supabase_service.dart';
+import 'services/supabase_service.dart'; // ✅ Fixed: Removed duplicate import
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/social_feed_screen.dart';
 import 'screens/friends_list_screen.dart';
 import 'screens/spiritual_tools_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/sessions_screen.dart';
 import 'screens/more_menu_screen.dart';
-import 'screens/aura_catcher.dart';
+import 'screens/aura_catcher.dart'; // ✅ Fixed: Removed duplicate import
 import 'screens/likes_screen.dart';
 import 'screens/messages_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/relations_screen.dart';
 import 'screens/chats_screen.dart';
-import 'screens/moon_cycle_screen.dart'; // ✅ Re-added
-import 'screens/tarot_reading_screen.dart'; // ✅ Fixed Tarot Reading import
-import 'screens/spiritual_guidance_screen.dart'; // ✅ Restored Spiritual Guidance
-import 'screens/aura_catcher.dart'; // ✅ Already added, ensuring it's present
+import 'screens/moon_cycle_screen.dart';
+import 'screens/tarot_reading_screen.dart';
+import 'screens/spiritual_guidance_screen.dart';
+import 'screens/soul_journey_screen.dart'; // ✅ Ensured this is correctly imported
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,12 +51,11 @@ class AuranaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Aurana App',
       theme: ThemeData(primarySwatch: Colors.teal),
-      home: AuthGate(), // ✅ Redirect users properly
+      home: AuthGate(),
     );
   }
 }
 
-// ✅ Checks if user is logged in & redirects correctly
 class AuthGate extends StatefulWidget {
   @override
   _AuthGateState createState() => _AuthGateState();
@@ -76,7 +74,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _checkSession() async {
-    await Future.delayed(Duration(seconds: 2)); // Simulate loading
+    await Future.delayed(Duration(seconds: 2));
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
@@ -88,7 +86,6 @@ class _AuthGateState extends State<AuthGate> {
       _isChecking = false;
     });
 
-    // ✅ Always redirect users to `MainScreen` to ensure navigation bar is present
     if (!_isLoggedIn) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AuthScreen()));
     } else {
@@ -107,7 +104,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// ✅ Main Navigation with Bottom Navigation Bar
 class MainScreen extends StatefulWidget {
   final String userId;
   MainScreen({required this.userId});
@@ -124,12 +120,12 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _screens = [
-      HomeScreen(userName: "Guest"), // 🏠 Home
-      SocialFeedScreen(), // 🌍 Feed
-      FriendsListScreen(), // 👥 Friends
-      JournalScreen(), // 📖 Journal
-      ProfileScreen(userId: widget.userId), // 👤 Profile
-      MoreMenuScreen(), // 📂 More Menu (Holds extra pages)
+      HomeScreen(userName: "Guest"),
+      SoulJourneyScreen(), // ✅ Ensured this is correct
+      FriendsListScreen(),
+      JournalScreen(),
+      ProfileScreen(userId: widget.userId),
+      MoreMenuScreen(),
     ];
   }
 
@@ -142,11 +138,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex], // ✅ Ensures the screen changes with the bottom bar
+      body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'Feed'),
+          BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
           BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
@@ -163,7 +159,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// 🟢 More Menu (For Extra Pages)
 class MoreMenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -191,68 +186,7 @@ class MoreMenuScreen extends StatelessWidget {
             title: Text("Aura Catcher"),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AuraCatcherScreen())),
           ),
-          ListTile(
-            leading: Icon(Icons.message),
-            title: Text("Messages"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MessagesScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.notifications),
-            title: Text("Notifications"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.favorite),
-            title: Text("Likes"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => LikesScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.group),
-            title: Text("Relations"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => RelationsScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.chat),
-            title: Text("Chats"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ChatsScreen())),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-// 🟢 SETTINGS PAGE (Fully Included)
-class SettingsPage extends StatefulWidget {
-  @override
-  _SettingsPageState createState() => _SettingsPageState();
-}
-
-class _SettingsPageState extends State<SettingsPage> {
-  bool _notificationsEnabled = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Settings')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const Divider(),
-            SwitchListTile(
-              title: const Text('Enable Notifications'),
-              value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _notificationsEnabled = value;
-                });
-              },
-            ),
-          ],
-        ),
       ),
     );
   }
