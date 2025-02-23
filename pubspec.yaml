@@ -35,6 +35,8 @@ dependencies:
   flutter_svg: ^2.0.9
   flutter_dotenv: ^5.2.1
   font_awesome_flutter: ^10.4.0
+  cached_network_image: ^3.2.3
+  video_player: ^2.9.3
 
 dev_dependencies:
   flutter_test:
