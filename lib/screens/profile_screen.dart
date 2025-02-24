@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
-import '../main.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -32,6 +31,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _zodiacSign;
   String? _selectedElement;
   String? _selectedSpiritualPath;
+  int _spiritualXP = 0;
+  int _spiritualLevel = 1; // New field for spiritual level
 
   @override
   void initState() {
@@ -62,6 +63,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (profile.element != null) {
             _selectedElement = profile.element!;
           }
+          _spiritualXP = profile.spiritualXP ?? 0;
+          _spiritualLevel = profile.spiritualLevel ?? 1;
           _isLoading = false;
         });
       } else {
@@ -71,7 +74,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (error) {
-      print("❌ Error fetching profile: $error");
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -89,13 +91,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (imageUrl != null) {
       bool success = await supabaseService.updateUserProfile(
-        widget.userId,
-        _nameController.text,
-        _bioController.text,
-        _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
-        imageUrl,
-        _spiritualPathController.text,
-        _selectedElement,
+          widget.userId,
+          _nameController.text,
+          _bioController.text,
+          _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+          imageUrl,
+          _spiritualPathController.text,
+          _selectedElement,
+          _spiritualXP,
+          _spiritualLevel
       );
 
       if (success) {
@@ -144,7 +148,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           DateFormat('yyyy-MM-dd').format(pickedDate),
           user?.icon ?? '',
           _spiritualPathController.text,
-          _selectedElement
+          _selectedElement,
+          _spiritualXP,
+          _spiritualLevel
       );
     }
   }
@@ -177,7 +183,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
         user?.icon ?? '',
         _spiritualPathController.text,
-        _selectedElement
+        _selectedElement,
+        _spiritualXP,
+        _spiritualLevel
     );
 
     if (success) {
@@ -187,6 +195,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Failed to update profile. Try again!")),
+      );
+    }
+  }
+  void _checkLevelUp() {
+    int xpNeeded = _spiritualLevel * 100;
+
+    if (_spiritualXP >= xpNeeded) {
+      setState(() {
+        _spiritualXP = 0; // Reset XP after leveling up
+        _spiritualLevel += 1;
+      });
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("🎉 Level Up!"),
+          content: Text("Congratulations! You've reached Level $_spiritualLevel!"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Awesome!"),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -287,6 +319,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildProgressBar() {
+    int xpNeeded = (_spiritualLevel * 100); // XP needed increases per level
+    double progress = _spiritualXP / xpNeeded;
+
+    return Column(
+      children: [
+        Text(
+          'Level $_spiritualLevel • XP: $_spiritualXP / $xpNeeded',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 5),
+        LinearProgressIndicator(
+          value: progress > 1 ? 1 : progress, // Cap progress at 100%
+          backgroundColor: Colors.grey[300],
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+        ),
+      ],
+    );
+  }
+  Widget _buildXPInfo() {
+    return Column(
+      children: [
+        Text(
+          '🌟 What is Spiritual XP?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 5),
+        Text(
+          "Spiritual XP helps track your journey! Earn XP by sharing milestones, receiving boosts, and engaging with others. Reach new levels for rewards and recognition! 🌟",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+        ),
+        SizedBox(height: 10),
+        _buildProgressBar(),
+      ],
+    );
+  }
+  Widget _buildBadges() {
+    List<String> badges = [];
+
+    if (_spiritualLevel >= 5) badges.add("🌟 Rising Star");
+    if (_spiritualLevel >= 10) badges.add("🔥 Spiritual Master");
+    if (_spiritualLevel >= 20) badges.add("🕊️ Enlightened One");
+
+    return badges.isEmpty
+        ? SizedBox()
+        : Column(
+      children: [
+        Text("Your Achievements 🏆", style: TextStyle(fontWeight: FontWeight.bold)),
+        Wrap(
+          spacing: 10,
+          children: badges.map((badge) => Chip(label: Text(badge))).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -340,8 +429,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(height: 10),
                 _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
                 SizedBox(height: 10),
-
-                // 🔥 Spiritual Path Dropdown
                 _buildDropdownField(
                   "Choose your Spiritual Path",
                   _selectedSpiritualPath ?? spiritualPaths.first,
@@ -353,8 +440,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                 ),
                 SizedBox(height: 10),
-
-                // 🌍 Element Dropdown
                 _buildDropdownField(
                   "Select Your Element",
                   _selectedElement ?? elements.first,
@@ -365,11 +450,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     });
                   },
                 ),
-
                 SizedBox(height: 10),
                 _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
                 SizedBox(height: 10),
                 _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+                SizedBox(height: 20),
+                _buildProgressBar(), // Add the progress bar
                 SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: _updateProfile,
@@ -390,12 +476,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// List of spiritual paths (Modify as needed)
+// List of spiritual paths
 final List<String> spiritualPaths = [
   "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
 ];
 
-// List of elements (Modify as needed)
+// List of elements
 final List<String> elements = [
   "Fire 🔥", "Water 💧", "Earth 🌍", "Air 🌬️", "Spirit ✨"
 ];

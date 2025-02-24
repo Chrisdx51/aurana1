@@ -68,28 +68,39 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
       mediaUrl = await _supabaseService.uploadMedia(_selectedVideo!);
     }
 
-    // Now correctly calls `addMilestone`
+    // ✅ Now correctly calls `addMilestone`
     bool success = await _supabaseService.addMilestone(
       userId,
       _milestoneController.text,
       _selectedMilestoneType,
-      mediaUrl, // Fix applied here
+      mediaUrl, // ✅ Fix applied here
     );
 
-    setState(() {
-      _isSubmitting = false;
-    });
-
     if (success) {
+      await _supabaseService.updateSpiritualXP(userId, 10); // ✅ Reward XP for posting
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Your spiritual journey has been recorded!")),
+        SnackBar(content: Text("✅ Journey recorded & XP earned!")),
       );
+
+      // ✅ Auto-Boost the Milestone (if it's a meaningful action)
+      final milestoneId = await _supabaseService.getLastMilestoneId(userId);
+      if (milestoneId != null) {
+        bool boostSuccess = await _supabaseService.addEnergyBoost(milestoneId);
+        if (boostSuccess) {
+          await _supabaseService.updateSpiritualXP(userId, 5); // ✅ Reward XP for getting boosted
+        }
+      }
+
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Failed to add milestone")),
       );
     }
+
+    setState(() {
+      _isSubmitting = false;
+    });
   }
 
   @override
@@ -118,16 +129,53 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
                 filled: true,
               ),
             ),
+            SizedBox(height: 20),
+            Text("Journey Type:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _selectedMilestoneType,
+              isExpanded: true,
+              items: ["meditation", "tarot_reading", "healing", "energy_work"]
+                  .map((type) => DropdownMenuItem<String>(
+                value: type,
+                child: Text(type.replaceAll("_", " ").toUpperCase()),
+              ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedMilestoneType = value;
+                  });
+                }
+              },
+            ),
+            SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ElevatedButton(onPressed: _pickImage, child: Text("📷 Image")),
+                ElevatedButton.icon(
+                  onPressed: _pickImage,
+                  icon: Icon(Icons.image),
+                  label: Text("Image"),
+                ),
                 SizedBox(width: 10),
-                ElevatedButton(onPressed: _pickVideo, child: Text("🎥 Video")),
+                ElevatedButton.icon(
+                  onPressed: _pickVideo,
+                  icon: Icon(Icons.video_camera_back),
+                  label: Text("Video"),
+                ),
               ],
             ),
-            if (_selectedImage != null) Image.file(_selectedImage!, height: 150),
-            if (_selectedVideo != null) Icon(Icons.videocam, size: 100),
+            SizedBox(height: 10),
+            if (_selectedImage != null)
+              Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Image.file(_selectedImage!, height: 150),
+              ),
+            if (_selectedVideo != null)
+              Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Icon(Icons.videocam, size: 100),
+              ),
             SizedBox(height: 20),
             Center(
               child: _isSubmitting
@@ -135,6 +183,11 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
                   : ElevatedButton(
                 onPressed: _addMilestone,
                 child: Text("Record Journey"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             ),
           ],
