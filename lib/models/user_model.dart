@@ -4,8 +4,14 @@ class UserModel {
   final String bio;
   final String? icon; // ✅ Profile Picture URL
   final String? dob;  // ✅ Date of Birth
-  final String? spiritualPath; // ✅ Spiritual Path (New)
-  final String? element; // ✅ Elemental Connection (New)
+  final String? spiritualPath; // ✅ Spiritual Path
+  final String? element; // ✅ Elemental Connection
+  final int spiritualXP; // ✅ Spiritual XP
+  final int spiritualLevel; // ✅ Spiritual Level (New)
+  final List<String>? friends;
+  final List<Map<String, dynamic>>? visitorLog;
+  final List<Map<String, dynamic>>? giftInventory;
+  final bool? isJourneyPublic;
 
   UserModel({
     required this.id,
@@ -13,8 +19,14 @@ class UserModel {
     required this.bio,
     this.icon,
     this.dob,
-    this.spiritualPath, // ✅ Added to constructor
-    this.element, // ✅ Added to constructor
+    this.spiritualPath,
+    this.element,
+    this.spiritualXP = 0,
+    this.spiritualLevel = 1, // ✅ Default to level 1
+    this.friends,
+    this.visitorLog,
+    this.giftInventory,
+    this.isJourneyPublic,
   });
 
   // ✅ Convert JSON Data from Supabase
@@ -23,14 +35,20 @@ class UserModel {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       bio: json['bio'] ?? '',
-      icon: json['icon'], // Can be null
-      dob: json['dob'],  // Can be null
-      spiritualPath: json['spiritual_path'], // ✅ Fetch Spiritual Path
-      element: json['element'], // ✅ Fetch Elemental Connection
+      icon: json['icon'],
+      dob: json['dob'],
+      spiritualPath: json['spiritual_path'],
+      element: json['element'],
+      spiritualXP: json['spiritual_xp'] ?? 0,
+      spiritualLevel: json['spiritual_level'] ?? 1, // ✅ Ensure we fetch the correct level
+      friends: List<String>.from(json['friends'] ?? []),
+      visitorLog: List<Map<String, dynamic>>.from(json['visitor_log'] ?? []),
+      giftInventory: List<Map<String, dynamic>>.from(json['gift_inventory'] ?? []),
+      isJourneyPublic: json['is_journey_public'] ?? true,
     );
   }
 
-  // ✅ Convert UserModel back to JSON
+  // ✅ Convert UserModel back to JSON for Supabase updates
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -38,8 +56,14 @@ class UserModel {
       'bio': bio,
       'icon': icon,
       'dob': dob,
-      'spiritual_path': spiritualPath, // ✅ Store Spiritual Path
-      'element': element, // ✅ Store Element
+      'spiritual_path': spiritualPath,
+      'element': element,
+      'spiritual_xp': spiritualXP,
+      'spiritual_level': spiritualLevel, // ✅ Store Spiritual Level in Supabase
+      'friends': friends,
+      'visitor_log': visitorLog,
+      'gift_inventory': giftInventory,
+      'is_journey_public': isJourneyPublic,
     };
   }
 
@@ -49,8 +73,14 @@ class UserModel {
     String? bio,
     String? icon,
     String? dob,
-    String? spiritualPath, // ✅ Allow updating Spiritual Path
-    String? element, // ✅ Allow updating Elemental Connection
+    String? spiritualPath,
+    String? element,
+    int? spiritualXP,
+    int? spiritualLevel, // ✅ Allow updating Spiritual Level
+    List<String>? friends,
+    List<Map<String, dynamic>>? visitorLog,
+    List<Map<String, dynamic>>? giftInventory,
+    bool? isJourneyPublic,
   }) {
     return UserModel(
       id: this.id,
@@ -58,8 +88,14 @@ class UserModel {
       bio: bio ?? this.bio,
       icon: icon ?? this.icon,
       dob: dob ?? this.dob,
-      spiritualPath: spiritualPath ?? this.spiritualPath, // ✅ Update Spiritual Path
-      element: element ?? this.element, // ✅ Update Element
+      spiritualPath: spiritualPath ?? this.spiritualPath,
+      element: element ?? this.element,
+      spiritualXP: spiritualXP ?? this.spiritualXP,
+      spiritualLevel: spiritualLevel ?? this.spiritualLevel, // ✅ Update Spiritual Level
+      friends: friends ?? this.friends,
+      visitorLog: visitorLog ?? this.visitorLog,
+      giftInventory: giftInventory ?? this.giftInventory,
+      isJourneyPublic: isJourneyPublic ?? this.isJourneyPublic,
     );
   }
 }

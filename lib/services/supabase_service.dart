@@ -47,7 +47,16 @@ class SupabaseService {
 
   // ✅ Update User Profile in Supabase
   Future<bool> updateUserProfile(
-      String userId, String name, String bio, String? dob, String? icon, String? spiritualPath, String? element) async {
+      String userId,
+      String name,
+      String bio,
+      String? dob,
+      String? icon,
+      String? spiritualPath,
+      String? element,
+      int spiritualXP,
+      int spiritualLevel, // ✅ Added spiritual level
+      ) async {
     try {
       final response = await supabase
           .from('profiles')
@@ -58,6 +67,8 @@ class SupabaseService {
         'icon': icon,
         'spiritual_path': spiritualPath,
         'element': element,
+        'spiritual_xp': spiritualXP, // ✅ Now updates spiritual XP
+        'spiritual_level': spiritualLevel, // ✅ Now updates spiritual level
       })
           .eq('id', userId)
           .select();
@@ -75,12 +86,12 @@ class SupabaseService {
     }
   }
 
-  // ✅ Upload Profile Picture to Supabase Storage (Fixed)
+  // ✅ Upload Profile Picture to Supabase Storage
   Future<String?> uploadProfilePicture(String userId, File imageFile) async {
     try {
       final String fileName = "avatars/$userId-${DateTime.now().millisecondsSinceEpoch}.png";
 
-      // ✅ Remove old profile picture
+      // ✅ Remove old profile picture if it exists
       final listResponse = await supabase.storage.from('profile_pictures').list(path: "avatars/");
       if (listResponse is List && listResponse.isNotEmpty) {
         for (var file in listResponse) {
@@ -205,11 +216,10 @@ class SupabaseService {
       );
 
       if (response == null) {
-        print("❌ Error: Supabase RPC returned null. Possible causes: function missing, RLS blocking updates, or incorrect parameters.");
+        print("❌ Error: Supabase RPC returned null.");
         return false;
       }
 
-      // ✅ Log the boost to prevent multiple boosts per user
       await supabase.from('milestone_boosts').insert({
         'user_id': userId,
         'milestone_id': milestoneId,
@@ -223,7 +233,6 @@ class SupabaseService {
     }
   }
 
-
   // ✅ Delete Milestone Post
   Future<bool> deleteMilestone(String milestoneId) async {
     try {
@@ -235,7 +244,7 @@ class SupabaseService {
 
       if (response.isNotEmpty) {
         print("✅ Milestone deleted successfully from Supabase.");
-        return true; // ✅ Only return success if Supabase confirms deletion
+        return true;
       } else {
         print("❌ Supabase returned an empty response.");
         return false;
@@ -243,6 +252,81 @@ class SupabaseService {
     } catch (error) {
       print("❌ Error deleting milestone: $error");
       return false;
+    }
+  }
+
+  // 🔥 Update XP & Check for Level Up
+  Future<void> updateSpiritualXP(String userId, int xpGained) async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('spiritual_xp, spiritual_level')
+          .eq('id', userId)
+          .single();
+
+      if (response == null) return;
+
+      int currentXP = response['spiritual_xp'] ?? 0;
+      int currentLevel = response['spiritual_level'] ?? 1;
+
+      int newXP = currentXP + xpGained;
+      int xpNeeded = currentLevel * 100; // XP requirement increases each level
+
+      if (newXP >= xpNeeded) {
+        currentLevel += 1; // Level up 🎉
+        newXP = 0; // Reset XP after level up
+
+        print("🎉 Level Up! New Level: $currentLevel");
+      }
+
+      await supabase
+          .from('profiles')
+          .update({'spiritual_xp': newXP, 'spiritual_level': currentLevel})
+          .eq('id', userId);
+
+    } catch (error) {
+      print("❌ Error updating XP: $error");
+    }
+  }
+  // 🔥 XP Threshold Function (XP Required Increases per Level)
+  int _getXPThreshold(int level) {
+    if (level == 1) return 100;
+    return (100 * level) + (level * 100); // Dynamic XP scaling
+  }
+
+  // ✅ Get Last Milestone ID for a User
+  Future<String?> getLastMilestoneId(String userId) async {
+    try {
+      final response = await supabase
+          .from('milestones')
+          .select('id')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (response != null && response is Map<String, dynamic> && response.containsKey('id')) {
+        return response['id'] as String;
+      }
+    } catch (error) {
+      print("❌ Error fetching last milestone ID: $error");
+    }
+    return null; // Return null if no milestone found
+  }
+
+  // ✅ Fetch Top Users for the Leaderboard
+  Future<List<UserModel>> fetchTopUsers() async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('id, name, icon, spiritual_xp, spiritual_level')
+          .order('spiritual_xp', ascending: false) // Sort by highest XP
+          .limit(10); // Only show top 10
+
+      return response.map<UserModel>((data) => UserModel.fromJson(data)).toList();
+    } catch (error) {
+      print("❌ Error fetching leaderboard: $error");
+      return [];
     }
   }
 }

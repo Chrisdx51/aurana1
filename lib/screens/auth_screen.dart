@@ -21,15 +21,22 @@ class _AuthScreenState extends State<AuthScreen> {
     return emailRegex.hasMatch(email);
   }
 
-  // 🔍 Check if user has a profile
-  Future<bool> _doesProfileExist(String userId) async {
+  // 🔍 Check if the profile is fully completed
+  Future<bool> _isProfileComplete(String userId) async {
     final response = await supabase
         .from('profiles')
-        .select('id')
+        .select('name, bio, dob')
         .eq('id', userId)
         .maybeSingle();
 
-    return response != null; // Returns true if a profile exists
+    if (response == null) return false; // No profile exists
+
+    // Check if key fields are filled (Modify as needed)
+    return response['name'] != null &&
+        response['name'].toString().isNotEmpty &&
+        response['bio'] != null &&
+        response['bio'].toString().isNotEmpty &&
+        response['dob'] != null;
   }
 
   // 🔥 Handle authentication
@@ -63,17 +70,16 @@ class _AuthScreenState extends State<AuthScreen> {
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // 🔥 Ensure the profile is created
+          // 🔥 Ensure the profile is created with default values
           await supabase.from('profiles').insert({
             'id': userId, // Use Supabase Auth UUID as ID
-            'name': 'New User',
-            'status': 'Active',
-            'bio': '',
+            'name': null,
+            'bio': null,
             'dob': null,
             'email': email,
           });
 
-          _showMessage("✅ Account Created! Redirecting to Profile...");
+          _showMessage("✅ Account Created! Redirecting to Profile Setup...");
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
@@ -89,17 +95,18 @@ class _AuthScreenState extends State<AuthScreen> {
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // 🔍 Check if the profile exists
-          bool profileExists = await _doesProfileExist(userId);
+          // 🔍 Check if the profile is complete
+          bool profileComplete = await _isProfileComplete(userId);
 
-          if (profileExists) {
-            // ✅ Redirect to Home if profile exists
+          if (profileComplete) {
+            // ✅ Redirect to Home if profile is complete
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => HomeScreen(userName: email)),
             );
           } else {
-            // 🚀 Redirect to Profile Setup if profile is missing
+            // 🚀 Redirect to Profile Setup if profile is incomplete
+            _showMessage("⚠️ Please complete your profile first.");
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
@@ -130,7 +137,7 @@ class _AuthScreenState extends State<AuthScreen> {
         title: Text(_isSignUp ? "Sign Up" : "Log In"),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -139,7 +146,7 @@ class _AuthScreenState extends State<AuthScreen> {
             _buildInputField(_passwordController, "Password", Icons.lock, obscureText: true),
             const SizedBox(height: 20),
             _isLoading
-                ? CircularProgressIndicator()
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
               onPressed: _authenticate,
               style: ElevatedButton.styleFrom(
@@ -157,7 +164,7 @@ class _AuthScreenState extends State<AuthScreen> {
               onPressed: () => setState(() => _isSignUp = !_isSignUp),
               child: Text(
                 _isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up",
-                style: TextStyle(color: Colors.blue),
+                style: const TextStyle(color: Colors.blue),
               ),
             ),
           ],
@@ -169,11 +176,11 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _buildInputField(TextEditingController controller, String label, IconData icon,
       {bool obscureText = false}) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
       child: TextField(
         controller: controller,
