@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import 'auth_screen.dart';
+import '../main.dart'; // Import MainScreen from main.dart
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -23,6 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isProfileComplete = false;
   File? _selectedImage;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
@@ -32,12 +34,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _selectedElement;
   String? _selectedSpiritualPath;
   int _spiritualXP = 0;
-  int _spiritualLevel = 1; // New field for spiritual level
+  int _spiritualLevel = 1;
+  List<Map<String, dynamic>> _achievements = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadAchievements();
   }
 
   Future<void> _loadUserProfile() async {
@@ -49,8 +53,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final profile = await supabaseService.getUserProfile(widget.userId);
       if (profile != null) {
+        final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+
         setState(() {
           user = profile;
+          _achievements = achievements;
           _nameController.text = profile.name ?? "";
           _bioController.text = profile.bio ?? "";
           if (profile.dob != null) {
@@ -81,6 +88,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _loadAchievements() async {
+    final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+    setState(() {
+      _achievements = achievements;
+    });
+  }
+
   Future<void> _changeProfilePicture() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image == null) return;
@@ -91,15 +105,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (imageUrl != null) {
       bool success = await supabaseService.updateUserProfile(
-          widget.userId,
-          _nameController.text,
-          _bioController.text,
-          _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
-          imageUrl,
-          _spiritualPathController.text,
-          _selectedElement,
-          _spiritualXP,
-          _spiritualLevel
+        widget.userId,
+        _nameController.text,
+        _bioController.text,
+        _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+        imageUrl,
+        _spiritualPathController.text,
+        _selectedElement,
+        _spiritualXP,
+        _spiritualLevel,
       );
 
       if (success) {
@@ -142,15 +156,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
       await supabaseService.updateUserProfile(
-          widget.userId,
-          _nameController.text,
-          _bioController.text,
-          DateFormat('yyyy-MM-dd').format(pickedDate),
-          user?.icon ?? '',
-          _spiritualPathController.text,
-          _selectedElement,
-          _spiritualXP,
-          _spiritualLevel
+        widget.userId,
+        _nameController.text,
+        _bioController.text,
+        DateFormat('yyyy-MM-dd').format(pickedDate),
+        user?.icon ?? '',
+        _spiritualPathController.text,
+        _selectedElement,
+        _spiritualXP,
+        _spiritualLevel,
       );
     }
   }
@@ -173,37 +187,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "♓ Pisces";
   }
 
-  Future<void> _updateProfile() async {
-    if (user == null) return;
-
+  Future<bool> _updateProfile() async {
+    if (user == null) return false; // Ensure there's a user to update
     bool success = await supabaseService.updateUserProfile(
-        widget.userId,
-        _nameController.text,
-        _bioController.text,
-        _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
-        user?.icon ?? '',
-        _spiritualPathController.text,
-        _selectedElement,
-        _spiritualXP,
-        _spiritualLevel
+      widget.userId,
+      _nameController.text,
+      _bioController.text,
+      _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+      user?.icon ?? '',
+      _spiritualPathController.text,
+      _selectedElement,
+      _spiritualXP,
+      _spiritualLevel,
     );
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Profile updated successfully!")),
       );
+      return true; // Now returns a boolean
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Failed to update profile. Try again!")),
       );
+      return false; // Handle failure properly
     }
   }
+
+  Future<void> _checkProfileCompletion() async {
+    bool complete = await supabaseService.isProfileComplete(widget.userId);
+    setState(() {
+      _isProfileComplete = complete;
+    });
+
+    if (complete) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
+      );
+    }
+  }
+
+  Future<void> _saveProfileAndUnlockNav() async {
+    bool success = await _updateProfile();
+    if (success) {
+      await _checkProfileCompletion();
+      setState(() {});
+    }
+  }
+
   void _checkLevelUp() {
     int xpNeeded = _spiritualLevel * 100;
 
     if (_spiritualXP >= xpNeeded) {
       setState(() {
-        _spiritualXP = 0; // Reset XP after leveling up
+        _spiritualXP = 0;
         _spiritualLevel += 1;
       });
 
@@ -320,7 +358,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProgressBar() {
-    int xpNeeded = (_spiritualLevel * 100); // XP needed increases per level
+    int xpNeeded = (_spiritualLevel * 100);
     double progress = _spiritualXP / xpNeeded;
 
     return Column(
@@ -331,46 +369,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         SizedBox(height: 5),
         LinearProgressIndicator(
-          value: progress > 1 ? 1 : progress, // Cap progress at 100%
+          value: progress > 1 ? 1 : progress,
           backgroundColor: Colors.grey[300],
           valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
         ),
       ],
     );
   }
-  Widget _buildXPInfo() {
+
+  Widget _buildAchievementsSection() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '🌟 What is Spiritual XP?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        SizedBox(height: 5),
-        Text(
-          "Spiritual XP helps track your journey! Earn XP by sharing milestones, receiving boosts, and engaging with others. Reach new levels for rewards and recognition! 🌟",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          "🏅 Achievements",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
         ),
         SizedBox(height: 10),
-        _buildProgressBar(),
-      ],
-    );
-  }
-  Widget _buildBadges() {
-    List<String> badges = [];
-
-    if (_spiritualLevel >= 5) badges.add("🌟 Rising Star");
-    if (_spiritualLevel >= 10) badges.add("🔥 Spiritual Master");
-    if (_spiritualLevel >= 20) badges.add("🕊️ Enlightened One");
-
-    return badges.isEmpty
-        ? SizedBox()
-        : Column(
-      children: [
-        Text("Your Achievements 🏆", style: TextStyle(fontWeight: FontWeight.bold)),
-        Wrap(
-          spacing: 10,
-          children: badges.map((badge) => Chip(label: Text(badge))).toList(),
+        _achievements.isEmpty
+            ? Text("No achievements unlocked yet. Keep growing! 🌟", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+            : Column(
+          children: _achievements.map((achievement) {
+            return ListTile(
+              leading: achievement['icon_url'] != null
+                  ? Image.network(
+                achievement['icon_url'],
+                width: 50,
+                height: 50,
+                fit: BoxFit.contain, // Ensures proper size
+              )
+                  : Icon(Icons.emoji_events, color: Colors.amber, size: 40),
+              title: Text(
+                achievement['title'],
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(achievement['description']),
+              trailing: Text(
+                DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at'])),
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -380,7 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Profile', style: TextStyle(color: Colors.black)),
+        title: Text('Profile', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -424,11 +463,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 30),
                 _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
-                SizedBox(height: 10),
+                SizedBox(height: 5),
                 _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
-                SizedBox(height: 10),
+                SizedBox(height: 5),
                 _buildDropdownField(
                   "Choose your Spiritual Path",
                   _selectedSpiritualPath ?? spiritualPaths.first,
@@ -450,23 +489,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     });
                   },
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 5),
                 _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
-                SizedBox(height: 10),
+                SizedBox(height: 5),
                 _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
                 SizedBox(height: 20),
-                _buildProgressBar(), // Add the progress bar
+                _buildProgressBar(),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: _updateProfile,
+                  onPressed: () async {
+                    bool success = await _updateProfile();
+                    if (success) {
+                      await _checkProfileCompletion(); // Re-checks profile completion
+                    }
+                  },
                   child: Text("Save Changes"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
+                SizedBox(height: 20),
+                _buildAchievementsSection(),
               ],
             ),
           ),
@@ -483,5 +529,5 @@ final List<String> spiritualPaths = [
 
 // List of elements
 final List<String> elements = [
-  "Fire 🔥", "Water 💧", "Earth 🌍", "Air 🌬️", "Spirit ✨"
+  "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
 ];

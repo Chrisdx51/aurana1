@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
+import 'profile_screen.dart'; // Make sure to import this if it's not already imported
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -27,7 +28,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _checkProfileCompletion();
     _loadUserProfile();
+  }
+
+  Future<void> _checkProfileCompletion() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    bool isComplete = await SupabaseService().isProfileComplete(userId);
+
+    if (!isComplete) {
+      // 🚫 Redirect to ProfileScreen
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
+        );
+      });
+    }
   }
 
   // 🔥 Fetch User Profile from Supabase
