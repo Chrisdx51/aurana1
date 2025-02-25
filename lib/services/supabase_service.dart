@@ -288,10 +288,9 @@ class SupabaseService {
     }
   }
 
-  // ✅ Update XP and Unlock Achievements
   Future<void> updateSpiritualXP(String userId, int xpEarned) async {
     try {
-      // Fetch current XP & Level
+      // 🔍 Fetch current XP & Level from Supabase
       final response = await supabase
           .from('profiles')
           .select('spiritual_xp, spiritual_level')
@@ -303,33 +302,65 @@ class SupabaseService {
       int currentXP = response['spiritual_xp'] ?? 0;
       int currentLevel = response['spiritual_level'] ?? 1;
 
-      // Add XP and calculate new level
+      // 🎯 XP needed to level up
+      int xpThreshold = _getXPThreshold(currentLevel);
       int newXP = currentXP + xpEarned;
-      int xpThreshold = currentLevel * 100;
       int newLevel = currentLevel;
 
+      // 🔥 Level Up Mechanic
       if (newXP >= xpThreshold) {
         newLevel += 1;
-        newXP = 0; // Reset XP after leveling up
+        newXP = newXP - xpThreshold; // Keep extra XP instead of resetting to 0
       }
 
-      // ✅ Update User XP and Level in Database
+      // ✅ Update Supabase with new XP & Level
       await supabase.from('profiles').update({
         'spiritual_xp': newXP,
         'spiritual_level': newLevel,
       }).eq('id', userId);
 
-      print("🔹 XP Updated: $newXP / $xpThreshold | Level: $newLevel");
+      print("🎯 XP Updated: $newXP / $xpThreshold | Level: $newLevel");
 
-      // ✅ Check if Achievements Should Unlock
+      // 🏆 Unlock Achievements at Specific Levels
+      if (newLevel == 1) {
+        await unlockAchievement(userId, "Soul Spark", "Just getting started!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Soul_Spark.gif");
+      }
       if (newLevel == 2) {
-        await unlockAchievement(userId, "Level 2 - Rising Seeker", "You have reached level 2!", "https://example.com/level2_badge.png");
+        await unlockAchievement(userId, "Energy Riser", "You're gaining momentum!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Energy_Riser.gif");
+      }
+      if (newLevel == 3) {
+        await unlockAchievement(userId, "Vibe Lifter", "Your presence is felt!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Vibe_Lifter.gif");
+      }
+      if (newLevel == 4) {
+        await unlockAchievement(userId, "Aura Shiner", "Bringing light to the space!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Aura_Shiner.gif");
       }
       if (newLevel == 5) {
-        await unlockAchievement(userId, "Level 5 - Ascended", "You are now an advanced seeker!", "https://example.com/level5_badge.png");
+        await unlockAchievement(userId, "Harmony Seeker", "Balanced and engaged!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Harmony_Seeker.gif");
+      }
+      if (newLevel == 6) {
+        await unlockAchievement(userId, "Karma Builder", "Spreading positivity!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Karma_Builder.gif");
+      }
+      if (newLevel == 7) {
+        await unlockAchievement(userId, "Zen Flow", "You're in the rhythm now!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Zen_Flow.gif");
+      }
+      if (newLevel == 8) {
+        await unlockAchievement(userId, "Cosmic Connector", "Making waves in the universe!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Cosmic_Connector.gif");
+      }
+      if (newLevel == 9) {
+        await unlockAchievement(userId, "Ethereal Radiance", "You glow with energy!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Ethereal_Radiance.gif");
       }
       if (newLevel == 10) {
-        await unlockAchievement(userId, "Master of Light", "You have reached the pinnacle of spiritual mastery.", "https://example.com/master_badge.png");
+        await unlockAchievement(userId, "Galactic Trailblazer", "A legendary presence!",
+            "https://rhapqmquxypczswwmzun.supabase.co/storage/v1/object/public/achievements/Galactic_Trailblazer.gif");
       }
 
     } catch (error) {
@@ -337,10 +368,9 @@ class SupabaseService {
     }
   }
 
-  // XP Threshold Function (XP Required Increases per Level)
+  // ✅ XP Scaling: Increases at a steady rate per level
   int _getXPThreshold(int level) {
-    if (level == 1) return 100;
-    return (100 * level) + (level * 100); // Dynamic XP scaling
+    return 100 * level; // Keeps XP progression balanced
   }
 
   // Get Last Milestone ID for a User
@@ -367,14 +397,16 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> fetchUserAchievements(String userId) async {
     try {
       final response = await supabase
-          .from('achievements')
+          .from('user_achievements')
           .select('*')
           .eq('user_id', userId)
           .order('earned_at', ascending: false);
 
+      print("🔥 Achievements fetched: $response"); // ✅ Debugging Line
+
       return response.isNotEmpty ? List<Map<String, dynamic>>.from(response) : [];
     } catch (error) {
-      print("Error fetching achievements: $error");
+      print("❌ Error fetching achievements: $error");
       return [];
     }
   }
@@ -395,28 +427,47 @@ class SupabaseService {
     }
   }
 
-  // 🔥 Unlock Achievement When XP Milestone is Reached
+  // ✅ Unlock Achievements and store in user_achievements
   Future<void> unlockAchievement(String userId, String achievementTitle, String description, String iconUrl) async {
     try {
-      // ✅ Check if the achievement is already unlocked
-      final check = await supabase
-          .from('user_achievements')
+      // ✅ Check if this achievement already exists in the main achievements table
+      final existingAchievement = await supabase
+          .from('achievements')
           .select('id')
-          .eq('user_id', userId)
           .eq('title', achievementTitle)
           .maybeSingle();
 
-      if (check != null) {
-        print("⚠️ Achievement '$achievementTitle' already unlocked.");
+      int achievementId;
+      if (existingAchievement == null) {
+        // ✅ Insert the achievement into the achievements table if it doesn't exist
+        final insertAchievement = await supabase.from('achievements').insert({
+          'title': achievementTitle,
+          'description': description,
+          'icon_url': iconUrl,
+        }).select().single();
+
+        achievementId = insertAchievement['id'];
+      } else {
+        achievementId = existingAchievement['id'];
+      }
+
+      // ✅ Now check if the user has already unlocked this achievement
+      final checkUserAchievement = await supabase
+          .from('user_achievements')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('achievement_id', achievementId)
+          .maybeSingle();
+
+      if (checkUserAchievement != null) {
+        print("⚠️ User has already unlocked '$achievementTitle'.");
         return;
       }
 
-      // ✅ Insert the unlocked achievement
+      // ✅ Insert the unlocked achievement for this user
       await supabase.from('user_achievements').insert({
         'user_id': userId,
-        'title': achievementTitle,
-        'description': description,
-        'icon_url': iconUrl,
+        'achievement_id': achievementId,  // Linking to the correct achievement
         'earned_at': DateTime.now().toIso8601String(),
       });
 

@@ -31,7 +31,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (response == null) return false; // No profile exists
 
-    // Check if key fields are filled (Modify as needed)
+    // ✅ Ensure the user has entered their name
     return response['name'] != null &&
         response['name'].toString().isNotEmpty &&
         response['bio'] != null &&
@@ -70,13 +70,12 @@ class _AuthScreenState extends State<AuthScreen> {
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // 🔥 Ensure the profile is created with default values
+          // ✅ Create profile without a name to force user input later
           await supabase.from('profiles').insert({
             'id': userId,
-            'name': 'New User',  // ✅ Provide a default name
+            'email': email,
             'bio': '',
             'dob': null,
-            'email': email,
           });
 
           _showMessage("✅ Account Created! Redirecting to Profile Setup...");
@@ -98,15 +97,14 @@ class _AuthScreenState extends State<AuthScreen> {
           // 🔍 Check if the profile is complete
           bool profileComplete = await _isProfileComplete(userId);
 
-          // Redirect based on profile completion
           if (profileComplete) {
-            // ✅ If profile is complete, go to HomeScreen
+            // ✅ Redirect to Home if profile is complete
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => HomeScreen(userName: email)),
             );
           } else {
-            // ❌ If profile is incomplete, force user to ProfileScreen
+            // 🚀 Redirect to Profile Setup if profile is incomplete
             _showMessage("⚠️ Please complete your profile first.");
             Navigator.pushReplacement(
               context,

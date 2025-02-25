@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import 'auth_screen.dart';
-import '../main.dart'; // Import MainScreen from main.dart
+import '../main.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -100,7 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (image == null) return;
 
     File imageFile = File(image.path);
-
     final imageUrl = await supabaseService.uploadProfilePicture(widget.userId, imageFile);
 
     if (imageUrl != null) {
@@ -188,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<bool> _updateProfile() async {
-    if (user == null) return false; // Ensure there's a user to update
+    if (user == null) return false;
     bool success = await supabaseService.updateUserProfile(
       widget.userId,
       _nameController.text,
@@ -205,12 +204,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Profile updated successfully!")),
       );
-      return true; // Now returns a boolean
+      return true;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Failed to update profile. Try again!")),
       );
-      return false; // Handle failure properly
+      return false;
     }
   }
 
@@ -278,10 +277,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: TextField(
               controller: controller,
               decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: hint,
-                hintStyle: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                labelText: hint,
+                errorText: controller.text.isEmpty ? "$label is required" : null,
               ),
+              onChanged: (value) {
+                setState(() {});
+              },
             ),
           ),
         ],
@@ -383,30 +384,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(
           "🏅 Achievements",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
         ),
         SizedBox(height: 10),
         _achievements.isEmpty
-            ? Text("No achievements unlocked yet. Keep growing! 🌟", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+            ? Text("No achievements unlocked yet. Keep growing! 🌟",
+            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
             : Column(
           children: _achievements.map((achievement) {
-            return ListTile(
-              leading: achievement['icon_url'] != null
-                  ? Image.network(
-                achievement['icon_url'],
-                width: 50,
-                height: 50,
-                fit: BoxFit.contain, // Ensures proper size
-              )
-                  : Icon(Icons.emoji_events, color: Colors.amber, size: 40),
-              title: Text(
-                achievement['title'],
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(achievement['description']),
-              trailing: Text(
-                DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at'])),
-                style: TextStyle(color: Colors.grey),
+            return Card(
+              margin: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+              color: Colors.white.withOpacity(0.5),
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (achievement['icon_url'] != null)
+                      Image.network(
+                        achievement['icon_url'],
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Icon(Icons.emoji_events, color: Colors.amber, size: 50),
+                      ),
+                    SizedBox(height: 10),
+                    Text(
+                      achievement['title'],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      achievement['description'],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at'])),
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
             );
           }).toList(),
@@ -498,9 +521,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () async {
+                    if (_nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("⚠️ Please enter your name before saving."))
+                      );
+                      return;
+                    }
+
                     bool success = await _updateProfile();
                     if (success) {
-                      await _checkProfileCompletion(); // Re-checks profile completion
+                      await _checkProfileCompletion();
                     }
                   },
                   child: Text("Save Changes"),
@@ -521,13 +551,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-// List of spiritual paths
 final List<String> spiritualPaths = [
   "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
 ];
 
-// List of elements
 final List<String> elements = [
   "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
 ];
