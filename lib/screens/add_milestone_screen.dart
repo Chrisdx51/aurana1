@@ -75,37 +75,9 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
     if (success) {
       await _supabaseService.updateSpiritualXP(userId, 10);
 
-      // ✅ Unlock Achievements Based on XP
-      final profile = await _supabaseService.getUserProfile(userId);
-      if (profile != null) {
-        if (profile.spiritualXP >= 10) {
-          await _supabaseService.unlockAchievement(
-            userId,
-            "First Journey",
-            "You recorded your first Soul Journey!",
-            "https://example.com/achievements/initiate.png",
-          );
-        }
-        if (profile.spiritualXP >= 100) {
-          await _supabaseService.unlockAchievement(
-            userId,
-            "Spiritual Initiate",
-            "You've earned 100 XP! Keep going on your journey.",
-            "https://example.com/achievements/seeker.png",
-          );
-        }
-        if (profile.spiritualXP >= 500) {
-          await _supabaseService.unlockAchievement(
-            userId,
-            "Awakened Seeker",
-            "500 XP achieved! You're growing stronger spiritually.",
-            "https://example.com/achievements/awakened.png",
-          );
-        }
-      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Journey recorded & XP earned!")),
+        SnackBar(content: Text("✅ Journey saved & XP earned!")),
       );
 
       // ✅ Auto-Boost Post

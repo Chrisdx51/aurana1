@@ -41,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadUserProfile();
-    _loadAchievements();
+    _loadAchievements(); // ✅ Ensure achievements are loaded
   }
 
   Future<void> _loadUserProfile() async {
@@ -89,10 +89,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadAchievements() async {
+    if (user == null) return;
+
     final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+
     setState(() {
       _achievements = achievements;
     });
+
+    print("✅ Achievements loaded: ${_achievements.length}");
   }
 
   Future<void> _changeProfilePicture() async {
@@ -383,50 +388,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "🏅 Achievements",
+          "🏆 Achievements",
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
         ),
         SizedBox(height: 10),
         _achievements.isEmpty
-            ? Text("No achievements unlocked yet. Keep growing! 🌟",
-            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+            ? Text("No achievements unlocked yet. Keep growing! 🌟", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
             : Column(
           children: _achievements.map((achievement) {
             return Card(
-              margin: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              color: Colors.white.withOpacity(0.8), // ✅ Transparent background
+              elevation: 3,
+              margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-              color: Colors.white.withOpacity(0.5),
               child: Padding(
                 padding: EdgeInsets.all(12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (achievement['icon_url'] != null)
-                      Image.network(
-                        achievement['icon_url'],
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Icon(Icons.emoji_events, color: Colors.amber, size: 50),
-                      ),
-                    SizedBox(height: 10),
+                    // 🏆 GIF Icon at the Top
+                    achievement['icon_url'] != null
+                        ? Image.network(
+                      achievement['icon_url'],
+                      width: 80, // ✅ Adjust size
+                      height: 80,
+                      fit: BoxFit.contain, // ✅ Proper scaling
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        return child; // ✅ Ensures GIF is animated
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(Icons.image_not_supported, size: 50, color: Colors.red);
+                      },
+                    )
+                        : Icon(Icons.emoji_events, color: Colors.amber, size: 50),
+
+                    SizedBox(height: 10), // Space between image and text
+
+                    // 📝 Title
                     Text(
                       achievement['title'],
-                      textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
                     ),
+
                     SizedBox(height: 5),
+
+                    // 📜 Description
                     Text(
                       achievement['description'],
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                     ),
-                    SizedBox(height: 5),
+
+                    SizedBox(height: 8),
+
+                    // 📆 Date Earned
                     Text(
                       DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at'])),
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -541,8 +559,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
+            Column(
+              children: [
+                // Other Profile Fields...
                 SizedBox(height: 20),
-                _buildAchievementsSection(),
+                _buildAchievementsSection(), // ✅ Now achievements will show up correctly with GIFs
+              ],
+            )
               ],
             ),
           ),
