@@ -4,8 +4,13 @@ import '../models/milestone_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'add_milestone_screen.dart';
 import '../widgets/video_widget.dart';
+import 'profile_screen.dart'; // Import ProfileScreen
 
 class SoulJourneyScreen extends StatefulWidget {
+  final String userId; // ✅ Ensure we pass a user ID
+
+  SoulJourneyScreen({required this.userId});
+
   @override
   _SoulJourneyScreenState createState() => _SoulJourneyScreenState();
 }
@@ -24,8 +29,13 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
 
   Future<void> _loadMilestones() async {
     try {
-      List<MilestoneModel> milestones =
-      await _supabaseService.fetchMilestones(sortBy: _sortOption);
+      final userId = widget.userId; // ✅ Get user ID from the widget
+
+      List<MilestoneModel> milestones = await _supabaseService.fetchMilestones(
+        sortBy: _sortOption,
+        userId: userId, // ✅ Only fetch this user's milestones
+      );
+
       setState(() {
         _milestones = milestones;
         _isLoading = false;
@@ -128,10 +138,24 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
                                   'assets/default_avatar.png')
                               as ImageProvider,
                             ),
-                            title: Text(
-                              milestone.username ?? "Unknown Seeker",
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold),
+                            title: GestureDetector(
+                              onTap: () {
+                                // ✅ Navigate to the clicked user's profile
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ProfileScreen(userId: milestone.userId),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                milestone.username ?? "Unknown Seeker",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueAccent, // ✅ Makes it look clickable
+                                  decoration: TextDecoration.underline, // ✅ Highlights as a link
+                                ),
+                              ),
                             ),
                             subtitle: Text(
                                 "${milestone.milestoneType} • ${milestone.createdAt.toLocal()}"),
@@ -243,7 +267,8 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: widget.userId == Supabase.instance.client.auth.currentUser?.id
+          ? FloatingActionButton(
         onPressed: () async {
           bool? result = await Navigator.push(
             context,
@@ -256,7 +281,8 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
         },
         backgroundColor: Colors.lightBlue,
         child: Icon(Icons.add, color: Colors.white),
-      ),
+      )
+          : null, // ✅ Hide button if visiting another user's profile
     );
   }
 }

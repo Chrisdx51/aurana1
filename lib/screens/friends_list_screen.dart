@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/supabase_service.dart';
 
 class FriendsListScreen extends StatefulWidget {
+  final String userId;
+  FriendsListScreen({required this.userId});
+
   @override
   _FriendsListScreenState createState() => _FriendsListScreenState();
 }
 
 class _FriendsListScreenState extends State<FriendsListScreen> {
-  final SupabaseClient supabase = Supabase.instance.client;
-  List<Map<String, dynamic>> friends = [];
+  final SupabaseService _supabaseService = SupabaseService();
+  List<Map<String, dynamic>> _friends = [];
   bool _isLoading = true;
 
   @override
@@ -17,61 +20,42 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     _loadFriends();
   }
 
-  // 🔥 Fetch Friends List from Supabase
   Future<void> _loadFriends() async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    try {
-      final response = await supabase
-          .from('friends')
-          .select('friend_id, profiles(name)')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
-
-      setState(() {
-        friends = response;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print("❌ Error loading friends: $e");
-      setState(() => _isLoading = false);
-    }
-  }
-
-  // 🔥 Remove Friend
-  Future<void> _removeFriend(String friendId) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    await supabase
-        .from('friends')
-        .delete()
-        .match({'user_id': userId, 'friend_id': friendId});
-
-    _loadFriends();
+    List<Map<String, dynamic>> friends =
+    await _supabaseService.getFriendsList(widget.userId);
+    setState(() {
+      _friends = friends;
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("My Friends")),
+      appBar: AppBar(title: Text("Friends List")),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : friends.isEmpty
-          ? Center(child: Text("No friends yet. Add some!"))
+          : _friends.isEmpty
+          ? Center(child: Text("No friends yet."))
           : ListView.builder(
-        itemCount: friends.length,
+        itemCount: _friends.length,
         itemBuilder: (context, index) {
-          final friend = friends[index];
-          return Card(
-            margin: EdgeInsets.all(10),
-            child: ListTile(
-              title: Text(friend['profiles']['name'] ?? "Unknown"),
-              trailing: IconButton(
-                icon: Icon(Icons.remove_circle, color: Colors.red),
-                onPressed: () => _removeFriend(friend['friend_id']),
-              ),
+          var friend = _friends[index];
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundImage: friend['profiles']['icon'] != null
+                  ? NetworkImage(friend['profiles']['icon'])
+                  : AssetImage('assets/images/default_avatar.png')
+              as ImageProvider,
+            ),
+            title: Text(friend['profiles']['name']),
+            trailing: IconButton(
+              icon: Icon(Icons.remove_circle, color: Colors.red),
+              onPressed: () async {
+                bool removed = await _supabaseService.removeFriend(
+                    widget.userId, friend['friend_id']);
+                if (removed) _loadFriends();
+              },
             ),
           );
         },

@@ -8,6 +8,7 @@ import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import 'auth_screen.dart';
 import '../main.dart';
+import 'friends_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -87,6 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
   }
+
 
   Future<void> _loadAchievements() async {
     if (user == null) return;
@@ -505,6 +507,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 SizedBox(height: 30),
+                Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.people),
+                      title: Text("Friends List"),
+                      onTap: () {
+                        final userId = Supabase.instance.client.auth.currentUser?.id;
+                        if (userId != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => FriendsListScreen(userId: userId)),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Error: User not logged in")),
+                          );
+                        }
+                      },
+                    ),
+
+                    // 🔹 Friend Request Button
+                    if (widget.userId != Supabase.instance.client.auth.currentUser?.id)
+                      FutureBuilder<bool>(
+                        future: _checkFriendStatus(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return CircularProgressIndicator();
+                          final isFriend = snapshot.data!;
+
+                          return ElevatedButton(
+                            onPressed: () async {
+                              if (isFriend) {
+                                await _removeFriend();
+                              } else {
+                                await _sendFriendRequest();
+                              }
+                              setState(() {});
+                            },
+                            child: Text(isFriend ? "Unfriend" : "Send Friend Request"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isFriend ? Colors.redAccent : Colors.blueAccent,
+                              foregroundColor: Colors.white,
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+
                 _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
                 SizedBox(height: 5),
                 _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
@@ -573,7 +623,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+// ✅ Check if users are already friends
+  Future<bool> _checkFriendStatus() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return false;
+
+    final response = await Supabase.instance.client
+        .from('friends')
+        .select()
+        .or('user_id.eq.${widget.userId},friend_id.eq.${widget.userId}')
+        .eq('user_id', userId)
+        .or('friend_id.eq.$userId')
+        .maybeSingle();
+
+    return response != null;
+  }
+
+// ✅ Send Friend Request
+  Future<void> _sendFriendRequest() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await Supabase.instance.client.from('friends').insert({
+      'user_id': userId,
+      'friend_id': widget.userId,
+      'status': 'pending',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("✅ Friend request sent!")),
+    );
+  }
+
+// ✅ Remove Friend
+  Future<void> _removeFriend() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await Supabase.instance.client
+        .from('friends')
+        .delete()
+        .or('user_id.eq.$userId,friend_id.eq.$userId')
+        .eq('friend_id', widget.userId);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("❌ Friend removed.")),
+    );
+  }
 }
+
 final List<String> spiritualPaths = [
   "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
 ];
