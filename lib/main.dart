@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'services/supabase_service.dart'; // ✅ Fixed: Removed duplicate import
+import 'services/supabase_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
@@ -12,7 +12,7 @@ import 'screens/journal_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/sessions_screen.dart';
 import 'screens/more_menu_screen.dart';
-import 'screens/aura_catcher.dart'; // ✅ Fixed: Removed duplicate import
+import 'screens/aura_catcher.dart';
 import 'screens/likes_screen.dart';
 import 'screens/messages_screen.dart';
 import 'screens/notifications_screen.dart';
@@ -21,7 +21,8 @@ import 'screens/chats_screen.dart';
 import 'screens/moon_cycle_screen.dart';
 import 'screens/tarot_reading_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
-import 'screens/soul_journey_screen.dart'; // ✅ Ensured this is correctly imported
+import 'screens/soul_journey_screen.dart';
+import 'screens/user_discovery_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,7 @@ class _AuthGateState extends State<AuthGate> {
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      userId = session.user!.id;
+      userId = Supabase.instance.client.auth.currentUser?.id ?? "";
       _isLoggedIn = true;
     }
 
@@ -121,8 +122,8 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _screens = [
       HomeScreen(userName: "Guest"),
-      SoulJourneyScreen(), // ✅ Ensured this is correct
-      FriendsListScreen(),
+      SoulJourneyScreen(userId: widget.userId), // ✅ Pass userId correctly
+      FriendsListScreen(userId: widget.userId),
       JournalScreen(),
       ProfileScreen(userId: widget.userId),
       MoreMenuScreen(),

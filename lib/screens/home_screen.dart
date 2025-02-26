@@ -2,22 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
-import 'profile_screen.dart'; // Make sure to import this if it's not already imported
+import 'profile_screen.dart';
+import 'tarot_reading_screen.dart';
+import 'aura_catcher.dart';
+import 'moon_cycle_screen.dart';
+import 'soul_journey_screen.dart';
+import 'user_discovery_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
 
-  HomeScreen({required this.userName}); // Accept userName dynamically
+  HomeScreen({required this.userName});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final SupabaseService supabaseService = SupabaseService();
   UserModel? user;
   bool _isLoading = true;
   bool _hasError = false;
+  int _spiritualXP = 0;
+  int _spiritualLevel = 1;
+  bool _challengeCompleted = false;
+  bool _profileChecked = false;
+  late TabController _tabController;
 
   final List<String> backgroundImages = [
     'assets/images/bg1.png',
@@ -25,32 +35,35 @@ class _HomeScreenState extends State<HomeScreen> {
     'assets/images/bg3.png',
   ];
 
+  final List<String> _challengeList = [
+    "Take 5 minutes to meditate and breathe deeply.",
+    "Write down 3 things you're grateful for.",
+    "Spend 10 minutes in silence, listening to your breath.",
+    "Do one act of kindness today.",
+    "Step outside and connect with nature.",
+    "Visualize yourself achieving your goals for 5 minutes.",
+    "Stretch your body and release tension for 5 minutes.",
+  ];
+
+  String _todaysChallenge = "Take 5 minutes to meditate and breathe deeply.";
+  DateTime? _lastCompletedTime;
+
   @override
   void initState() {
     super.initState();
-    _checkProfileCompletion();
     _loadUserProfile();
+    _loadChallengeStatus();
   }
 
-  Future<void> _checkProfileCompletion() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    bool isComplete = await SupabaseService().isProfileComplete(userId);
-
-    if (!isComplete) {
-      // 🚫 Redirect to ProfileScreen
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
-        );
-      });
-    }
+  @override
+  void dispose() {
+    super.dispose();
   }
 
-  // 🔥 Fetch User Profile from Supabase
   Future<void> _loadUserProfile() async {
+    if (_profileChecked) return;
+    _profileChecked = true;
+
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -70,6 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (profile != null) {
         setState(() {
           user = profile;
+          _spiritualXP = profile.spiritualXP ?? 0;
+          _spiritualLevel = profile.spiritualLevel ?? 1;
           _isLoading = false;
         });
       } else {
@@ -86,23 +101,95 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 🔄 Get background image based on the date
+  Future<void> _loadChallengeStatus() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('challenge_status')
+          .select('last_completed')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (response != null && response['last_completed'] != null) {
+        _lastCompletedTime = DateTime.parse(response['last_completed']);
+        if (DateTime.now().difference(_lastCompletedTime!).inHours < 24) {
+          setState(() {
+            _challengeCompleted = true;
+          });
+        }
+      }
+    } catch (error) {
+      print("Error loading challenge status: $error");
+    }
+
+    _generateDailyChallenge();
+  }
+
+  void _generateDailyChallenge() {
+    int today = DateTime.now().day;
+    int challengeIndex = today % _challengeList.length;
+    setState(() {
+      _todaysChallenge = _challengeList[challengeIndex];
+    });
+  }
+
+  void _completeChallenge() async {
+    if (_challengeCompleted) return;
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('challenge_status')
+          .upsert({'user_id': userId, 'last_completed': DateTime.now().toIso8601String()});
+
+      setState(() {
+        _challengeCompleted = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Challenge completed! +10 XP')),
+      );
+
+      setState(() {
+        _spiritualXP += 10;
+      });
+    } catch (error) {
+      print("Error updating challenge status: $error");
+    }
+  }
+
   String getRotatingBackground() {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
   }
 
+  void _navigateToPage(Widget page) {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => page),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: User not logged in")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'Celestial Path',
-          style: TextStyle(
-            fontFamily: 'fo18',
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         flexibleSpace: Container(
           decoration: BoxDecoration(
@@ -114,81 +201,86 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          // 🔄 Rotating background image
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(getRotatingBackground()),
-                  fit: BoxFit.cover,
-                ),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.black.withOpacity(0.4), Colors.transparent],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(getRotatingBackground()), // ✅ Dynamic Background
+            fit: BoxFit.cover, // ✅ Ensures full coverage
+            alignment: Alignment.topCenter, // ✅ Aligns correctly
           ),
-          SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  SizedBox(height: 10),
-                  _isLoading
-                      ? Center(child: CircularProgressIndicator(color: Colors.purple))
-                      : _hasError
-                      ? _buildErrorMessage()
-                      : _buildGreetingSection(),
-                  SizedBox(height: 10),
-                  _buildCardSection(
-                    title: "Today's Affirmation",
-                    content: '“I am in alignment with my higher purpose.”',
-                    icon: Icons.lightbulb_outline,
-                  ),
-                  SizedBox(height: 10),
-                  _buildCardSection(
-                    title: "Today's Challenge",
-                    content: "Take 5 minutes to meditate and breathe deeply.",
-                    icon: Icons.check_circle_outline,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Challenge marked as complete!'),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                physics: BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    _isLoading
+                        ? Center(child: CircularProgressIndicator(color: Colors.purple))
+                        : _hasError
+                        ? _buildErrorMessage()
+                        : _buildGreetingSection(),
+                    SizedBox(height: 10),
+                    _buildXPProgressBar(),
+                    SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.style, color: Colors.blueAccent),
+                          onPressed: () => _navigateToPage(TarotReadingScreen()),
                         ),
-                      );
-                    },
-                  ),
-                  SizedBox(height: 10),
-                  _buildCardSection(
-                    title: "Today's Insight",
-                    content:
-                    "The energy of the universe flows within you. Take a moment to connect with your inner light.",
-                    icon: Icons.self_improvement,
-                  ),
-                  SizedBox(height: 10),
-                  _buildTrendingTopicsSection(),
-                  SizedBox(height: 20),
-                ],
+                        IconButton(
+                          icon: Icon(Icons.blur_on, color: Colors.blueAccent),
+                          onPressed: () => _navigateToPage(AuraCatcherScreen()),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.brightness_2, color: Colors.blueAccent),
+                          onPressed: () => _navigateToPage(MoonCycleScreen()),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.auto_awesome, color: Colors.blueAccent),
+                          onPressed: () {
+                            if (userId != null) {
+                              _navigateToPage(SoulJourneyScreen(userId: userId));
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Error: User not logged in")),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 20),
+                    _buildCardSection(
+                      title: "Today's Affirmation",
+                      content: '“I am in alignment with my higher purpose.”',
+                      icon: Icons.lightbulb_outline,
+                    ),
+                    SizedBox(height: 10),
+                    _buildCardSection(
+                      title: "Today's Challenge",
+                      content: _todaysChallenge,
+                      icon: Icons.check_circle_outline,
+                      onTap: _completeChallenge,
+                      isDisabled: _challengeCompleted,
+                    ),
+                    SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // 🟢 Greeting Section with Dynamic Data
   Widget _buildGreetingSection() {
     return Container(
-      padding: const EdgeInsets.all(12.0),
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
@@ -201,28 +293,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back, ${user?.name ?? "Guest"}!',
-                  style: TextStyle(
-                    fontFamily: 'fo18',
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  'Illuminate Your Path',
-                  style: TextStyle(
-                    fontFamily: 'fo18',
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                ),
-              ],
+            child: Text(
+              'Welcome back, ${user?.name ?? "Guest"}!',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
         ],
@@ -230,16 +303,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🟢 Card Section for Daily Messages
+  Widget _buildXPProgressBar() {
+    int xpNeeded = _spiritualLevel * 100;
+    double progress = _spiritualXP / xpNeeded;
+
+    return Column(
+      children: [
+        Text(
+          'Level $_spiritualLevel • XP: $_spiritualXP / $xpNeeded',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+        ),
+        SizedBox(height: 5),
+        LinearProgressIndicator(
+          value: progress > 1 ? 1 : progress,
+          backgroundColor: Colors.grey[300],
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCardSection({
     required String title,
     required String content,
     IconData? icon,
     VoidCallback? onTap,
+    bool isDisabled = false,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.8),
         borderRadius: BorderRadius.circular(10),
@@ -248,70 +340,16 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           if (icon != null) Icon(icon, size: 28, color: Colors.blueAccent),
           SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'fo18',
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  content,
-                  style: TextStyle(
-                    fontFamily: 'fo18',
-                    fontSize: 12,
-                    color: Colors.black.withOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
+          Expanded(child: Text(content)),
+          IconButton(
+            icon: Icon(Icons.people, color: Colors.blueAccent),
+            onPressed: () => _navigateToPage(UserDiscoveryScreen()),
           ),
-          if (onTap != null)
-            IconButton(
-              icon: Icon(Icons.done, color: Colors.blue),
-              onPressed: onTap,
-            ),
         ],
       ),
     );
   }
 
-  // 🟢 Trending Topics Section
-  Widget _buildTrendingTopicsSection() {
-    final List<Map<String, String>> trendingTopics = [
-      {"topic": "#Mindfulness", "posts": "324 posts"},
-      {"topic": "#Gratitude", "posts": "289 posts"},
-      {"topic": "#SpiritualGrowth", "posts": "415 posts"},
-      {"topic": "#InnerPeace", "posts": "198 posts"},
-      {"topic": "#DailyAffirmations", "posts": "350 posts"},
-    ];
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: trendingTopics.map((topic) {
-          return ListTile(
-            title: Text(topic["topic"]!, style: TextStyle(fontSize: 12, color: Colors.black)),
-            subtitle: Text(topic["posts"]!, style: TextStyle(fontSize: 12, color: Colors.grey)),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // 🔥 Error Message UI
   Widget _buildErrorMessage() {
     return Center(child: Text("Error loading profile", style: TextStyle(color: Colors.red)));
   }

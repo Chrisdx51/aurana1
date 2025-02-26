@@ -7,6 +7,7 @@ import '../models/milestone_model.dart';
 class SupabaseService {
   final SupabaseClient supabase = Supabase.instance.client;
 
+
   // Fetch User Profile from Supabase
   Future<UserModel?> getUserProfile(String userId) async {
     try {
@@ -181,9 +182,7 @@ class SupabaseService {
   }
 
   // Fetch All Milestones from Supabase
-  Future<List<MilestoneModel>> fetchMilestones(
-      {String sortBy = "Newest"}) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+  Future<List<MilestoneModel>> fetchMilestones({String sortBy = "Newest", required String userId}) async {
 
     String orderColumn = "created_at";
     bool ascending = false;
@@ -199,10 +198,11 @@ class SupabaseService {
       final response = await supabase
           .from('milestones')
           .select('''
-            id, user_id, content, milestone_type, created_at, energy_boosts, media_url, 
-            profiles(name, icon), 
-            milestone_boosts(user_id)
-          ''')
+          id, user_id, content, milestone_type, created_at, energy_boosts, media_url, 
+          profiles(name, icon), 
+          milestone_boosts(user_id)
+        ''')
+          .eq('user_id', userId) // ✅ Fetch only milestones of the specific user
           .order(orderColumn, ascending: ascending);
 
       if (response == null || response.isEmpty) {
@@ -478,4 +478,127 @@ class SupabaseService {
       return [];
     }
   }
-} // Helper function to calculate XP threshold for each level
+// ✅ Send a Friend Request
+  Future<bool> sendFriendRequest(String senderId, String receiverId) async {
+    try {
+      // ✅ Check if a request already exists
+      final existingRequest = await supabase
+          .from('friends')
+          .select('status')
+          .or('and(user_id.eq.$senderId, friend_id.eq.$receiverId), and(user_id.eq.$receiverId, friend_id.eq.$senderId)')
+          .maybeSingle();
+
+      if (existingRequest != null) {
+        print("⚠️ Friend request already exists.");
+        return false;
+      }
+
+      // ✅ Insert a new friend request
+      await supabase.from('friends').insert({
+        'user_id': senderId,
+        'friend_id': receiverId,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // ✅ Send a notification to the receiver
+      await supabase.from('notifications').insert({
+        'user_id': receiverId,
+        'type': 'friend_request',
+        'message': 'You have a new friend request!',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      return true;
+    } catch (error) {
+      print("Error sending friend request: $error");
+      return false;
+    }
+  }
+
+
+  // ✅ Accept a Friend Request
+  Future<bool> acceptFriendRequest(String userId, String friendId) async {
+    try {
+      await supabase
+          .from('friends')
+          .update({'status': 'accepted'})
+          .match({'user_id': friendId, 'friend_id': userId});
+
+      return true;
+    } catch (error) {
+      print("Error accepting friend request: $error");
+      return false;
+    }
+  }
+
+  // ✅ Remove a Friend
+  Future<bool> removeFriend(String userId, String friendId) async {
+    try {
+      await supabase
+          .from('friends')
+          .delete()
+          .match({'user_id': userId, 'friend_id': friendId});
+      await supabase
+          .from('friends')
+          .delete()
+          .match({'user_id': friendId, 'friend_id': userId});
+      return true;
+    } catch (error) {
+      print("Error removing friend: $error");
+      return false;
+    }
+  }
+
+  // ✅ Check Friendship Status
+  Future<String> checkFriendshipStatus(String userId, String friendId) async {
+    try {
+      final response = await supabase
+          .from('friends')
+          .select('status')
+          .or('user_id.eq.$userId, friend_id.eq.$friendId')
+          .maybeSingle();
+
+      if (response == null) return 'not_friends';
+      return response['status'];
+    } catch (error) {
+      print("Error checking friendship status: $error");
+      return 'error';
+    }
+  }
+
+  // ✅ Fetch Friend List
+  Future<List<Map<String, dynamic>>> getFriendsList(String userId) async {
+    try {
+      final response = await supabase
+          .from('friends')
+          .select('friend_id, profiles(name, icon)')
+          .eq('user_id', userId)
+          .eq('status', 'accepted');
+
+      return response ?? [];
+    } catch (error) {
+      print("Error fetching friends list: $error");
+      return [];
+    }
+  }
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    try {
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+      final response = await supabase
+          .from('profiles')
+          .select('id, name, icon, spiritual_path')
+          .order('name', ascending: true);
+
+      if (currentUserId != null) {
+        return response.where((user) => user['id'] != currentUserId).toList();
+      }
+
+      return response ?? [];
+    } catch (error) {
+      print("Error fetching users: $error");
+      return [];
+    }
+  }
+}// Helper function to calculate XP threshold for each level
