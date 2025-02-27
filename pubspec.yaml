@@ -62,6 +62,8 @@ flutter:
     - assets/images/profile.png
     - assets/model.tflite
     - .env
+    - assets/default_avatar.png
+
   fonts:
     - family: Fo
       fonts:

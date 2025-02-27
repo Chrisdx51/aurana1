@@ -26,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   bool _isProfileComplete = false;
+  bool _friendRequestSent = false; // ✅ Track if a friend request is sent
   File? _selectedImage;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
@@ -42,7 +43,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadUserProfile();
-    _loadAchievements(); // ✅ Ensure achievements are loaded
+    _loadAchievements();
+    _checkFriendshipStatus(); // ✅ Ensure button state is set when page loads
   }
 
   Future<void> _loadUserProfile() async {
@@ -306,7 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
+          boxShadow: [BoxShadow(color: Colors.green, blurRadius: 6)],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -482,19 +484,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
-            child: Column(
+            child: Expanded(  // ✅ Fix: Wrap Column in Expanded
+             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(height: 20),
                 GestureDetector(
-                  onTap: _changeProfilePicture,
+                  onTap: widget.userId == Supabase.instance.client.auth.currentUser?.id
+                      ? _changeProfilePicture  // ✅ Only allow profile owner to change
+                      : null,  // ❌ Disable clicking for visitors
                   child: Stack(
-                    alignment: Alignment.center,
+                  alignment: Alignment.center,
                     children: [
                       CircleAvatar(
                         radius: 65,
                         backgroundColor: Colors.white,
-                        backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
+                        backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
                             ? NetworkImage(user!.icon!)
                             : AssetImage('assets/default_avatar.png') as ImageProvider,
                       ),
@@ -506,177 +511,410 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+
                 SizedBox(height: 30),
                 Column(
                   children: [
-                    ListTile(
-                      leading: Icon(Icons.people),
-                      title: Text("Friends List"),
-                      onTap: () {
-                        final userId = Supabase.instance.client.auth.currentUser?.id;
-                        if (userId != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => FriendsListScreen(userId: userId)),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Error: User not logged in")),
-                          );
+                    // 🔹 Friend Request Button
+                    FutureBuilder<String>(
+                      future: _checkFriendshipStatus(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return CircularProgressIndicator();
+                        final status = snapshot.data!;
+                        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+                        if (widget.userId == currentUserId) {
+                          return SizedBox();  // ✅ Don't show any friend buttons on own profile
                         }
+
+                        print("🛠 Friendship Status in UI: $status"); // 👈 Debugging line
+
+                        return Column(
+                          children: [
+                            if (status == "friends") // ✅ Show Remove Friend Button
+                              Column(
+                                children: [
+                                  Text(
+                                    "✅ You are friends!",
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
+                                  ),
+                                  SizedBox(height: 5),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      await _removeFriend();
+                                      setState(() {}); // ✅ Refresh UI after removing friend
+                                    },
+                                    child: Text("Remove Friend ❌"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.redAccent,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        );
                       },
                     ),
 
-                    // 🔹 Friend Request Button
-                    if (widget.userId != Supabase.instance.client.auth.currentUser?.id)
-                      FutureBuilder<bool>(
-                        future: _checkFriendStatus(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) return CircularProgressIndicator();
-                          final isFriend = snapshot.data!;
 
-                          return ElevatedButton(
-                            onPressed: () async {
-                              if (isFriend) {
-                                await _removeFriend();
-                              } else {
-                                await _sendFriendRequest();
-                              }
-                              setState(() {});
-                            },
-                            child: Text(isFriend ? "Unfriend" : "Send Friend Request"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isFriend ? Colors.redAccent : Colors.blueAccent,
-                              foregroundColor: Colors.white,
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _getFriendsList(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return CircularProgressIndicator();
+                        final friends = snapshot.data!;
+                        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+                        // 🚫 Hide friends list for visitors
+                        if (widget.userId != currentUserId) {
+                          return SizedBox();
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "👥 Friends",
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                             ),
-                          );
-                        },
-                      ),
+                            SizedBox(height: 10),
+                            friends.isEmpty
+                                ? Text("No friends yet. Add some!", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+                                : SizedBox(
+                              height: 100,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: friends.take(5).map((friend) {
+                                  return GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ProfileScreen(userId: friend['id']),
+                                        ),
+                                      );
+                                    },
+                                    child: Column(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 30,
+                                          backgroundImage: friend['icon'] != null && friend['icon'].startsWith('http')
+                                              ? NetworkImage(friend['icon'])
+                                              : AssetImage('assets/default_avatar.png') as ImageProvider,
+                                        ),
+                                        SizedBox(height: 5),
+                                        Text(friend['name'], style: TextStyle(fontSize: 14)),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
                   ],
                 ),
-
-                _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
-                SizedBox(height: 5),
-                _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
-                SizedBox(height: 5),
-                _buildDropdownField(
-                  "Choose your Spiritual Path",
-                  _selectedSpiritualPath ?? spiritualPaths.first,
-                  spiritualPaths,
-                      (newValue) {
-                    setState(() {
-                      _selectedSpiritualPath = newValue;
-                    });
-                  },
-                ),
-                SizedBox(height: 10),
-                _buildDropdownField(
-                  "Select Your Element",
-                  _selectedElement ?? elements.first,
-                  elements,
-                      (newValue) {
-                    setState(() {
-                      _selectedElement = newValue;
-                    });
-                  },
-                ),
-                SizedBox(height: 5),
-                _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
-                SizedBox(height: 5),
-                _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
-                SizedBox(height: 20),
-                _buildProgressBar(),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (_nameController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("⚠️ Please enter your name before saving."))
-                      );
-                      return;
-                    }
-
-                    bool success = await _updateProfile();
-                    if (success) {
-                      await _checkProfileCompletion();
-                    }
-                  },
-                  child: Text("Save Changes"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                // ✅ Only allow editing if the logged-in user is viewing their own profile
+                if (widget.userId == Supabase.instance.client.auth.currentUser?.id) ...[
+                  _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
+                  SizedBox(height: 5),
+                  _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
+                  SizedBox(height: 5),
+                  _buildDropdownField(
+                    "Choose your Spiritual Path",
+                    _selectedSpiritualPath ?? spiritualPaths.first,
+                    spiritualPaths,
+                        (newValue) {
+                      setState(() {
+                        _selectedSpiritualPath = newValue;
+                      });
+                    },
                   ),
+                  SizedBox(height: 10),
+                  _buildDropdownField(
+                    "Select Your Element",
+                    _selectedElement ?? elements.first,
+                    elements,
+                        (newValue) {
+                      setState(() {
+                        _selectedElement = newValue;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 5),
+                  _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
+                  SizedBox(height: 5),
+                  _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+                  SizedBox(height: 20),
+                  _buildProgressBar(),
+                  SizedBox(height: 20),
+
+                  // ✅ Only show Save Button to profile owner
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (_nameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("⚠️ Please enter your name before saving."))
+                        );
+                        return;
+                      }
+
+                      bool success = await _updateProfile();
+                      if (success) {
+                        await _checkProfileCompletion();
+                      }
+                    },
+                    child: Text("Save Changes"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ], // ✅ End of check for profile owner
+
+// ✅ Show information for visitors (only viewable, not editable)
+                if (widget.userId != Supabase.instance.client.auth.currentUser?.id) ...[
+                  _buildBubbleText(_nameController.text, FontAwesomeIcons.sun),
+                  SizedBox(height: 5),
+                  _buildBubbleText(_bioController.text, FontAwesomeIcons.moon),
+                  SizedBox(height: 5),
+                  _buildBubbleText(_selectedSpiritualPath ?? "Not Set", FontAwesomeIcons.seedling),
+                  SizedBox(height: 10),
+                  _buildBubbleText(_selectedElement ?? "Not Set", FontAwesomeIcons.leaf),
+                  SizedBox(height: 5),
+                  _buildBubbleText(_selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : "Not Set", FontAwesomeIcons.calendar),
+                  SizedBox(height: 5),
+                  _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+                  SizedBox(height: 20),
+                  _buildProgressBar(),
+                ],
+
+               // ✅ Show achievements for everyone
+                Column(
+                  children: [
+                    SizedBox(height: 20),
+                    _buildAchievementsSection(),
+                  ],
                 ),
-            Column(
-              children: [
-                // Other Profile Fields...
-                SizedBox(height: 20),
-                _buildAchievementsSection(), // ✅ Now achievements will show up correctly with GIFs
-              ],
-            )
               ],
             ),
           ),
         ),
+
       ),
+    )
     );
   }
-// ✅ Check if users are already friends
-  Future<bool> _checkFriendStatus() async {
+  Future<List<Map<String, dynamic>>> _getFriendsList() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return false;
+    if (userId == null) return [];
 
-    final response = await Supabase.instance.client
-        .from('friends')
-        .select()
-        .or('user_id.eq.${widget.userId},friend_id.eq.${widget.userId}')
-        .eq('user_id', userId)
-        .or('friend_id.eq.$userId')
-        .maybeSingle();
+    try {
+      final response = await Supabase.instance.client
+          .from('relations')
+          .select('friend_id')
+          .or('user_id.eq.$userId,friend_id.eq.$userId');
 
-    return response != null;
+      List<Map<String, dynamic>> friends = [];
+      for (var entry in response) {
+        final friendId = entry['friend_id'];
+        if (friendId != userId) {
+          final friendProfile = await supabaseService.getUserProfile(friendId);
+          if (friendProfile != null) {
+            friends.add({
+              'id': friendId,
+              'name': friendProfile.name,
+              'icon': friendProfile.icon, // ✅ Get profile picture
+            });
+          }
+        }
+      }
+
+      return friends;
+    } catch (error) {
+      print("❌ Error getting friend list: $error");
+      return [];
+    }
+  }
+//✅ Check if a friend request is already sent or accepted
+  Future<String> _checkFriendshipStatus() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return 'not_friends';
+
+    try {
+      // ✅ FIXED: Use `.select().limit(1).single()` to ensure only one row is returned
+      final friendsResponse = await Supabase.instance.client
+          .from('relations')
+          .select()
+          .or('and(user_id.eq.$userId,friend_id.eq.${widget.userId}),and(user_id.eq.${widget.userId},friend_id.eq.$userId))')
+          .limit(1)
+          .single();
+
+      if (friendsResponse != null) {
+        print("✅ Friendship Status: friends");
+        return 'friends';
+      }
+    } catch (error) {
+      print("⚠️ No friendship found in relations table: $error");
+    }
+
+    try {
+      final sentRequestResponse = await Supabase.instance.client
+          .from('friend_requests')
+          .select()
+          .eq('sender_id', userId)
+          .eq('receiver_id', widget.userId)
+          .limit(1)
+          .single();
+
+      if (sentRequestResponse != null) {
+        print("✅ Friendship Status: sent");
+        return 'sent';
+      }
+    } catch (error) {
+      print("⚠️ No sent friend request found: $error");
+    }
+
+    try {
+      final receivedRequestResponse = await Supabase.instance.client
+          .from('friend_requests')
+          .select()
+          .eq('sender_id', widget.userId)
+          .eq('receiver_id', userId)
+          .limit(1)
+          .single();
+
+      if (receivedRequestResponse != null) {
+        print("✅ Friendship Status: received");
+        return 'received';
+      }
+    } catch (error) {
+      print("⚠️ No received friend request found: $error");
+    }
+
+    print("✅ Friendship Status: not_friends");
+    return 'not_friends';
   }
 
-// ✅ Send Friend Request
+  // ✅ Send Friend Request
   Future<void> _sendFriendRequest() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
-    await Supabase.instance.client.from('friends').insert({
-      'user_id': userId,
-      'friend_id': widget.userId,
-      'status': 'pending',
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    try {
+      // ✅ FIXED: Ensure no duplicate requests
+      final existingRequest = await Supabase.instance.client
+          .from('friend_requests')
+          .select('id')
+          .or('sender_id.eq.$userId.and(receiver_id.eq.${widget.userId}),sender_id.eq.${widget.userId}.and(receiver_id.eq.$userId))')
+          .limit(1)
+          .single();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("✅ Friend request sent!")),
-    );
+      if (existingRequest != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("⚠️ Friend request already exists!")),
+        );
+        return;
+      }
+
+      // ✅ Insert Friend Request
+      await Supabase.instance.client.from('friend_requests').insert({
+        'sender_id': userId,
+        'receiver_id': widget.userId,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // ✅ Refresh UI
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("✅ Friend request sent!")),
+      );
+    } catch (error) {
+      print("❌ Error sending friend request: $error");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Error sending friend request. Try again!")),
+      );
+    }
   }
 
-// ✅ Remove Friend
+
+  // ✅ Remove Friend
   Future<void> _removeFriend() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
-    await Supabase.instance.client
-        .from('friends')
-        .delete()
-        .or('user_id.eq.$userId,friend_id.eq.$userId')
-        .eq('friend_id', widget.userId);
+    try {
+      // ✅ Remove friendship from relations table
+      await Supabase.instance.client
+          .from('relations')
+          .delete()
+          .or('and(user_id.eq.$userId,friend_id.eq.${widget.userId}),and(user_id.eq.${widget.userId},friend_id.eq.$userId))');
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("❌ Friend removed.")),
-    );
+      if (mounted) {
+        setState(() {}); // ✅ Refresh UI
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Friend removed.")),
+      );
+    } catch (error) {
+      print("❌ Error removing friend: $error");
+    }
   }
-}
 
-final List<String> spiritualPaths = [
+  // ✅ Accept Friend Request
+  Future<void> _acceptFriendRequest() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      // ✅ Delete the friend request
+      await Supabase.instance.client
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', widget.userId)
+          .eq('receiver_id', userId);
+
+      // ✅ Insert into relations table (make both users friends)
+      await Supabase.instance.client.from('relations').insert([
+        {
+          'user_id': userId,
+          'friend_id': widget.userId,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'user_id': widget.userId,
+          'friend_id': userId,
+          'created_at': DateTime.now().toIso8601String(),
+        }
+      ]);
+
+      // ✅ Refresh UI
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("🎉 You are now friends!")),
+      );
+    } catch (error) {
+      print("❌ Error accepting friend request: $error");
+    }
+  }
+
+
+
+
+  final List<String> spiritualPaths = [
   "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
 ];
 
 final List<String> elements = [
   "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
 ];
+}

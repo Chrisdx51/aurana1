@@ -117,12 +117,18 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   late List<Widget> _screens;
 
+  static const int PROFILE_TAB_INDEX = 4;
+
   @override
   void initState() {
     super.initState();
+    _initializeScreens();
+  }
+
+  void _initializeScreens() {
     _screens = [
       HomeScreen(userName: "Guest"),
-      SoulJourneyScreen(userId: widget.userId), // ✅ Pass userId correctly
+      SoulJourneyScreen(userId: widget.userId),
       FriendsListScreen(userId: widget.userId),
       JournalScreen(),
       ProfileScreen(userId: widget.userId),
@@ -131,15 +137,27 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (index == PROFILE_TAB_INDEX && currentUserId != null) {
+      setState(() {
+        _screens[PROFILE_TAB_INDEX] = ProfileScreen(userId: currentUserId);
+        _selectedIndex = index;
+      });
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
