@@ -289,9 +289,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         children: [
           CircleAvatar(
             radius: 25,
-            backgroundImage: AssetImage('assets/images/default_avatar.png'),
-          ),
+            backgroundImage: user != null && user!.icon != null && user!.icon!.isNotEmpty
+                ? NetworkImage(user!.icon!)
+                : AssetImage("assets/images/default_avatar.png") as ImageProvider, // ✅ Fallback image
+          ), // ✅ Fixed null safety issues
+
           SizedBox(width: 10),
+
           Expanded(
             child: Text(
               'Welcome back, ${user?.name ?? "Guest"}!',

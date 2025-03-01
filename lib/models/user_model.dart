@@ -4,6 +4,7 @@ class UserModel {
   final String bio;
   final String? icon; // ✅ Profile Picture URL
   final String? dob;  // ✅ Date of Birth
+  final String? zodiacSign; // ✅ Zodiac Sign (FIXED)
   final String? spiritualPath; // ✅ Spiritual Path
   final String? element; // ✅ Elemental Connection
   final int spiritualXP; // ✅ Spiritual XP
@@ -19,6 +20,7 @@ class UserModel {
     required this.bio,
     this.icon,
     this.dob,
+    this.zodiacSign, // ✅ Added
     this.spiritualPath,
     this.element,
     this.spiritualXP = 0,
@@ -37,6 +39,7 @@ class UserModel {
       bio: json['bio'] ?? '',
       icon: json['icon'],
       dob: json['dob'],
+      zodiacSign: json['zodiac_sign'], // ✅ Ensure it's mapped from Supabase
       spiritualPath: json['spiritual_path'],
       element: json['element'],
       spiritualXP: json['spiritual_xp'] ?? 0,
@@ -56,6 +59,7 @@ class UserModel {
       'bio': bio,
       'icon': icon,
       'dob': dob,
+      'zodiac_sign': zodiacSign, // ✅ Added
       'spiritual_path': spiritualPath,
       'element': element,
       'spiritual_xp': spiritualXP,
@@ -73,6 +77,7 @@ class UserModel {
     String? bio,
     String? icon,
     String? dob,
+    String? zodiacSign, // ✅ Added
     String? spiritualPath,
     String? element,
     int? spiritualXP,
@@ -88,6 +93,7 @@ class UserModel {
       bio: bio ?? this.bio,
       icon: icon ?? this.icon,
       dob: dob ?? this.dob,
+      zodiacSign: zodiacSign ?? this.zodiacSign, // ✅ Ensure copyWith updates it
       spiritualPath: spiritualPath ?? this.spiritualPath,
       element: element ?? this.element,
       spiritualXP: spiritualXP ?? this.spiritualXP,
