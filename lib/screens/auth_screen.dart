@@ -64,13 +64,11 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final AuthResponse response;
       if (_isSignUp) {
-        // 🔥 Sign-Up Logic
         response = await supabase.auth.signUp(email: email, password: password);
 
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // ✅ Create profile without a name to force user input later
           await supabase.from('profiles').insert({
             'id': userId,
             'email': email,
@@ -88,24 +86,22 @@ class _AuthScreenState extends State<AuthScreen> {
           _showMessage("⚠️ Failed to create account.");
         }
       } else {
-        // 🔥 Log-In Logic
         response = await supabase.auth.signInWithPassword(email: email, password: password);
 
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // 🔍 Check if the profile is complete
+          // ✅ Check if profile is complete
           bool profileComplete = await _isProfileComplete(userId);
 
           if (profileComplete) {
-            // ✅ Redirect to Home if profile is complete
+            // ✅ Redirect to Home Screen if complete
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => HomeScreen(userName: email)),
             );
           } else {
-            // 🚀 Redirect to Profile Setup if profile is incomplete
-            _showMessage("⚠️ Please complete your profile first.");
+            // ✅ Redirect to Profile Setup if incomplete
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
@@ -121,7 +117,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => _isLoading = false);
   }
-
   // 🔥 Show messages
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));

@@ -211,7 +211,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Profile updated successfully!")),
+          SnackBar(
+            content: Text("✅ Profile updated successfully!"),
+            duration: Duration(seconds: 0), // ⏳ Show message for only 1 second
+          )
       );
       return true;
     } else {
@@ -240,11 +243,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool success = await _updateProfile();
     if (success) {
       await _checkProfileCompletion();
-      setState(() {});
+
+      // ✅ Corrected: Pass the userId when navigating
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
+      );
     }
   }
 
-  void _checkLevelUp() {
+  void_checkLevelUp() {
     int xpNeeded = _spiritualLevel * 100;
 
     if (_spiritualXP >= xpNeeded) {
@@ -498,11 +506,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       CircleAvatar(
                         radius: 65,
-                        backgroundColor: Colors.white,
-                        backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
-                            ? NetworkImage(user!.icon!)
-                            : AssetImage('assets/default_avatar.png') as ImageProvider,
+                        backgroundColor: widget.userId == Supabase.instance.client.auth.currentUser?.id
+                            ? Colors.white // ✅ No border for own profile
+                            : Colors.blueAccent, // ✅ Blue border for friends' profiles
+                        child: CircleAvatar(
+                          radius: 60, // ✅ Inner Avatar (smaller to allow border effect)
+                          backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
+                              ? NetworkImage(user!.icon!)
+                              : AssetImage('assets/default_avatar.png') as ImageProvider,
+                        ),
                       ),
+
                       Positioned(
                         bottom: 5,
                         right: 5,
@@ -524,7 +538,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         final currentUserId = Supabase.instance.client.auth.currentUser?.id;
 
                         if (widget.userId == currentUserId) {
-                          return SizedBox();  // ✅ Don't show any friend buttons on own profile
+                          return SizedBox();  // ✅ Don't show friend buttons on own profile
                         }
 
                         print("🛠 Friendship Status in UI: $status"); // Debugging log
@@ -544,27 +558,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
 
-                            if (status == "sent") // ✅ Show Request Sent Button (disabled)
+                            if (status == "sent") // ✅ Show Cancel Friend Request Button
                               ElevatedButton(
-                                onPressed: null,
-                                child: Text("Request Sent ⏳"),
+                                onPressed: () async {
+                                  await _cancelFriendRequest();
+                                  setState(() {}); // ✅ Refresh UI
+                                },
+                                child: Text("Cancel Request ❌"),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.grey,
+                                  backgroundColor: Colors.redAccent,
                                   foregroundColor: Colors.white,
                                 ),
                               ),
 
                             if (status == "received") // ✅ Show Accept Friend Request Button
-                              ElevatedButton(
-                                onPressed: () async {
-                                  await _acceptFriendRequest();
-                                  setState(() {}); // ✅ Refresh UI
-                                },
-                                child: Text("Accept Friend Request ✅"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                ),
+                              Column(
+                                children: [
+                                  Text(
+                                    "✅ Friend Request Received!",
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+                                  ),
+                                  SizedBox(height: 5),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      await _acceptFriendRequest();
+                                      setState(() {}); // ✅ Refresh UI
+                                    },
+                                    child: Text("Accept Friend Request ✅"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
                               ),
 
                             if (status == "friends") // ✅ Show Remove Friend Button
@@ -592,6 +618,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         );
                       },
                     ),
+
 
                     FutureBuilder<List<Map<String, dynamic>>>(
                       future: _getFriendsList(),
@@ -705,7 +732,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       bool success = await _updateProfile();
                       if (success) {
-                        await _checkProfileCompletion();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("✅ Profile updated successfully!"))
+                        );
+                        setState(() {}); // ✅ Stay on the profile page instead of redirecting
                       }
                     },
                     child: Text("Save Changes"),
@@ -788,13 +818,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (userId == null) return 'not_friends';
 
     try {
-      // ✅ FIXED: Use `.select().limit(1).single()` to ensure only one row is returned
       final friendsResponse = await Supabase.instance.client
           .from('relations')
           .select()
           .or('and(user_id.eq.$userId,friend_id.eq.${widget.userId}),and(user_id.eq.${widget.userId},friend_id.eq.$userId))')
           .limit(1)
-          .single();
+          .maybeSingle();
 
       if (friendsResponse != null) {
         print("✅ Friendship Status: friends");
@@ -810,12 +839,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select()
           .eq('sender_id', userId)
           .eq('receiver_id', widget.userId)
+          .eq('status', 'pending')
           .limit(1)
-          .single();
+          .maybeSingle();
 
       if (sentRequestResponse != null) {
         print("✅ Friendship Status: sent");
-        return 'sent';
+        return 'sent'; // ✅ Mark as request sent
       }
     } catch (error) {
       print("⚠️ No sent friend request found: $error");
@@ -827,8 +857,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select()
           .eq('sender_id', widget.userId)
           .eq('receiver_id', userId)
+          .eq('status', 'pending')
           .limit(1)
-          .single();
+          .maybeSingle();
 
       if (receivedRequestResponse != null) {
         print("✅ Friendship Status: received");
@@ -840,6 +871,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     print("✅ Friendship Status: not_friends");
     return 'not_friends';
+  }
+
+  Future<void> _cancelFriendRequest() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', userId)
+          .eq('receiver_id', widget.userId)
+          .eq('status', 'pending');
+
+      print("✅ Friend request canceled successfully!");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("✅ Friend request canceled!"),
+      ));
+
+      setState(() {}); // ✅ Refresh UI after canceling
+    } catch (error) {
+      print("❌ Error canceling friend request: $error");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("❌ Error canceling request."),
+      ));
+    }
   }
 
   // ✅ Send Friend Request
@@ -892,6 +949,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
+
   // ✅ Remove Friend
   Future<void> _removeFriend() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;

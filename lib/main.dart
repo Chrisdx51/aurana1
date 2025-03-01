@@ -6,11 +6,12 @@ import 'services/supabase_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/friends_page.dart'; // Keeping only FriendsPage
-import 'screens/soul_journey_screen.dart';
+import 'screens/friends_page.dart'; // ✅ Keep only one Friends Page
 import 'screens/aura_catcher.dart';
 import 'screens/tarot_reading_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
+import 'screens/soul_journey_screen.dart';
+import 'screens/more_menu_screen.dart'; // ✅ More Menu Screen
 import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
 
@@ -115,20 +116,28 @@ class _MainScreenState extends State<MainScreen> {
 
   void _initializeScreens() {
     _screens = [
-      HomeScreen(userName: "Guest"),         // Fix: Added userName
-      SoulJourneyScreen(userId: widget.userId), // Fix: Added userId
-      FriendsPage(),
-      ProfileScreen(userId: widget.userId),  // Fix: Added userId
+      HomeScreen(userName: "Guest"),
+      SoulJourneyScreen(userId: widget.userId),
+      ProfileScreen(userId: widget.userId),
+      FriendsPage(), // ✅ Only one Friends Page now
       AuraCatcherScreen(),
-      TarotReadingScreen(),
       SpiritualGuidanceScreen(),
+      TarotReadingScreen(),
+      MoreMenuScreen(), // ✅ More Menu for extra features
     ];
   }
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    if (index == 7) {  // 7 is the More button index
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => MoreMenuScreen()),
+      );
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
@@ -142,11 +151,12 @@ class _MainScreenState extends State<MainScreen> {
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
           BottomNavigationBarItem(icon: Icon(Icons.light_mode), label: 'Aura Catcher'),
-          BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot Reading'),
           BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Spiritual Guidance'),
+          BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot Reading'),
+          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'), // ✅ More menu button
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
