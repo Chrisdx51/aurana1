@@ -527,10 +527,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return SizedBox();  // ✅ Don't show any friend buttons on own profile
                         }
 
-                        print("🛠 Friendship Status in UI: $status"); // 👈 Debugging line
+                        print("🛠 Friendship Status in UI: $status"); // Debugging log
 
                         return Column(
                           children: [
+                            if (status == "not_friends") // ✅ Show Add Friend Button
+                              ElevatedButton(
+                                onPressed: () async {
+                                  await _sendFriendRequest();
+                                  setState(() {}); // ✅ Refresh UI
+                                },
+                                child: Text("Add Friend"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blueAccent,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+
+                            if (status == "sent") // ✅ Show Request Sent Button (disabled)
+                              ElevatedButton(
+                                onPressed: null,
+                                child: Text("Request Sent ⏳"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+
+                            if (status == "received") // ✅ Show Accept Friend Request Button
+                              ElevatedButton(
+                                onPressed: () async {
+                                  await _acceptFriendRequest();
+                                  setState(() {}); // ✅ Refresh UI
+                                },
+                                child: Text("Accept Friend Request ✅"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+
                             if (status == "friends") // ✅ Show Remove Friend Button
                               Column(
                                 children: [
@@ -556,7 +592,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         );
                       },
                     ),
-
 
                     FutureBuilder<List<Map<String, dynamic>>>(
                       future: _getFriendsList(),
@@ -802,18 +837,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ✅ Send Friend Request
+  // ✅ FIXED: Send Friend Request
   Future<void> _sendFriendRequest() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
     try {
+      print("🔄 Checking for existing friend requests...");
+
       // ✅ FIXED: Ensure no duplicate requests
       final existingRequest = await Supabase.instance.client
           .from('friend_requests')
           .select('id')
-          .or('sender_id.eq.$userId.and(receiver_id.eq.${widget.userId}),sender_id.eq.${widget.userId}.and(receiver_id.eq.$userId))')
+          .or('and(sender_id.eq.$userId,receiver_id.eq.${widget.userId}),and(sender_id.eq.${widget.userId},receiver_id.eq.$userId))')
           .limit(1)
-          .single();
+          .maybeSingle(); // ✅ Prevents crashes if no rows are found
 
       if (existingRequest != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -822,13 +860,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      // ✅ Insert Friend Request
+      print("✅ No existing request found. Sending new friend request...");
+
+      // ✅ FIXED: Insert Friend Request
       await Supabase.instance.client.from('friend_requests').insert({
         'sender_id': userId,
         'receiver_id': widget.userId,
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
+
+      print("✅ Friend request sent successfully!");
 
       // ✅ Refresh UI
       setState(() {});
@@ -838,13 +880,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (error) {
       print("❌ Error sending friend request: $error");
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("❌ Error sending friend request. Try again!")),
       );
     }
   }
-
-
   // ✅ Remove Friend
   Future<void> _removeFriend() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -906,9 +947,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print("❌ Error accepting friend request: $error");
     }
   }
-
-
-
 
   final List<String> spiritualPaths = [
   "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
