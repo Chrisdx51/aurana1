@@ -6,23 +6,13 @@ import 'services/supabase_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/friends_list_screen.dart';
-import 'screens/spiritual_tools_screen.dart';
-import 'screens/journal_screen.dart';
-import 'screens/challenges_screen.dart';
-import 'screens/sessions_screen.dart';
-import 'screens/more_menu_screen.dart';
+import 'screens/friends_page.dart'; // Keeping only FriendsPage
+import 'screens/soul_journey_screen.dart';
 import 'screens/aura_catcher.dart';
-import 'screens/likes_screen.dart';
-import 'screens/messages_screen.dart';
-import 'screens/notifications_screen.dart';
-import 'screens/relations_screen.dart';
-import 'screens/chats_screen.dart';
-import 'screens/moon_cycle_screen.dart';
 import 'screens/tarot_reading_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
-import 'screens/soul_journey_screen.dart';
-import 'screens/user_discovery_screen.dart';
+import 'screens/moon_cycle_screen.dart';
+import 'screens/journal_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -117,8 +107,6 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   late List<Widget> _screens;
 
-  static const int PROFILE_TAB_INDEX = 4;
-
   @override
   void initState() {
     super.initState();
@@ -127,28 +115,20 @@ class _MainScreenState extends State<MainScreen> {
 
   void _initializeScreens() {
     _screens = [
-      HomeScreen(userName: "Guest"),
-      SoulJourneyScreen(userId: widget.userId),
-      FriendsListScreen(userId: widget.userId),
-      JournalScreen(),
-      ProfileScreen(userId: widget.userId),
-      MoreMenuScreen(),
+      HomeScreen(userName: "Guest"),         // Fix: Added userName
+      SoulJourneyScreen(userId: widget.userId), // Fix: Added userId
+      FriendsPage(),
+      ProfileScreen(userId: widget.userId),  // Fix: Added userId
+      AuraCatcherScreen(),
+      TarotReadingScreen(),
+      SpiritualGuidanceScreen(),
     ];
   }
 
   void _onItemTapped(int index) {
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-
-    if (index == PROFILE_TAB_INDEX && currentUserId != null) {
-      setState(() {
-        _screens[PROFILE_TAB_INDEX] = ProfileScreen(userId: currentUserId);
-        _selectedIndex = index;
-      });
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -163,9 +143,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
           BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+          BottomNavigationBarItem(icon: Icon(Icons.light_mode), label: 'Aura Catcher'),
+          BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot Reading'),
+          BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Spiritual Guidance'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
@@ -191,19 +172,9 @@ class MoreMenuScreen extends StatelessWidget {
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MoonCycleScreen())),
           ),
           ListTile(
-            leading: Icon(Icons.style),
-            title: Text("Tarot Reading"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TarotReadingScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.self_improvement),
-            title: Text("Spiritual Guidance"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SpiritualGuidanceScreen())),
-          ),
-          ListTile(
-            leading: Icon(Icons.light_mode),
-            title: Text("Aura Catcher"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AuraCatcherScreen())),
+            leading: Icon(Icons.book),
+            title: Text("Journal"),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JournalScreen())),
           ),
         ],
       ),

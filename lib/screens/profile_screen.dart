@@ -602,7 +602,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         // 🚫 Hide friends list for visitors
                         if (widget.userId != currentUserId) {
-                          return SizedBox();
+                          return SizedBox(); // Hide friends for visitors
                         }
 
                         return Column(
@@ -616,12 +616,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             friends.isEmpty
                                 ? Text("No friends yet. Add some!", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
                                 : SizedBox(
-                              height: 100,
-                              child: ListView(
+                              height: 120, // ✅ Adjusted height
+                              child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
-                                children: friends.take(5).map((friend) {
+                                itemCount: friends.length,
+                                itemBuilder: (context, index) {
+                                  final friend = friends[index];
                                   return GestureDetector(
                                     onTap: () {
+                                      // ✅ Navigate to friend's profile when tapped
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -629,20 +632,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         ),
                                       );
                                     },
-                                    child: Column(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 30,
-                                          backgroundImage: friend['icon'] != null && friend['icon'].startsWith('http')
-                                              ? NetworkImage(friend['icon'])
-                                              : AssetImage('assets/default_avatar.png') as ImageProvider,
-                                        ),
-                                        SizedBox(height: 5),
-                                        Text(friend['name'], style: TextStyle(fontSize: 14)),
-                                      ],
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Column(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 40, // ✅ Larger profile image
+                                            backgroundImage: friend['icon'] != null && friend['icon'].startsWith('http')
+                                                ? NetworkImage(friend['icon'])
+                                                : AssetImage('assets/default_avatar.png') as ImageProvider,
+                                          ),
+                                          SizedBox(height: 5),
+                                          Text(friend['name'], style: TextStyle(fontSize: 14)),
+                                        ],
+                                      ),
                                     ),
                                   );
-                                }).toList(),
+                                },
                               ),
                             ),
                           ],
