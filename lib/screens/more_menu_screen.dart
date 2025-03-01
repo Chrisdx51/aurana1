@@ -14,31 +14,7 @@ class MoreMenuScreen extends StatelessWidget {
       appBar: AppBar(title: Text("More Options")),
       body: ListView(
         children: [
-          ListTile(
-            leading: Icon(Icons.star),
-            title: Text("Spiritual Tools"),
-            onTap: () => _navigate(context, SpiritualToolsScreen()),
-          ),
-          ListTile(
-            leading: Icon(Icons.directions_run),
-            title: Text("Challenges"),
-            onTap: () => _navigate(context, ChallengesScreen()),
-          ),
-          ListTile(
-            leading: Icon(Icons.live_tv),
-            title: Text("Sessions"),
-            onTap: () => _navigate(context, SessionsScreen()),
-          ),
-          ListTile(
-            leading: Icon(Icons.lightbulb),
-            title: Text("Guidance"),
-            onTap: () => _navigate(context, SpiritualGuidanceScreen()),
-          ),
-          ListTile(
-            leading: Icon(Icons.camera),
-            title: Text("Aura Capture"),
-            onTap: () => _navigate(context, AuraCatcherScreen()),
-          ),
+
           ListTile(
             leading: Icon(Icons.nightlight_round),
             title: Text("Moon Cycle"),

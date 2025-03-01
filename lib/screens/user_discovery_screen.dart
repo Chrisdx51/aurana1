@@ -7,6 +7,8 @@ import '../models/user_model.dart';
 import 'profile_screen.dart';
 import 'home_screen.dart';
 
+final SupabaseClient supabase = Supabase.instance.client;
+
 class UserDiscoveryScreen extends StatefulWidget {
   @override
   _UserDiscoveryScreenState createState() => _UserDiscoveryScreenState();
@@ -38,16 +40,24 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
     });
   }
 
-  void _sendFriendRequest(String userId) async {
+  Future<void> _sendFriendRequest(String userId) async {
     final senderId = Supabase.instance.client.auth.currentUser?.id;
     if (senderId == null) return;
 
     try {
-      await supabaseService.sendFriendRequest(senderId, userId);
+      await Supabase.instance.client.from('friend_requests').insert({
+        'sender_id': senderId,
+        'receiver_id': userId,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // ✅ Refresh UI by calling setState
+      setState(() {});
+
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("✅ Friend request sent!"),
       ));
-      _loadUsers(); // Refresh the list
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("❌ Error sending request."),
@@ -55,27 +65,90 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
     }
   }
 
+
   void _shareInviteLink() {
     final inviteLink = "https://aurana.app/invite";
     Share.share("🌟 Join me on Aurana! 🌌 Click to download: $inviteLink");
   }
 
   Future<String> _checkFriendshipStatus(String userId) async {
-    if (currentUserId == null) return 'not_friends';
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return "not_friends";
 
     try {
-      final relations = await Supabase.instance.client
+      // ✅ Check if the users are already friends (Allow multiple rows but check for any accepted)
+      final friendsCheck = await Supabase.instance.client
           .from('relations')
           .select()
-          .or('and(user_id.eq.${currentUserId ?? ''},friend_id.eq.$userId),and(user_id.eq.$userId,friend_id.eq.${currentUserId ?? ''}))')
-          .limit(1)
+          .or('and(user_id.eq.${user.id},friend_id.eq.$userId),and(user_id.eq.$userId,friend_id.eq.${user.id})')
+          .eq('status', 'accepted')
+          .limit(1) // ✅ Limit to 1 row to prevent multiple row issues
           .maybeSingle();
 
-      if (relations != null) return 'friends';
-    } catch (_) {}
+      if (friendsCheck != null) {
+        print("✅ Friendship Status: friends");
+        return "friends";
+      }
 
-    return 'not_friends';
+      // ✅ Check if the current user has SENT a friend request
+      final sentRequests = await Supabase.instance.client
+          .from('friend_requests')
+          .select()
+          .eq('sender_id', user.id)
+          .eq('receiver_id', userId)
+          .eq('status', 'pending');
+
+      if (sentRequests.isNotEmpty) {
+        print("✅ Friendship Status: request_sent");
+        return "request_sent";
+      }
+
+      // ✅ Check if the current user has RECEIVED a friend request
+      final receivedRequests = await Supabase.instance.client
+          .from('friend_requests')
+          .select()
+          .eq('receiver_id', user.id)
+          .eq('sender_id', userId)
+          .eq('status', 'pending');
+
+      if (receivedRequests.isNotEmpty) {
+        print("✅ Friendship Status: request_received");
+        return "request_received";
+      }
+
+      // ✅ If no match, return "not_friends"
+      print("✅ Friendship Status: not_friends");
+      return "not_friends";
+    } catch (error) {
+      print("❌ Error checking friendship status: $error");
+      return "not_friends"; // Default to "not_friends" if error occurs
+    }
   }
+
+  Future<void> _cancelFriendRequest(String userId) async {
+    final senderId = Supabase.instance.client.auth.currentUser?.id;
+    if (senderId == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', senderId)
+          .eq('receiver_id', userId);
+
+      // ✅ Refresh UI
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("✅ Friend request cancelled."),
+      ));
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("❌ Error cancelling request."),
+      ));
+    }
+  }
+
 
   List<UserModel> _filterUsers() {
     return users.where((user) {
@@ -217,8 +290,21 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
                               if (status == "not_friends")
                                 IconButton(
                                   icon: Icon(FontAwesomeIcons.userPlus, color: Colors.green),
-                                  onPressed: () => _sendFriendRequest(user.id),
+                                  onPressed: () async {
+                                    await _sendFriendRequest(user.id);
+                                    setState(() {}); // ✅ Refresh UI
+                                  },
                                 ),
+
+                              if (status == "request_sent")
+                                IconButton(
+                                  icon: Icon(FontAwesomeIcons.hourglassHalf, color: Colors.orange),
+                                  onPressed: () async {
+                                    await _cancelFriendRequest(user.id);
+                                    setState(() {}); // ✅ Refresh UI after canceling
+                                  },
+                                ),
+
                               if (status == "friends")
                                 Icon(FontAwesomeIcons.solidCheckCircle, color: Colors.blue),
                             ],

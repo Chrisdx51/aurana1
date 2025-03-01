@@ -339,6 +339,17 @@ class SupabaseService {
     }
   }
 
+  Future<void> declineFriendRequest(String senderId, String receiverId) async {
+    try {
+      await Supabase.instance.client
+          .from('friend_requests')
+          .delete()
+          .match({'sender_id': senderId, 'receiver_id': receiverId});
+    } catch (error) {
+      print("❌ Error declining friend request: $error");
+    }
+  }
+
   // ✅ Update XP & Level
   Future<void> updateSpiritualXP(String userId, int xpEarned) async {
     try {

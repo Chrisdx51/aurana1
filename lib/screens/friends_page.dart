@@ -10,7 +10,8 @@ class FriendsPage extends StatefulWidget {
 class _FriendsPageState extends State<FriendsPage> {
   final SupabaseClient supabase = Supabase.instance.client;
   List<dynamic> friends = [];
-  List<dynamic> pendingRequests = [];
+  List<String> sentFriendRequests = [];
+  List<String> receivedFriendRequests = [];
   bool isLoading = true;
   String searchQuery = "";
 
@@ -24,108 +25,144 @@ class _FriendsPageState extends State<FriendsPage> {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    print("🔍 Fetching friends for user: ${user.id}");
-
     try {
-      // ✅ Fetch Friends with Correct Relationship
       final friendsResponse = await supabase
           .from('relations')
-          .select('friend_id, profiles!fk_friend_profile(id, name, icon)')
+          .select('friend_id, profiles!fk_friend(id, name, icon)')
           .or('user_id.eq.${user.id}, friend_id.eq.${user.id}')
           .eq('status', 'accepted')
           .order('created_at', ascending: false);
 
-      print("✅ Friends response from Supabase: $friendsResponse");
-
-      // ✅ Ensure correct friend profile is selected and exclude current user
-      List<dynamic> formattedFriends = friendsResponse.map((relation) {
-        var friend = relation['profiles'];
-        return (friend['id'] != user.id) ? friend : null;
-      }).where((friend) => friend != null).toList();
-
-      // ✅ Fetch Pending Friend Requests
-      final requestsResponse = await supabase
-          .from('relations')
-          .select('user_id, profiles!fk_friend_profile(id, name, icon)')
-          .eq('friend_id', user.id)
-          .eq('status', 'pending');
-
-      print("✅ Pending requests response from Supabase: $requestsResponse");
+      List<dynamic> formattedFriends = friendsResponse
+          .map((relation) => relation['profiles'])
+          .where((friend) => friend['id'] != user.id)
+          .toList();
 
       if (mounted) {
         setState(() {
-          friends = formattedFriends ?? [];
-          pendingRequests = requestsResponse ?? [];
-          isLoading = false;
+          friends = formattedFriends;
         });
       }
 
-      if (friends.isEmpty) {
-        print("⚠ No friends found in app!");
-      }
+      print("✅ Friends list updated");
     } catch (error) {
       print("❌ Error fetching friends: $error");
-      setState(() {
-        isLoading = false;
-      });
     }
   }
 
-  void searchFriends(String query) {
-    setState(() {
-      searchQuery = query.toLowerCase();
-    });
-  }
-
-  void removeFriend(String friendId) async {
+  Future<void> sendFriendRequest(String friendId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    await supabase
-        .from('relations')
-        .delete()
-        .or('and(user_id.eq.${user.id},friend_id.eq.$friendId),and(user_id.eq.$friendId,friend_id.eq.${user.id}))');
+    try {
+      await supabase.from('friend_requests').insert({
+        'sender_id': user.id,
+        'receiver_id': friendId,
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
 
-    setState(() {
-      friends.removeWhere((friend) => friend['id'] == friendId);
-    });
+      setState(() {
+        sentFriendRequests.add(friendId);
+      });
+
+      await fetchFriends(); // ✅ Ensure UI refreshes after sending request
+
+    } catch (error) {
+      print("❌ Error sending friend request: $error");
+    }
   }
 
-  void acceptFriendRequest(String requesterId) async {
+  Future<void> cancelFriendRequest(String friendId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    await supabase
-        .from('relations')
-        .update({'status': 'accepted'})
-        .match({'user_id': requesterId, 'friend_id': user.id});
+    try {
+      await supabase
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', user.id)
+          .eq('receiver_id', friendId);
 
-    setState(() {
-      pendingRequests.removeWhere((request) => request['user_id'] == requesterId);
-      fetchFriends(); // Refresh friends list
-    });
+      // ✅ Refresh pending requests list
+      await fetchFriends();
+
+      print("✅ Friend request canceled");
+    } catch (error) {
+      print("❌ Error canceling friend request: $error");
+    }
   }
 
-  void declineFriendRequest(String requesterId) async {
+
+
+  Future<void> removeFriend(String friendId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    await supabase
-        .from('relations')
-        .delete()
-        .match({'user_id': requesterId, 'friend_id': user.id});
+    try {
+      await supabase.from('relations')
+          .delete()
+          .or('and(user_id.eq.${user.id},friend_id.eq.$friendId),and(user_id.eq.$friendId,friend_id.eq.${user.id}))');
 
-    setState(() {
-      pendingRequests.removeWhere((request) => request['user_id'] == requesterId);
-    });
+      // ✅ Refresh the friend list immediately
+      await fetchFriends();
+
+      print("✅ Friend removed successfully");
+    } catch (error) {
+      print("❌ Error removing friend: $error");
+    }
+  }
+
+
+
+  Future<void> acceptFriendRequest(String requesterId) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await supabase
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', requesterId)
+          .eq('receiver_id', user.id);
+
+      await supabase.from('relations').insert([
+        {'user_id': user.id, 'friend_id': requesterId, 'created_at': DateTime.now().toIso8601String()},
+        {'user_id': requesterId, 'friend_id': user.id, 'created_at': DateTime.now().toIso8601String()},
+      ]);
+
+      setState(() {
+        receivedFriendRequests.remove(requesterId);
+      });
+
+      await fetchFriends(); // ✅ Ensure UI refreshes after accepting friend request
+
+    } catch (error) {
+      print("❌ Error accepting friend request: $error");
+    }
+  }
+
+  Future<String> checkFriendshipStatus(String friendId) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return 'not_friends';
+
+    if (friends.any((friend) => friend['id'] == friendId)) {
+      return 'friends';
+    }
+    if (sentFriendRequests.contains(friendId)) {
+      return 'sent';
+    }
+    if (receivedFriendRequests.contains(friendId)) {
+      return 'received';
+    }
+
+    return 'not_friends';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('My Friends'),
-      ),
+      appBar: AppBar(title: Text('My Friends')),
       body: isLoading
           ? Center(child: CircularProgressIndicator())
           : Column(
@@ -138,74 +175,76 @@ class _FriendsPageState extends State<FriendsPage> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
-              onChanged: searchFriends,
+              onChanged: (query) {
+                setState(() {
+                  searchQuery = query.toLowerCase();
+                });
+              },
             ),
           ),
-          if (pendingRequests.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Friend Requests',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
-                    itemCount: pendingRequests.length,
-                    itemBuilder: (context, index) {
-                      final request = pendingRequests[index]['profiles'];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: request['icon'] != null
-                              ? NetworkImage(request['icon'])
-                              : AssetImage('assets/default_avatar.png')
-                          as ImageProvider,
-                        ),
-                        title: Text(request['name']),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.check_circle, color: Colors.green),
-                              onPressed: () => acceptFriendRequest(request['id']),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.cancel, color: Colors.red),
-                              onPressed: () => declineFriendRequest(request['id']),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
           Expanded(
             child: ListView.builder(
               itemCount: friends.length,
               itemBuilder: (context, index) {
                 final friend = friends[index];
 
-                if (searchQuery.isNotEmpty &&
-                    !friend['name'].toLowerCase().contains(searchQuery)) {
+                if (searchQuery.isNotEmpty && !friend['name'].toLowerCase().contains(searchQuery)) {
                   return SizedBox.shrink();
                 }
+
                 return ListTile(
                   leading: CircleAvatar(
                     backgroundImage: friend['icon'] != null
                         ? NetworkImage(friend['icon'])
-                        : AssetImage('assets/default_avatar.png')
-                    as ImageProvider,
+                        : AssetImage('assets/default_avatar.png') as ImageProvider,
                   ),
                   title: Text(friend['name']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.remove_circle, color: Colors.red),
-                    onPressed: () => removeFriend(friend['id']),
+                  trailing: FutureBuilder(
+                    future: checkFriendshipStatus(friend['id']),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return CircularProgressIndicator();
+
+                      final status = snapshot.data as String;
+
+                      if (status == "friends") {
+                        return IconButton(
+                          icon: Icon(Icons.remove_circle, color: Colors.red),
+                          onPressed: () async {
+                            await removeFriend(friend['id']);
+                            setState(() {});
+                          },
+                        );
+                      } else if (status == "sent") {
+                        return ElevatedButton(
+                          onPressed: () async {
+                            await cancelFriendRequest(friend['id']);
+                            setState(() {});
+                          },
+                          child: Text("Cancel Request ❌"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                        );
+                      } else if (status == "received") {
+                        return ElevatedButton(
+                          onPressed: () async {
+                            await acceptFriendRequest(friend['id']);
+                            setState(() {});
+                          },
+                          child: Text("Accept Friend ✅"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        );
+                      } else {
+                        return ElevatedButton(
+                          onPressed: () async {
+                            await sendFriendRequest(friend['id']);
+                            setState(() {});
+                          },
+                          child: Text("Add Friend ➕"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                        );
+                      }
+                    },
                   ),
                   onTap: () {
-                    print("📌 Navigating to friend's profile: ${friend['id']}");
                     Navigator.push(
                       context,
                       MaterialPageRoute(
