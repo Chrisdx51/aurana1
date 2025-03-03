@@ -39,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _spiritualLevel = 1;
   List<Map<String, dynamic>> _achievements = [];
 
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
+
 
   void _logout() async {
     await Supabase.instance.client.auth.signOut();
