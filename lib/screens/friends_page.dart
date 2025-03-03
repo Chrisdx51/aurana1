@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'profile_screen.dart'; // ✅ Import ProfileScreen
+import 'profile_screen.dart';
+import 'chat_screen.dart';
 
 class FriendsPage extends StatefulWidget {
   @override
@@ -9,252 +10,274 @@ class FriendsPage extends StatefulWidget {
 
 class _FriendsPageState extends State<FriendsPage> {
   final SupabaseClient supabase = Supabase.instance.client;
-  List<dynamic> friends = [];
-  List<String> sentFriendRequests = [];
-  List<String> receivedFriendRequests = [];
+  List<Map<String, dynamic>> friends = [];
+  List<Map<String, dynamic>> receivedFriendRequests = [];
+  List<Map<String, dynamic>> blockedUsers = []; // ✅ Blocked users list
   bool isLoading = true;
   String searchQuery = "";
+  int _pendingFriendRequestsCount = 0;
 
   @override
   void initState() {
     super.initState();
     fetchFriends();
+    fetchBlockedUsers();
+    refreshNotifications();
   }
 
+  Future<void> refreshNotifications() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final countResponse = await supabase
+          .from('friend_requests')
+          .select()
+          .eq('receiver_id', userId)
+          .eq('status', 'pending');
+
+      setState(() {
+        _pendingFriendRequestsCount = countResponse.length;
+      });
+    } catch (error) {
+      print("❌ Error refreshing notifications: $error");
+    }
+  }
+
+  // ✅ Fetch Friends & Friend Requests
   Future<void> fetchFriends() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
+    setState(() {
+      isLoading = true;
+    });
+
     try {
       final friendsResponse = await supabase
           .from('relations')
-          .select('friend_id, profiles!fk_friend(id, name, icon)')
+          .select('friend_id, friend:profiles!fk_friend(id, name, icon)')
           .or('user_id.eq.${user.id}, friend_id.eq.${user.id}')
           .eq('status', 'accepted')
           .order('created_at', ascending: false);
 
-      List<dynamic> formattedFriends = friendsResponse
-          .map((relation) => relation['profiles'])
+      List<Map<String, dynamic>> formattedFriends = friendsResponse
+          .map((relation) => relation['friend'] as Map<String, dynamic>)
           .where((friend) => friend['id'] != user.id)
           .toList();
 
-      if (mounted) {
-        setState(() {
-          friends = formattedFriends;
-        });
-      }
+      final requestsResponse = await supabase
+          .from('friend_requests')
+          .select('sender_id, sender:profiles!fk_sender(id, name, icon)')
+          .eq('receiver_id', user.id)
+          .eq('status', 'pending');
 
-      print("✅ Friends list updated");
+      List<Map<String, dynamic>> formattedRequests = requestsResponse
+          .map((request) => request['sender'] as Map<String, dynamic>)
+          .toList();
+
+      setState(() {
+        friends = formattedFriends;
+        receivedFriendRequests = formattedRequests;
+        isLoading = false;
+      });
     } catch (error) {
       print("❌ Error fetching friends: $error");
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
-  Future<void> sendFriendRequest(String friendId) async {
+
+  // ✅ Fetch Blocked Users
+  Future<void> fetchBlockedUsers() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
     try {
-      await supabase.from('friend_requests').insert({
-        'sender_id': user.id,
-        'receiver_id': friendId,
-        'status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      final blockedResponse = await supabase
+          .from('blocked_users')
+          .select('blocked_id, blocked:profiles!blocked_id(id, name, icon)')
+          .eq('blocker_id', user.id);
 
       setState(() {
-        sentFriendRequests.add(friendId);
+        blockedUsers = blockedResponse
+            .map((entry) => entry['blocked'] as Map<String, dynamic>)
+            .cast<Map<String, dynamic>>()
+            .toList();
       });
 
-      await fetchFriends(); // ✅ Ensure UI refreshes after sending request
-
+      print("✅ Blocked users loaded: ${blockedUsers.length}");
     } catch (error) {
-      print("❌ Error sending friend request: $error");
+      print("❌ Error fetching blocked users: $error");
     }
   }
 
-  Future<void> cancelFriendRequest(String friendId) async {
+  // ✅ Block a User
+  Future<void> blockUser(String blockedId) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await supabase.from('blocked_users').insert({
+        'blocker_id': user.id,
+        'blocked_id': blockedId,
+      });
+
+      await supabase.from('relations').delete().or(
+          'and(user_id.eq.${user.id},friend_id.eq.$blockedId),and(user_id.eq.$blockedId,friend_id.eq.${user.id})');
+
+      print("✅ User blocked successfully!");
+
+      await fetchFriends();
+      await fetchBlockedUsers();
+    } catch (error) {
+      print("❌ Error blocking user: $error");
+    }
+  }
+
+  // ✅ Unblock a User
+  Future<void> unblockUser(String blockedId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
     try {
       await supabase
-          .from('friend_requests')
+          .from('blocked_users')
           .delete()
-          .eq('sender_id', user.id)
-          .eq('receiver_id', friendId);
+          .eq('blocker_id', user.id)
+          .eq('blocked_id', blockedId);
 
-      // ✅ Refresh pending requests list
+      print("✅ User unblocked successfully!");
+
+      await fetchBlockedUsers();
       await fetchFriends();
-
-      print("✅ Friend request canceled");
     } catch (error) {
-      print("❌ Error canceling friend request: $error");
+      print("❌ Error unblocking user: $error");
     }
-  }
-
-
-
-  Future<void> removeFriend(String friendId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await supabase.from('relations')
-          .delete()
-          .or('and(user_id.eq.${user.id},friend_id.eq.$friendId),and(user_id.eq.$friendId,friend_id.eq.${user.id}))');
-
-      // ✅ Refresh the friend list immediately
-      await fetchFriends();
-
-      print("✅ Friend removed successfully");
-    } catch (error) {
-      print("❌ Error removing friend: $error");
-    }
-  }
-
-
-
-  Future<void> acceptFriendRequest(String requesterId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await supabase
-          .from('friend_requests')
-          .delete()
-          .eq('sender_id', requesterId)
-          .eq('receiver_id', user.id);
-
-      await supabase.from('relations').insert([
-        {'user_id': user.id, 'friend_id': requesterId, 'created_at': DateTime.now().toIso8601String()},
-        {'user_id': requesterId, 'friend_id': user.id, 'created_at': DateTime.now().toIso8601String()},
-      ]);
-
-      setState(() {
-        receivedFriendRequests.remove(requesterId);
-      });
-
-      await fetchFriends(); // ✅ Ensure UI refreshes after accepting friend request
-
-    } catch (error) {
-      print("❌ Error accepting friend request: $error");
-    }
-  }
-
-  Future<String> checkFriendshipStatus(String friendId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return 'not_friends';
-
-    if (friends.any((friend) => friend['id'] == friendId)) {
-      return 'friends';
-    }
-    if (sentFriendRequests.contains(friendId)) {
-      return 'sent';
-    }
-    if (receivedFriendRequests.contains(friendId)) {
-      return 'received';
-    }
-
-    return 'not_friends';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('My Friends')),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Column(
+      body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              decoration: InputDecoration(
-                labelText: 'Search Friends',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (query) {
-                setState(() {
-                  searchQuery = query.toLowerCase();
-                });
-              },
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/bg2.png',
+              fit: BoxFit.cover,
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: friends.length,
-              itemBuilder: (context, index) {
-                final friend = friends[index];
-
-                if (searchQuery.isNotEmpty && !friend['name'].toLowerCase().contains(searchQuery)) {
-                  return SizedBox.shrink();
-                }
-
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: friend['icon'] != null
-                        ? NetworkImage(friend['icon'])
-                        : AssetImage('assets/default_avatar.png') as ImageProvider,
+          Column(
+            children: [
+              AppBar(
+                title: Text('My Friends'),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    labelText: 'Search Friends',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.search),
                   ),
-                  title: Text(friend['name']),
-                  trailing: FutureBuilder(
-                    future: checkFriendshipStatus(friend['id']),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return CircularProgressIndicator();
-
-                      final status = snapshot.data as String;
-
-                      if (status == "friends") {
-                        return IconButton(
-                          icon: Icon(Icons.remove_circle, color: Colors.red),
-                          onPressed: () async {
-                            await removeFriend(friend['id']);
-                            setState(() {});
-                          },
-                        );
-                      } else if (status == "sent") {
-                        return ElevatedButton(
-                          onPressed: () async {
-                            await cancelFriendRequest(friend['id']);
-                            setState(() {});
-                          },
-                          child: Text("Cancel Request ❌"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                        );
-                      } else if (status == "received") {
-                        return ElevatedButton(
-                          onPressed: () async {
-                            await acceptFriendRequest(friend['id']);
-                            setState(() {});
-                          },
-                          child: Text("Accept Friend ✅"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        );
-                      } else {
-                        return ElevatedButton(
-                          onPressed: () async {
-                            await sendFriendRequest(friend['id']);
-                            setState(() {});
-                          },
-                          child: Text("Add Friend ➕"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                        );
-                      }
-                    },
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProfileScreen(userId: friend['id']),
-                      ),
-                    );
+                  onChanged: (query) {
+                    setState(() {
+                      searchQuery = query.toLowerCase();
+                    });
                   },
-                );
-              },
-            ),
+                ),
+              ),
+
+              Expanded(
+                child: ListView(
+                  children: [
+                    // ✅ Blocked Users Section
+                    if (blockedUsers.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Text(
+                          "Blocked Users",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
+                        ),
+                      ),
+                      ...blockedUsers.map(
+                            (blockedUser) => ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: blockedUser['icon'] != null
+                                ? NetworkImage(blockedUser['icon'])
+                                : AssetImage('assets/default_avatar.png') as ImageProvider,
+                          ),
+                          title: Text(blockedUser['name']),
+                          trailing: IconButton(
+                            icon: Icon(Icons.lock_open, color: Colors.orange, size: 28),
+                            onPressed: () async {
+                              await unblockUser(blockedUser['id']);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // ✅ Friends List
+                    ...friends.map(
+                          (friend) => Card(
+                        margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: friend['icon'] != null
+                                ? NetworkImage(friend['icon'])
+                                : AssetImage('assets/default_avatar.png') as ImageProvider,
+                          ),
+                          title: Text(friend['name']),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.person, color: Colors.teal, size: 28),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProfileScreen(userId: friend['id']),
+                                    ),
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.message, color: Colors.blue, size: 28),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatScreen(
+                                        receiverId: friend['id'],
+                                        receiverName: friend['name'],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.block, color: Colors.red, size: 28),
+                                onPressed: () async {
+                                  await blockUser(friend['id']);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

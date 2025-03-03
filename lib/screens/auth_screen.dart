@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 
@@ -29,9 +30,8 @@ class _AuthScreenState extends State<AuthScreen> {
         .eq('id', userId)
         .maybeSingle();
 
-    if (response == null) return false; // No profile exists
+    if (response == null) return false;
 
-    // ✅ Ensure the user has entered their name
     return response['name'] != null &&
         response['name'].toString().isNotEmpty &&
         response['bio'] != null &&
@@ -94,6 +94,9 @@ class _AuthScreenState extends State<AuthScreen> {
           // ✅ Check if profile is complete
           bool profileComplete = await _isProfileComplete(userId);
 
+          // ✅ Save FCM Token
+          await saveFCMToken();
+
           if (profileComplete) {
             // ✅ Redirect to Home Screen if complete
             Navigator.pushReplacement(
@@ -117,6 +120,25 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => _isLoading = false);
   }
+
+  // 🔥 Save FCM Token
+  Future<void> saveFCMToken() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    String? token = await messaging.getToken();
+
+    if (token != null) {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'fcm_token': token})
+          .eq('id', user.id);
+
+      print("✅ FCM Token saved to Supabase: $token");
+    }
+  }
+
   // 🔥 Show messages
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -125,44 +147,54 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: Text(_isSignUp ? "Sign Up" : "Log In"),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildInputField(_emailController, "Email Address", Icons.email),
-            const SizedBox(height: 10),
-            _buildInputField(_passwordController, "Password", Icons.lock, obscureText: true),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-              onPressed: _authenticate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF22A45D),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 40),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(_isSignUp ? "Sign Up" : "Log In"),
+      body: Stack(
+        children: [
+          // 📌 Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/media/bg2.png',
+              fit: BoxFit.cover,
             ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => setState(() => _isSignUp = !_isSignUp),
-              child: Text(
-                _isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up",
-                style: const TextStyle(color: Colors.blue),
+          ),
+
+          // 📌 Login Form
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildInputField(_emailController, "Email Address", Icons.email),
+                  const SizedBox(height: 10),
+                  _buildInputField(_passwordController, "Password", Icons.lock, obscureText: true),
+                  const SizedBox(height: 20),
+                  _isLoading
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton(
+                    onPressed: _authenticate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF22A45D),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(_isSignUp ? "Sign Up" : "Log In"),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => setState(() => _isSignUp = !_isSignUp),
+                    child: Text(
+                      _isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up",
+                      style: const TextStyle(color: Colors.blue),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -172,7 +204,7 @@ class _AuthScreenState extends State<AuthScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.9), // ✅ Make fields readable over background
         borderRadius: BorderRadius.circular(10),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),

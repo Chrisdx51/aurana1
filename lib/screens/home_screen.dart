@@ -8,6 +8,7 @@ import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
 import 'soul_journey_screen.dart';
 import 'user_discovery_screen.dart';
+import 'friends_page.dart'; // Make sure to import the FriendsPage
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -53,6 +54,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     _loadUserProfile();
     _loadChallengeStatus();
+
+    // ✅ Subscribe to real-time friend request notifications
+    Supabase.instance.client
+        .channel('friend_requests')
+        .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'friend_requests',
+        callback: (payload) {
+          if (mounted) {
+            setState(() {}); // ✅ Refresh UI when a new friend request is received
+          }
+        }
+    )
+        .subscribe();
   }
 
   @override
@@ -200,6 +216,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Stack(
+              children: [
+                Icon(Icons.notifications, size: 30, color: Colors.white), // Bell Icon
+                FutureBuilder<int>(
+                  future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
+                  builder: (context, snapshot) {
+                    int count = snapshot.data ?? 0;
+                    return count > 0
+                        ? Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: EdgeInsets.all(5),
+                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        child: Text(
+                          count.toString(),
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    )
+                        : SizedBox();
+                  },
+                ),
+              ],
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FriendsPage()), // ✅ Navigate to Friends Page
+              );
+            },
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -292,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             backgroundImage: user != null && user!.icon != null && user!.icon!.isNotEmpty
                 ? NetworkImage(user!.icon!)
                 : AssetImage("assets/images/default_avatar.png") as ImageProvider, // ✅ Fallback image
+
           ), // ✅ Fixed null safety issues
 
           SizedBox(width: 10),

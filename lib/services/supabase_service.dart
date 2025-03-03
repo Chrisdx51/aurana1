@@ -578,6 +578,15 @@ class SupabaseService {
     }
   }
 
+  Future<int> getPendingFriendRequestsCount(String userId) async {
+    final response = await Supabase.instance.client
+        .from('friend_requests')
+        .select('id')
+        .eq('receiver_id', userId)
+        .eq('status', 'pending');
+
+    return response.length;
+  }
   // ✅ Fetch Friend List
   Future<List<Map<String, dynamic>>> getFriendsList(String userId) async {
     try {

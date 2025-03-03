@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/supabase_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -14,6 +17,32 @@ import 'screens/soul_journey_screen.dart';
 import 'screens/more_menu_screen.dart'; // ✅ More Menu Screen
 import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
+
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  _showNotification(message);
+}
+
+void _showNotification(RemoteMessage message) async {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'aurana_channel',
+    'Aurana Notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
+  const NotificationDetails details = NotificationDetails(android: androidDetails);
+
+  await flutterLocalNotificationsPlugin.show(
+    0,
+    message.notification?.title ?? "New Notification",
+    message.notification?.body ?? "You have a new update",
+    details,
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +57,38 @@ void main() async {
       anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     );
     print("✅ Supabase initialized!");
+
+    print("🔄 Initializing Firebase...");
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // 🔥 Initialize Local Notifications
+    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(android: androidInit);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    messaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+
+    FirebaseMessaging.instance.getToken().then((token) {
+      print("🔥 FCM Token: $token");
+    });
+
+    // 🔔 Handle foreground notifications
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print("🔔 Foreground notification received: ${message.notification?.title}");
+      _showNotification(message); // 🔥 Display Notification in Foreground
+    });
+
+    print("✅ Firebase initialized!");
 
     MobileAds.instance.initialize();
     runApp(AuranaApp());
@@ -152,7 +213,33 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'Friends'),
+          BottomNavigationBarItem(
+            icon: FutureBuilder<int>(
+              future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
+              builder: (context, snapshot) {
+                int count = snapshot.data ?? 0;
+                return Stack(
+                  children: [
+                    Icon(Icons.people, size: 30), // Friends Icon
+                    if (count > 0) // ✅ Show notification only if requests exist
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: EdgeInsets.all(5),
+                          decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          child: Text(
+                            count.toString(),
+                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            label: 'Friends',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.light_mode), label: 'Aura Catcher'),
           BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Spiritual Guidance'),
           BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot Reading'),
