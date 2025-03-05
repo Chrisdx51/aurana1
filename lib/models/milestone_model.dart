@@ -4,11 +4,17 @@ class MilestoneModel {
   final String content;
   final String milestoneType;
   final DateTime createdAt;
+  final String visibility;
   int energyBoosts; // ✅ Allow modification
   final String? mediaUrl; // ✅ Allow images/videos
   final String? username; // ✅ Allow username
-  final String? icon; // ✅ Allow profile pictures
-  final bool userHasBoosted; // ✅ New field to track if user boosted
+  late final String? icon; // ✅ Allow profile pictures
+  final bool userHasBoosted; // ✅ Track if user boosted
+
+  // ✅ Added fields for likes and comments
+  int likeCount;
+  int commentCount;
+  bool likedByMe;
 
   MilestoneModel({
     required this.id,
@@ -16,14 +22,18 @@ class MilestoneModel {
     required this.content,
     required this.milestoneType,
     required this.createdAt,
+    required this.visibility,
     this.energyBoosts = 0,
     this.mediaUrl,
     this.username,
     this.icon, // ✅ Store profile picture URL
     this.userHasBoosted = false, // ✅ Default to false
+    this.likeCount = 0, // ✅ New field for like count
+    this.commentCount = 0, // ✅ New field for comment count
+    this.likedByMe = false, // ✅ Track if user liked the post
   });
 
-
+  // ✅ Convert from Supabase JSON
   // ✅ Convert from Supabase JSON
   factory MilestoneModel.fromJson(Map<String, dynamic> json) {
     return MilestoneModel(
@@ -37,6 +47,10 @@ class MilestoneModel {
       username: json['profiles']?['name'] as String? ?? "", // ✅ Safe username retrieval
       icon: json['profiles']?['icon'] as String? ?? "", // ✅ Safe profile picture retrieval
       userHasBoosted: json.containsKey('user_boosted') ? json['user_boosted'] as bool : false, // ✅ Ensure it's fetched properly
+      likeCount: json['like_count'] ?? 0,
+      commentCount: json['comment_count'] ?? 0,
+      likedByMe: json['liked_by_me'] ?? false,
+      visibility: json['visibility'] ?? 'open', // ✅ Ensure visibility is included!
     );
   }
 
@@ -54,8 +68,14 @@ class MilestoneModel {
       if (username != null) 'username': username, // ✅ Include username
       if (icon != null) 'icon': icon, // ✅ Include profile picture
       'user_boosted': userHasBoosted, // ✅ Store the value
+
+      // ✅ Include new fields for Supabase
+      'like_count': likeCount,
+      'comment_count': commentCount,
+      'liked_by_me': likedByMe,
     };
   }
+
   // ✅ Allow modifications
   MilestoneModel copyWith({
     String? id,
@@ -68,7 +88,11 @@ class MilestoneModel {
     String? username,
     String? icon,
     bool? userHasBoosted,
+    int? likeCount,
+    int? commentCount,
+    bool? likedByMe,
   }) {
+
     return MilestoneModel(
       id: id ?? this.id,
       userId: userId ?? this.userId,
@@ -80,6 +104,9 @@ class MilestoneModel {
       username: username ?? this.username,
       icon: icon ?? this.icon,
       userHasBoosted: userHasBoosted ?? this.userHasBoosted,
+      likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
+      likedByMe: likedByMe ?? this.likedByMe, visibility: '',
     );
   }
 }

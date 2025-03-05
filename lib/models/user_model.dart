@@ -7,6 +7,7 @@ class UserModel {
   final String? zodiacSign; // ✅ Zodiac Sign (FIXED)
   final String? spiritualPath; // ✅ Spiritual Path
   final String? element; // ✅ Elemental Connection
+  final String? privacy; // 🔒 Profile Privacy Setting (public, friends_only, private)
   final int spiritualXP; // ✅ Spiritual XP
   final int spiritualLevel; // ✅ Spiritual Level (New)
   final List<String>? friends;
@@ -29,6 +30,7 @@ class UserModel {
     this.visitorLog,
     this.giftInventory,
     this.isJourneyPublic,
+    this.privacy, // ✅ Added privacy
   });
 
   // ✅ Convert JSON Data from Supabase
@@ -48,6 +50,7 @@ class UserModel {
       visitorLog: List<Map<String, dynamic>>.from(json['visitor_log'] ?? []),
       giftInventory: List<Map<String, dynamic>>.from(json['gift_inventory'] ?? []),
       isJourneyPublic: json['is_journey_public'] ?? true,
+      privacy: json['privacy'] as String? ?? 'public', // ✅ Added privacy
     );
   }
 
@@ -80,6 +83,7 @@ class UserModel {
     String? zodiacSign, // ✅ Added
     String? spiritualPath,
     String? element,
+    String? privacy, // ✅ Added privacy
     int? spiritualXP,
     int? spiritualLevel, // ✅ Allow updating Spiritual Level
     List<String>? friends,
@@ -102,6 +106,7 @@ class UserModel {
       visitorLog: visitorLog ?? this.visitorLog,
       giftInventory: giftInventory ?? this.giftInventory,
       isJourneyPublic: isJourneyPublic ?? this.isJourneyPublic,
+      privacy: privacy ?? this.privacy, // ✅ Added privacy
     );
   }
 }

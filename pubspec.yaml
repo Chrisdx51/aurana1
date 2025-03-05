@@ -39,6 +39,7 @@ dependencies:
   video_player: ^2.9.3
   firebase_core: ^2.15.0
   firebase_messaging: ^14.6.5
+  postgrest: ^2.1.0
 
 dev_dependencies:
   flutter_test:
