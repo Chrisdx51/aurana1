@@ -17,6 +17,7 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
   File? _selectedImage;
   File? _selectedVideo;
   final ImagePicker _picker = ImagePicker();
+  bool _isPrivate = true; // ✅ Default to Sacred
 
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -65,29 +66,23 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
       mediaUrl = await _supabaseService.uploadMedia(_selectedVideo!);
     }
 
+    // ✅ Save "sacred" (private) or "open" (public)
+    String visibility = _isPrivate ? "sacred" : "open";
+
     bool success = await _supabaseService.addMilestone(
       userId,
       _milestoneController.text,
       _selectedMilestoneType,
       mediaUrl,
+      visibility, // ✅ Save visibility setting
     );
 
     if (success) {
       await _supabaseService.updateSpiritualXP(userId, 10);
 
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Journey saved & XP earned!")),
       );
-
-      // ✅ Auto-Boost Post
-      final milestoneId = await _supabaseService.getLastMilestoneId(userId);
-      if (milestoneId != null) {
-        bool boostSuccess = await _supabaseService.addEnergyBoost(milestoneId);
-        if (boostSuccess) {
-          await _supabaseService.updateSpiritualXP(userId, 5);
-        }
-      }
 
       Navigator.pop(context, true);
     } else {
@@ -117,6 +112,8 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
             _buildTextField(),
             SizedBox(height: 20),
             _buildDropdown(),
+            SizedBox(height: 20),
+            _buildVisibilityToggle(), // ✅ Added Visibility Toggle
             SizedBox(height: 20),
             _buildMediaButtons(),
             SizedBox(height: 10),
@@ -163,6 +160,30 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
               });
             }
           },
+        ),
+      ],
+    );
+  }
+
+  // ✅ New Visibility Toggle
+  Widget _buildVisibilityToggle() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text("✨ Visibility:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Row(
+          children: [
+            Text(_isPrivate ? "Sacred" : "Open",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.purple)),
+            Switch(
+              value: _isPrivate,
+              onChanged: (value) {
+                setState(() {
+                  _isPrivate = value;
+                });
+              },
+            ),
+          ],
         ),
       ],
     );

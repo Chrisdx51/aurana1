@@ -7,15 +7,17 @@ import '../models/milestone_model.dart';
 class SupabaseService {
   final SupabaseClient supabase = Supabase.instance.client;
 
-
   // Fetch User Profile from Supabase
   Future<UserModel?> getUserProfile(String userId) async {
     try {
       final response = await supabase
           .from('profiles')
-          .select()
+          .select('id, name, email, bio, dob, icon, spiritual_path, element, spiritual_xp, spiritual_level, privacy') // ✅ Added privacy
           .eq('id', userId)
           .single();
+
+      print("✅ Fetched DOB from Supabase: ${response['dob']}");
+
 
       if (response != null) {
         return UserModel.fromJson(response);
@@ -26,29 +28,72 @@ class SupabaseService {
     return null;
   }
 
+  Future<UserModel?> fetchUserProfileWithPrivacy(String viewerId, String targetUserId) async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('id, name, bio, dob, icon, privacy, spiritual_path, element, spiritual_xp, spiritual_level')
+          .eq('id', targetUserId)
+          .single();
+
+      if (response == null) return null;
+
+      String privacy = response['privacy'] ?? 'public';
+
+      if (privacy == 'private' && viewerId != targetUserId) {
+        print("🔒 Profile is private. Access denied.");
+        return null; // Deny access for private profiles
+      }
+
+      if (privacy == 'friends_only' && viewerId != targetUserId) {
+        final friendshipStatus = await checkFriendshipStatus(viewerId, targetUserId);
+        if (friendshipStatus != 'friends') {
+          print("🔒 Profile is restricted to friends only.");
+          return null;
+        }
+      }
+
+      return UserModel.fromJson(response); // ✅ Return profile if accessible
+    } catch (error) {
+      print("❌ Error fetching profile with privacy: $error");
+      return null;
+    }
+  }
   // Check if profile is complete
   Future<bool> isProfileComplete(String userId) async {
     try {
+      print("🔍 Checking if profile is complete for user: $userId");
+
       final response = await supabase
           .from('profiles')
           .select('name, bio, dob')
           .eq('id', userId)
           .maybeSingle();
 
-      if (response == null) return false; // No profile exists
+      if (response == null) {
+        print("❌ Profile does not exist!");
+        return false;
+      }
 
-      // Ensure all required fields are filled
-      return response['name'] != null &&
-          response['name']
-              .toString()
-              .isNotEmpty &&
-          response['bio'] != null &&
-          response['bio']
-              .toString()
-              .isNotEmpty &&
+      bool isComplete = response['name'] != null && response['name'].toString().isNotEmpty &&
+          response['bio'] != null && response['bio'].toString().isNotEmpty &&
           response['dob'] != null;
+
+      print("✅ Profile completeness result: $isComplete");
+
+      return isComplete;
     } catch (error) {
-      print("Error checking profile completeness: $error");
+      print("❌ Error checking profile completeness: $error");
+      return false;
+    }
+  }
+
+  Future<bool> updateProfilePrivacy(String userId, String newPrivacy) async {
+    try {
+      await supabase.from('profiles').update({'privacy': newPrivacy}).eq('id', userId);
+      return true;
+    } catch (error) {
+      print('Error updating privacy: $error');
       return false;
     }
   }
@@ -60,9 +105,13 @@ class SupabaseService {
       String? icon,
       String? spiritualPath,
       String? element,
+      String? privacy, // ✅ Added privacy
       int spiritualXP,
       int spiritualLevel) async {
     try {
+      print("🔄 Updating profile with DOB: $dob");
+      print("🔄 Checking if profile exists in Supabase for user: $userId");
+
       // ✅ Check if the profile already exists
       final checkProfile = await supabase
           .from('profiles')
@@ -90,9 +139,10 @@ class SupabaseService {
           'icon': icon,
           'spiritual_path': spiritualPath,
           'element': element,
+          'privacy': privacy, // ✅ Save privacy setting
           'spiritual_xp': spiritualXP,
           'spiritual_level': spiritualLevel,
-        }).select();
+        }) .select();
       } else {
         // ✅ Update existing profile
         final response = await supabase
@@ -123,7 +173,6 @@ class SupabaseService {
       return false;
     }
   }
-
   // Upload Profile Picture to Supabase Storage
   Future<String?> uploadProfilePicture(String userId, File imageFile) async {
     try {
@@ -159,7 +208,6 @@ class SupabaseService {
       return null;
     }
   }
-
   // Upload Media to Supabase Storage
   Future<String?> uploadMedia(File file) async {
     try {
@@ -180,74 +228,29 @@ class SupabaseService {
       return null;
     }
   }
-
-  // Fetch All Milestones from Supabase
-  Future<List<MilestoneModel>> fetchMilestones({String sortBy = "Newest", required String userId}) async {
-
-    String orderColumn = "created_at";
-    bool ascending = false;
-
-    if (sortBy == "Oldest") {
-      ascending = true;
-    } else if (sortBy == "Most Boosted") {
-      orderColumn = "energy_boosts";
-      ascending = false;
-    }
-
+  // Add Milestone to Supabase Database
+  Future<List<MilestoneModel>> fetchMilestones({String? userId, bool global = false}) async {
     try {
-      final response = await supabase
-          .from('milestones')
-          .select('''
-          id, user_id, content, milestone_type, created_at, energy_boosts, media_url, 
-          profiles(name, icon), 
-          milestone_boosts(user_id)
-        ''')
-          .eq('user_id', userId) // ✅ Fetch only milestones of the specific user
-          .order(orderColumn, ascending: ascending);
+      var query = supabase.from('milestones').select('''
+  id, user_id, content, milestone_type, media_url, created_at, 
+  energy_boosts, like_count, comment_count, visibility,
+  profiles(name, icon)  -- ✅ Fetch profile picture correctly
+''');
 
-      if (response == null || response.isEmpty) {
-        return [];
+      if (global) {
+        query = query.eq('visibility', 'open'); // ✅ Fetch only public posts
+      } else if (userId != null) {
+        query = query.eq('user_id', userId); // ✅ Fetch only the user's posts
       }
 
-      return response.map<MilestoneModel>((data) =>
-          MilestoneModel.fromJson({
-            ...data,
-            'user_boosted': data['milestone_boosts'] != null &&
-                (data['milestone_boosts'] as List).any((
-                    boost) => boost['user_id'] == userId),
-          })).toList();
+      final response = await query; // ✅ Execute the query
+
+      return response.map<MilestoneModel>((json) => MilestoneModel.fromJson(json)).toList();
     } catch (error) {
-      print("Error fetching milestones: $error");
+      print("❌ Error fetching milestones: $error");
       return [];
     }
   }
-
-  // Add Milestone to Supabase Database
-  Future<bool> addMilestone(String userId, String content, String milestoneType,
-      String? mediaUrl) async {
-    try {
-      final response = await supabase.from('milestones').insert({
-        'user_id': userId,
-        'content': content,
-        'milestone_type': milestoneType,
-        'created_at': DateTime.now().toIso8601String(),
-        'energy_boosts': 0, // Default boost count
-        'media_url': mediaUrl, // If media exists
-      }).select();
-
-      if (response.isNotEmpty) {
-        print("Milestone added successfully: $response");
-        return true;
-      } else {
-        print("Supabase returned empty response");
-        return false;
-      }
-    } catch (error) {
-      print("Supabase Error: $error");
-      return false;
-    }
-  }
-
   // Energy Boost Function
   Future<bool> addEnergyBoost(String milestoneId) async {
     final userId = supabase.auth.currentUser?.id;
@@ -279,7 +282,6 @@ class SupabaseService {
       return false;
     }
   }
-
   // Delete Milestone Post
   Future<bool> deleteMilestone(String milestoneId) async {
     try {
@@ -301,7 +303,6 @@ class SupabaseService {
       return false;
     }
   }
-
   // ✅ XP Scaling: Increases at a steady rate per level
   int _getXPThreshold(int level) {
     return 100 * level; // Keeps XP progression balanced
@@ -347,6 +348,45 @@ class SupabaseService {
           .match({'sender_id': senderId, 'receiver_id': receiverId});
     } catch (error) {
       print("❌ Error declining friend request: $error");
+    }
+  }
+
+  Future<void> toggleLike(String milestoneId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      print("❌ Error: User not logged in.");
+      return;
+    }
+
+    try {
+      // Check if the user already liked the post
+      final existingLike = await supabase
+          .from('milestone_likes')
+          .select('id')
+          .eq('milestone_id', milestoneId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existingLike != null) {
+        // Unlike (Delete the like)
+        await supabase
+            .from('milestone_likes')
+            .delete()
+            .eq('milestone_id', milestoneId)
+            .eq('user_id', userId);
+
+        print("👍 Like removed successfully.");
+      } else {
+        // Like (Insert a new like)
+        await supabase.from('milestone_likes').insert({
+          'milestone_id': milestoneId,
+          'user_id': userId,
+        });
+
+        print("❤️ Liked successfully.");
+      }
+    } catch (error) {
+      print("❌ Error toggling like: $error");
     }
   }
 
@@ -436,29 +476,35 @@ class SupabaseService {
   }
 
   // ✅ Fetch Achievements for a User
-  Future<List<Map<String, dynamic>>> fetchUserAchievements(
-      String userId) async {
+  Future<List<Map<String, dynamic>>> fetchUserAchievements(String userId) async {
     try {
-      final response = await supabase
-          .from('user_achievements')
-          .select('*')
-          .eq('user_id', userId)
-          .order('earned_at', ascending: false);
+      print("🔎 Fetching user achievements for: $userId");
 
-      return response.isNotEmpty ? List<Map<String, dynamic>>.from(response) : [
-      ];
+      final response = await Supabase.instance.client
+          .from('user_achievements') // ✅ Correct table
+          .select()
+          .eq('user_id', userId)
+          .order('earned_at', ascending: false); // ✅ Show newest first
+
+      if (response.isEmpty) {
+        print("⚠️ No achievements found for user: $userId");
+        return [];
+      }
+
+      print("✅ Achievements found: $response");
+
+      return List<Map<String, dynamic>>.from(response);
     } catch (error) {
       print("❌ Error fetching achievements: $error");
       return [];
     }
   }
-
   // ✅ Get Last Milestone ID for a User
   Future<String?> getLastMilestoneId(String userId) async {
     try {
       final response = await supabase
           .from('milestones')
-          .select('id')
+          .select('id, user_id, content, media_url, visibility, profiles!inner(name, icon)')
           .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(1)
@@ -489,6 +535,8 @@ class SupabaseService {
       return [];
     }
   }
+
+
 // ✅ Send a Friend Request
   Future<bool> sendFriendRequest(String senderId, String receiverId) async {
     try {
@@ -528,6 +576,7 @@ class SupabaseService {
   }
 
 
+
   // ✅ Accept a Friend Request
   Future<bool> acceptFriendRequest(String userId, String friendId) async {
     try {
@@ -557,6 +606,31 @@ class SupabaseService {
       return true;
     } catch (error) {
       print("Error removing friend: $error");
+      return false;
+    }
+  }
+
+  Future<bool> addMilestone(String userId, String content, String milestoneType, String? mediaUrl, String visibility) async {
+    try {
+      final response = await supabase.from('milestones').insert({
+        'user_id': userId,
+        'content': content,
+        'milestone_type': milestoneType,
+        'created_at': DateTime.now().toIso8601String(),
+        'energy_boosts': 0, // Default boost count
+        'media_url': mediaUrl, // If media exists
+        'visibility': visibility, // ✅ Store visibility (public or sacred)
+      }).select();
+
+      if (response.isNotEmpty) {
+        print("✅ Milestone added successfully: $response");
+        return true;
+      } else {
+        print("❌ Supabase returned empty response.");
+        return false;
+      }
+    } catch (error) {
+      print("❌ Supabase Error: $error");
       return false;
     }
   }
@@ -621,4 +695,8 @@ class SupabaseService {
       return [];
     }
   }
+}
+
+extension on PostgrestTransformBuilder<PostgrestList> {
+  void eq(String s, String t) {}
 }// Helper function to calculate XP threshold for each level

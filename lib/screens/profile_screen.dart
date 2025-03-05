@@ -26,7 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   bool _isProfileComplete = false;
-  bool _friendRequestSent = false; // ✅ Track if a friend request is sent
+  bool _friendRequestSent = false;
   File? _selectedImage;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
@@ -35,20 +35,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _zodiacSign;
   String? _selectedElement;
   String? _selectedSpiritualPath;
+  String? _selectedPrivacy = "public"; // ✅ Default privacy setting
   int _spiritualXP = 0;
   int _spiritualLevel = 1;
   List<Map<String, dynamic>> _achievements = [];
-
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _checkProfileCompletion(); // ✅ Ensures users complete profiles before proceeding
     _loadAchievements();
-    _checkFriendshipStatus(); // ✅ Ensure button state is set when page loads
+    _checkFriendshipStatus();
   }
 
   Future<void> _loadUserProfile() async {
+    if (!mounted) return; // ✅ Prevent calling setState() after dispose
+
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -56,28 +59,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final profile = await supabaseService.getUserProfile(widget.userId);
-      if (profile != null) {
-        final achievements = await supabaseService.fetchUserAchievements(widget.userId);
 
+      if (!mounted) return; // ✅ Stop execution if widget is gone
+
+      if (profile != null) {
         setState(() {
           user = profile;
-          _achievements = achievements;
           _nameController.text = profile.name ?? "";
           _bioController.text = profile.bio ?? "";
-          if (profile.dob != null) {
-            _selectedDOB = DateTime.tryParse(profile.dob!);
-            _zodiacSign = _selectedDOB != null ? _getZodiacSign(_selectedDOB!) : null;
-          }
-          if (profile.spiritualPath != null) {
-            _spiritualPathController.text = profile.spiritualPath!;
-          }
-          if (profile.element != null) {
-            _selectedElement = profile.element!;
-          }
+          _spiritualPathController.text = profile.spiritualPath ?? "";
+          _selectedElement = profile.element;
           _spiritualXP = profile.spiritualXP ?? 0;
           _spiritualLevel = profile.spiritualLevel ?? 1;
           _isLoading = false;
         });
+
+        // ✅ Load achievements AFTER user is loaded
+        _loadAchievements();
       } else {
         setState(() {
           _hasError = true;
@@ -85,6 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -94,15 +93,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
   Future<void> _loadAchievements() async {
-    if (user == null) return;
+    if (widget.userId.isEmpty) {
+      print("⚠️ Cannot load achievements: User ID is empty.");
+      return;
+    }
 
-    final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+    try {
+      print("🔄 Fetching latest achievement for: ${widget.userId}");
 
-    setState(() {
-      _achievements = achievements;
-    });
+      // Fetch ONLY the latest unlocked achievement (ORDER BY earned_at DESC, LIMIT 1)
+      final achievements = await supabaseService.fetchUserAchievements(widget.userId);
 
-    print("✅ Achievements loaded: ${_achievements.length}");
+      if (achievements == null || achievements.isEmpty) {
+        print("❌ No achievements found.");
+        if (mounted) {
+          setState(() {
+            _achievements = []; // ✅ Clear previous achievements
+          });
+        }
+        return;
+      }
+
+      // ✅ Keep only the latest achievement (first item in the list)
+      final latestAchievement = achievements.first;
+
+      if (mounted) {
+        setState(() {
+          _achievements = [latestAchievement]; // ✅ Replace with only the latest
+        });
+      }
+
+      print("✅ Latest achievement loaded: ${latestAchievement['title']}");
+    } catch (error) {
+      print("❌ Error loading achievements: $error");
+
+      if (mounted) {
+        setState(() {
+          _achievements = []; // ✅ Prevent crash
+        });
+      }
+    }
   }
 
   Future<void> _changeProfilePicture() async {
@@ -121,6 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         imageUrl,
         _spiritualPathController.text,
         _selectedElement,
+        user?.privacy ?? "public", // ✅ Added privacy as String
         _spiritualXP,
         _spiritualLevel,
       );
@@ -144,7 +175,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
-
 
   void _logout() async {
     await Supabase.instance.client.auth.signOut();
@@ -173,6 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         user?.icon ?? '',
         _spiritualPathController.text,
         _selectedElement,
+        _selectedPrivacy ?? "public", // ✅ Ensures a valid string
         _spiritualXP,
         _spiritualLevel,
       );
@@ -197,8 +228,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "♓ Pisces";
   }
 
+  Future<void> _saveProfileAndUnlockNav() async {
+    print("🔄 Attempting to save profile...");
+
+    bool success = await _updateProfile();
+
+    if (success) {
+      print("✅ Profile successfully updated! Reloading UI...");
+
+      // ✅ Reload profile immediately after saving
+      await _loadUserProfile();
+
+      if (!mounted) return; // ✅ Prevents crash if screen was closed
+
+      // ✅ Refresh the whole screen after saving
+      setState(() {});
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
+      );
+    } else {
+      print("❌ Profile update failed!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Failed to update profile. Try again!")),
+      );
+    }
+  }
+
+  Future<bool> _checkIfFriends() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return false;
+
+    final friendsResponse = await Supabase.instance.client
+        .from('relations')
+        .select()
+        .or('and(user_id.eq.$userId,friend_id.eq.${widget.userId}),and(user_id.eq.${widget.userId},friend_id.eq.$userId))')
+        .limit(1)
+        .maybeSingle();
+
+    return friendsResponse != null;
+  }
+
   Future<bool> _updateProfile() async {
-    if (user == null) return false;
+    print("🔄 Attempting to update profile...");
+
+    if (_nameController.text.trim().isEmpty || _bioController.text.trim().isEmpty || _selectedDOB == null) {
+      print("❌ Profile is incomplete! Blocking update.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("⚠️ Name, Bio, and DOB are required before saving!")),
+      );
+      return false;
+    }
+
+    print("✅ Profile fields entered: Name = ${_nameController.text}, Bio = ${_bioController.text}, DOB = ${_selectedDOB.toString()}");
+
     bool success = await supabaseService.updateUserProfile(
       widget.userId,
       _nameController.text,
@@ -207,54 +291,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
       user?.icon ?? '',
       _spiritualPathController.text,
       _selectedElement,
+      user?.privacy ?? "public",
       _spiritualXP,
       _spiritualLevel,
     );
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("✅ Profile updated successfully!"),
-            duration: Duration(seconds: 0), // ⏳ Show message for only 1 second
-          )
-      );
+      print("✅ Profile updated successfully!");
+
+      // ✅ Immediately reload profile after saving
+      await _loadUserProfile();
+
+      if (!mounted) return false;
+
+      setState(() {});
+
       return true;
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Failed to update profile. Try again!")),
-      );
+      print("❌ Failed to update profile.");
       return false;
     }
   }
 
+
   Future<void> _checkProfileCompletion() async {
-    bool complete = await supabaseService.isProfileComplete(widget.userId);
-    setState(() {
-      _isProfileComplete = complete;
-    });
+    if (user == null) {
+      print("❌ User is null. Cannot check profile completion.");
+      return;
+    }
 
-    if (complete) {
+    bool isComplete = await supabaseService.isProfileComplete(widget.userId);
+    print("🔍 Profile completion check: $isComplete");
+
+    if (isComplete) {
+      print("✅ Profile is complete! Allowing navigation.");
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
       );
-    }
-  }
-
-  Future<void> _saveProfileAndUnlockNav() async {
-    bool success = await _updateProfile();
-    if (success) {
-      await _checkProfileCompletion();
-
-      // ✅ Corrected: Pass the userId when navigating
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
+    } else {
+      print("❌ Profile is incomplete! Blocking navigation.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("⚠️ You must complete your profile before leaving this page!")),
       );
     }
   }
 
-  void_checkLevelUp() {
+  void _checkLevelUp() {
     int xpNeeded = _spiritualLevel * 100;
 
     if (_spiritualXP >= xpNeeded) {
@@ -278,6 +361,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
   }
+
+  Widget _buildPrivacyDropdown() {
+    return _buildDropdownField(
+      "Profile Privacy",
+      user?.privacy ?? "public",
+      ["public", "friends_only", "private"],
+          (newValue) async {
+        setState(() {
+          user = user?.copyWith(privacy: newValue);
+        });
+
+        await supabaseService.updateUserProfile(
+          widget.userId,
+          _nameController.text,
+          _bioController.text,
+          _selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : null,
+          user?.icon ?? '',
+          _spiritualPathController.text,
+          _selectedElement,
+          _selectedPrivacy ?? "public", // ✅ Ensures a valid string
+          _spiritualXP,
+          _spiritualLevel,
+        );
+      },
+    );
+  }
+
 
   Widget _buildBubbleField(String label, TextEditingController controller, IconData icon, String hint) {
     return Container(
@@ -406,12 +516,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
         ),
         SizedBox(height: 10),
+
         _achievements.isEmpty
-            ? Text("No achievements unlocked yet. Keep growing! 🌟", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+            ? Text("No achievements unlocked yet. Keep growing! 🌟",
+            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
             : Column(
           children: _achievements.map((achievement) {
             return Card(
-              color: Colors.white.withOpacity(0.8), // ✅ Transparent background
+              color: Colors.white.withOpacity(0.8),
               elevation: 3,
               margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -419,45 +531,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    // 🏆 GIF Icon at the Top
-                    achievement['icon_url'] != null
-                        ? Image.network(
-                      achievement['icon_url'],
-                      width: 80, // ✅ Adjust size
-                      height: 80,
-                      fit: BoxFit.contain, // ✅ Proper scaling
-                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                        return child; // ✅ Ensures GIF is animated
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(Icons.image_not_supported, size: 50, color: Colors.red);
-                      },
-                    )
-                        : Icon(Icons.emoji_events, color: Colors.amber, size: 50),
+                    if (achievement['icon_url'] != null && achievement['icon_url'].isNotEmpty)
+                      Image.network(
+                        achievement['icon_url'],
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(Icons.image_not_supported, size: 50, color: Colors.red);
+                        },
+                      ),
 
-                    SizedBox(height: 10), // Space between image and text
+                    SizedBox(height: 10),
 
-                    // 📝 Title
                     Text(
-                      achievement['title'],
+                      achievement['title'] ?? "Unknown Title",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
 
                     SizedBox(height: 5),
 
-                    // 📜 Description
                     Text(
-                      achievement['description'],
+                      achievement['description'] ?? "No description available.",
                       style: TextStyle(fontSize: 14, color: Colors.black54),
                       textAlign: TextAlign.center,
                     ),
 
                     SizedBox(height: 8),
 
-                    // 📆 Date Earned
                     Text(
-                      DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at'])),
+                      achievement['earned_at'] != null
+                          ? DateFormat('MMM dd, yyyy').format(DateTime.parse(achievement['earned_at']))
+                          : "Unknown Date",
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
@@ -470,319 +576,319 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+        appBar: AppBar(
         title: Text('Profile', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(icon: Icon(Icons.logout, color: Colors.red), onPressed: _logout),
+    backgroundColor: Colors.white,
+    elevation: 0,
+    actions: [
+    IconButton(icon: Icon(Icons.logout, color: Colors.red), onPressed: _logout),
+    ],
+    ),
+    body: Container(
+    width: double.infinity,
+    height: double.infinity,
+    decoration: BoxDecoration(
+    gradient: LinearGradient(
+    colors: [Colors.blue.shade300, Colors.white],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    ),
+    ),
+    child: SafeArea(
+    child: SingleChildScrollView(
+    padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+    SizedBox(height: 20),
+    GestureDetector(
+    onTap: widget.userId == Supabase.instance.client.auth.currentUser?.id
+    ? _changeProfilePicture
+        : null,
+    child: Stack(
+    alignment: Alignment.center,
+    children: [
+    CircleAvatar(
+    radius: 65,
+    backgroundColor: widget.userId == Supabase.instance.client.auth.currentUser?.id
+    ? Colors.white
+        : Colors.blueAccent,
+    child: CircleAvatar(
+    radius: 60,
+    backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
+    ? NetworkImage(user!.icon!)
+        : AssetImage('assets/default_avatar.png') as ImageProvider                        ),
+    ),
+      Positioned(
+        bottom: 5,
+        right: 5,
+        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
+      ),
+    ],
+    ),
+    ),
+      SizedBox(height: 30),
+      Column(
+        children: [
+          FutureBuilder<String>(
+            future: _checkFriendshipStatus(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return CircularProgressIndicator();
+              final status = snapshot.data!;
+              final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+              if (widget.userId == currentUserId) {
+                return SizedBox();
+              }
+
+              print("🛠 Friendship Status in UI: $status");
+
+              return Column(
+                children: [
+                  if (status == "not_friends")
+                    ElevatedButton(
+                      onPressed: () async {
+                        await _sendFriendRequest();
+                        setState(() {});
+                      },
+                      child: Text("Add Friend"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  if (status == "sent")
+                    ElevatedButton(
+                      onPressed: () async {
+                        await _cancelFriendRequest();
+                        setState(() {});
+                      },
+                      child: Text("Cancel Request ❌"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  if (status == "received")
+                    Column(
+                      children: [
+                        Text(
+                          "✅ Friend Request Received!",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+                        ),
+                        SizedBox(height: 5),
+                        ElevatedButton(
+                          onPressed: () async {
+                            await _acceptFriendRequest();
+                            setState(() {});
+                          },
+                          child: Text("Accept Friend Request ✅"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (status == "friends")
+                    Column(
+                      children: [
+                        Text(
+                          "✅ You are friends!",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
+                        ),
+                        SizedBox(height: 5),
+                        ElevatedButton(
+                          onPressed: () async {
+                            await _removeFriend();
+                            setState(() {});
+                          },
+                          child: Text("Remove Friend ❌"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _getFriendsList(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return CircularProgressIndicator();
+              final friends = snapshot.data!;
+              final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+              if (widget.userId != currentUserId) {
+                return SizedBox();
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "👥 Friends",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                  ),
+                  SizedBox(height: 10),
+                  friends.isEmpty
+                      ? Text("No friends yet. Add some!", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
+                      : SizedBox(
+                    height: 120,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: friends.length,
+                      itemBuilder: (context, index) {
+                        final friend = friends[index];
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProfileScreen(userId: friend['id']),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 40,
+                                  backgroundImage: friend['icon'] != null && friend['icon'].startsWith('http')
+                                      ? NetworkImage(friend['icon'])
+                                      : AssetImage('assets/default_avatar.png') as ImageProvider,
+                                ),
+                                SizedBox(height: 5),
+                                Text(friend['name'], style: TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade300, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      if (widget.userId == Supabase.instance.client.auth.currentUser?.id) ...[
+        _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
+        SizedBox(height: 5),
+        _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
+        SizedBox(height: 5),
+        _buildDropdownField(
+          "Choose your Spiritual Path",
+          _selectedSpiritualPath ?? spiritualPaths.first,
+          spiritualPaths,
+              (newValue) {
+            setState(() {
+              _selectedSpiritualPath = newValue;
+            });
+          },
+        ),
+        SizedBox(height: 10),
+        _buildDropdownField(
+          "Select Your Element",
+          _selectedElement ?? elements.first,
+          elements,
+              (newValue) {
+            setState(() {
+              _selectedElement = newValue;
+            });
+          },
+        ),
+        SizedBox(height: 5),
+        _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
+        SizedBox(height: 5),
+        _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+        SizedBox(height: 20),
+        _buildProgressBar(),
+        _buildAchievementsSection(),  // ✅ Added back achievements for your profile
+        SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: () async {
+            if (_nameController.text.trim().isEmpty || _bioController.text.trim().isEmpty || _selectedDOB == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("⚠️ Please fill out Name, Bio, and DOB before saving."))
+              );
+              return;
+            }
+
+            bool success = await _updateProfile();
+            if (success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("✅ Profile updated successfully!"))
+              );
+
+              // ✅ Reload profile immediately after saving
+              await _loadUserProfile();
+
+              // ✅ Ensure the UI refreshes
+              if (mounted) {
+                setState(() {});
+              }
+
+              // ✅ Delay navigation slightly to prevent UI glitches
+              Future.delayed(Duration(milliseconds: 500), () {
+                if (mounted && _isProfileComplete) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => MainScreen(userId: widget.userId)),
+                  );
+                }
+              });
+            }
+          },
+          child: Text("Save Changes"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
-            child: Expanded(  // ✅ Fix: Wrap Column in Expanded
-             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(height: 20),
-                GestureDetector(
-                  onTap: widget.userId == Supabase.instance.client.auth.currentUser?.id
-                      ? _changeProfilePicture  // ✅ Only allow profile owner to change
-                      : null,  // ❌ Disable clicking for visitors
-                  child: Stack(
-                  alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 65,
-                        backgroundColor: widget.userId == Supabase.instance.client.auth.currentUser?.id
-                            ? Colors.white // ✅ No border for own profile
-                            : Colors.blueAccent, // ✅ Blue border for friends' profiles
-                        child: CircleAvatar(
-                          radius: 60, // ✅ Inner Avatar (smaller to allow border effect)
-                          backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
-                              ? NetworkImage(user!.icon!)
-                              : AssetImage('assets/default_avatar.png') as ImageProvider,
-                        ),
-                      ),
+      ],
 
-                      Positioned(
-                        bottom: 5,
-                        right: 5,
-                        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
-                      ),
-                    ],
-                  ),
-                ),
+        if (widget.userId != Supabase.instance.client.auth.currentUser?.id) ...[
+        _buildBubbleText(_nameController.text, FontAwesomeIcons.sun),
+        SizedBox(height: 5),
+        _buildBubbleText(_bioController.text, FontAwesomeIcons.moon),
+        SizedBox(height: 5),
+        _buildBubbleText(_selectedSpiritualPath ?? "Not Set", FontAwesomeIcons.seedling),
+        SizedBox(height: 10),
+        _buildBubbleText(_selectedElement ?? "Not Set", FontAwesomeIcons.leaf),
+        SizedBox(height: 5),
+        _buildBubbleText(_selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : "Not Set", FontAwesomeIcons.calendar),
+        SizedBox(height: 5),
+        _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
+        SizedBox(height: 20),
+        _buildProgressBar(),
+        _buildAchievementsSection(),
+      ],
+      Column(
+        children: [
+          SizedBox(height: 20),
 
-                SizedBox(height: 30),
-                Column(
-                  children: [
-                    // 🔹 Friend Request Button
-                    FutureBuilder<String>(
-                      future: _checkFriendshipStatus(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) return CircularProgressIndicator();
-                        final status = snapshot.data!;
-                        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-
-                        if (widget.userId == currentUserId) {
-                          return SizedBox();  // ✅ Don't show friend buttons on own profile
-                        }
-
-                        print("🛠 Friendship Status in UI: $status"); // Debugging log
-
-                        return Column(
-                          children: [
-                            if (status == "not_friends") // ✅ Show Add Friend Button
-                              ElevatedButton(
-                                onPressed: () async {
-                                  await _sendFriendRequest();
-                                  setState(() {}); // ✅ Refresh UI
-                                },
-                                child: Text("Add Friend"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blueAccent,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-
-                            if (status == "sent") // ✅ Show Cancel Friend Request Button
-                              ElevatedButton(
-                                onPressed: () async {
-                                  await _cancelFriendRequest();
-                                  setState(() {}); // ✅ Refresh UI
-                                },
-                                child: Text("Cancel Request ❌"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-
-                            if (status == "received") // ✅ Show Accept Friend Request Button
-                              Column(
-                                children: [
-                                  Text(
-                                    "✅ Friend Request Received!",
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
-                                  ),
-                                  SizedBox(height: 5),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      await _acceptFriendRequest();
-                                      setState(() {}); // ✅ Refresh UI
-                                    },
-                                    child: Text("Accept Friend Request ✅"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                            if (status == "friends") // ✅ Show Remove Friend Button
-                              Column(
-                                children: [
-                                  Text(
-                                    "✅ You are friends!",
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
-                                  ),
-                                  SizedBox(height: 5),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      await _removeFriend();
-                                      setState(() {}); // ✅ Refresh UI after removing friend
-                                    },
-                                    child: Text("Remove Friend ❌"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.redAccent,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-
-
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _getFriendsList(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) return CircularProgressIndicator();
-                        final friends = snapshot.data!;
-                        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-
-                        // 🚫 Hide friends list for visitors
-                        if (widget.userId != currentUserId) {
-                          return SizedBox(); // Hide friends for visitors
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "👥 Friends",
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                            ),
-                            SizedBox(height: 10),
-                            friends.isEmpty
-                                ? Text("No friends yet. Add some!", style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic))
-                                : SizedBox(
-                              height: 120, // ✅ Adjusted height
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: friends.length,
-                                itemBuilder: (context, index) {
-                                  final friend = friends[index];
-                                  return GestureDetector(
-                                    onTap: () {
-                                      // ✅ Navigate to friend's profile when tapped
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ProfileScreen(userId: friend['id']),
-                                        ),
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                                      child: Column(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 40, // ✅ Larger profile image
-                                            backgroundImage: friend['icon'] != null && friend['icon'].startsWith('http')
-                                                ? NetworkImage(friend['icon'])
-                                                : AssetImage('assets/default_avatar.png') as ImageProvider,
-                                          ),
-                                          SizedBox(height: 5),
-                                          Text(friend['name'], style: TextStyle(fontSize: 14)),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-
-                  ],
-                ),
-                // ✅ Only allow editing if the logged-in user is viewing their own profile
-                if (widget.userId == Supabase.instance.client.auth.currentUser?.id) ...[
-                  _buildBubbleField("Your Spiritual Name", _nameController, FontAwesomeIcons.sun, "Enter your sacred name"),
-                  SizedBox(height: 5),
-                  _buildBubbleField("Tell us about you", _bioController, FontAwesomeIcons.moon, "What brings you here?"),
-                  SizedBox(height: 5),
-                  _buildDropdownField(
-                    "Choose your Spiritual Path",
-                    _selectedSpiritualPath ?? spiritualPaths.first,
-                    spiritualPaths,
-                        (newValue) {
-                      setState(() {
-                        _selectedSpiritualPath = newValue;
-                      });
-                    },
-                  ),
-                  SizedBox(height: 10),
-                  _buildDropdownField(
-                    "Select Your Element",
-                    _selectedElement ?? elements.first,
-                    elements,
-                        (newValue) {
-                      setState(() {
-                        _selectedElement = newValue;
-                      });
-                    },
-                  ),
-                  SizedBox(height: 5),
-                  _buildBubbleDateField("Your Birth Date", _selectedDOB, _pickDate),
-                  SizedBox(height: 5),
-                  _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
-                  SizedBox(height: 20),
-                  _buildProgressBar(),
-                  SizedBox(height: 20),
-
-                  // ✅ Only show Save Button to profile owner
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (_nameController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("⚠️ Please enter your name before saving."))
-                        );
-                        return;
-                      }
-
-                      bool success = await _updateProfile();
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("✅ Profile updated successfully!"))
-                        );
-                        setState(() {}); // ✅ Stay on the profile page instead of redirecting
-                      }
-                    },
-                    child: Text("Save Changes"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ], // ✅ End of check for profile owner
-
-// ✅ Show information for visitors (only viewable, not editable)
-                if (widget.userId != Supabase.instance.client.auth.currentUser?.id) ...[
-                  _buildBubbleText(_nameController.text, FontAwesomeIcons.sun),
-                  SizedBox(height: 5),
-                  _buildBubbleText(_bioController.text, FontAwesomeIcons.moon),
-                  SizedBox(height: 5),
-                  _buildBubbleText(_selectedSpiritualPath ?? "Not Set", FontAwesomeIcons.seedling),
-                  SizedBox(height: 10),
-                  _buildBubbleText(_selectedElement ?? "Not Set", FontAwesomeIcons.leaf),
-                  SizedBox(height: 5),
-                  _buildBubbleText(_selectedDOB != null ? DateFormat('yyyy-MM-dd').format(_selectedDOB!) : "Not Set", FontAwesomeIcons.calendar),
-                  SizedBox(height: 5),
-                  _buildBubbleText(_zodiacSign ?? "Not Set", FontAwesomeIcons.galacticRepublic),
-                  SizedBox(height: 20),
-                  _buildProgressBar(),
-                ],
-
-               // ✅ Show achievements for everyone
-                Column(
-                  children: [
-                    SizedBox(height: 20),
-                    _buildAchievementsSection(),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-
+        ],
       ),
-    )
+    ],
+    ),
+    ),
+    ),
+    ),
     );
   }
+
   Future<List<Map<String, dynamic>>> _getFriendsList() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return [];
@@ -802,7 +908,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             friends.add({
               'id': friendId,
               'name': friendProfile.name,
-              'icon': friendProfile.icon, // ✅ Get profile picture
+              'icon': friendProfile.icon,
             });
           }
         }
@@ -814,7 +920,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return [];
     }
   }
-//✅ Check if a friend request is already sent or accepted
+
   Future<String> _checkFriendshipStatus() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return 'not_friends';
@@ -847,7 +953,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (sentRequestResponse != null) {
         print("✅ Friendship Status: sent");
-        return 'sent'; // ✅ Mark as request sent
+        return 'sent';
       }
     } catch (error) {
       print("⚠️ No sent friend request found: $error");
@@ -892,7 +998,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Text("✅ Friend request canceled!"),
       ));
 
-      setState(() {}); // ✅ Refresh UI after canceling
+      setState(() {});
     } catch (error) {
       print("❌ Error canceling friend request: $error");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -901,8 +1007,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ✅ Send Friend Request
-  // ✅ FIXED: Send Friend Request
   Future<void> _sendFriendRequest() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
@@ -910,13 +1014,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       print("🔄 Checking for existing friend requests...");
 
-      // ✅ FIXED: Ensure no duplicate requests
       final existingRequest = await Supabase.instance.client
           .from('friend_requests')
           .select('id')
           .or('and(sender_id.eq.$userId,receiver_id.eq.${widget.userId}),and(sender_id.eq.${widget.userId},receiver_id.eq.$userId))')
           .limit(1)
-          .maybeSingle(); // ✅ Prevents crashes if no rows are found
+          .maybeSingle();
 
       if (existingRequest != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -927,7 +1030,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       print("✅ No existing request found. Sending new friend request...");
 
-      // ✅ FIXED: Insert Friend Request
       await Supabase.instance.client.from('friend_requests').insert({
         'sender_id': userId,
         'receiver_id': widget.userId,
@@ -937,7 +1039,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       print("✅ Friend request sent successfully!");
 
-      // ✅ Refresh UI
       setState(() {});
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -952,20 +1053,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ✅ Remove Friend
   Future<void> _removeFriend() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
     try {
-      // ✅ Remove friendship from relations table
       await Supabase.instance.client
           .from('relations')
           .delete()
           .or('and(user_id.eq.$userId,friend_id.eq.${widget.userId}),and(user_id.eq.${widget.userId},friend_id.eq.$userId))');
 
       if (mounted) {
-        setState(() {}); // ✅ Refresh UI
+        setState(() {});
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -976,20 +1075,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ✅ Accept Friend Request
   Future<void> _acceptFriendRequest() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
     try {
-      // ✅ Delete the friend request
       await Supabase.instance.client
           .from('friend_requests')
           .delete()
           .eq('sender_id', widget.userId)
           .eq('receiver_id', userId);
 
-      // ✅ Insert into relations table (make both users friends)
       await Supabase.instance.client.from('relations').insert([
         {
           'user_id': userId,
@@ -1003,7 +1099,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       ]);
 
-      // ✅ Refresh UI
       setState(() {});
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1015,10 +1110,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   final List<String> spiritualPaths = [
-  "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
-];
+    "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
+  ];
 
-final List<String> elements = [
-  "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
-];
+  final List<String> elements = [
+    "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
+  ];
 }

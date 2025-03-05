@@ -179,7 +179,7 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       HomeScreen(userName: "Guest"),
       SoulJourneyScreen(userId: widget.userId),
-      ProfileScreen(userId: widget.userId),
+      ProfileScreen(userId: Supabase.instance.client.auth.currentUser!.id), // ✅ Pass user ID
       FriendsPage(), // ✅ Only one Friends Page now
       AuraCatcherScreen(),
       SpiritualGuidanceScreen(),
