@@ -5,9 +5,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:dart_openai/dart_openai.dart';
 import 'services/supabase_service.dart';
 import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
+import 'package:aurana/screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/friends_page.dart'; // ✅ Keep only one Friends Page
 import 'screens/aura_catcher.dart';
@@ -17,6 +18,7 @@ import 'screens/soul_journey_screen.dart';
 import 'screens/more_menu_screen.dart'; // ✅ More Menu Screen
 import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
+import '../widgets/custom_nav_bar.dart'; // Import custom navigation bar
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -51,6 +53,22 @@ void main() async {
     await dotenv.load(fileName: ".env");
     print("✅ Environment variables loaded!");
 
+    // ✅ Load OpenAI API Key from the environment
+    final String? openAiKey = dotenv.env['OPENAI_API_KEY']; // ✅ Fetch key properly
+
+    if (openAiKey == null || openAiKey.isEmpty) {
+      throw Exception("❌ Missing OpenAI API Key in .env file!");
+    }
+    final String? apiKey = dotenv.env['GEMINI_API_KEY'];
+
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception("❌ Missing Gemini API Key in .env file!");
+    }
+
+    print("✅ Gemini API Key Loaded!");
+
+    OpenAI.apiKey = openAiKey; // ✅ Securely assign OpenAI API Key
+    print("✅ OpenAI API Initialized!");
     print("🔄 Initializing Supabase...");
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL']!,
@@ -129,25 +147,57 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _checkSession() async {
     await Future.delayed(Duration(seconds: 2));
 
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) {
-      userId = Supabase.instance.client.auth.currentUser?.id ?? "";
-      _isLoggedIn = true;
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      print("❌ User is null. Redirecting to login.");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => AuthScreen()),
+      );
+      return;
     }
 
+    String userId = user.id;
+
+    // 🔍 Check if the user has completed their profile
+    final response = await Supabase.instance.client
+        .from('profiles')
+        .select('username, bio, dob')
+        .eq('id', userId)
+        .single();
+
+    if (response == null ||
+        response['username'] == null ||
+        response['bio'] == null ||
+        response['dob'] == null ||
+        response['username'].toString().trim().isEmpty ||
+        response['bio'].toString().trim().isEmpty ||
+        response['dob'].toString().trim().isEmpty) {
+      print("❌ Incomplete Profile! Redirecting to Profile Completion Screen.");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileScreen(userId: userId, forceComplete: true),
+        ),
+      );
+      return;
+    }
+
+    // ✅ User has completed profile → Proceed to Main Screen
     setState(() {
       _isChecking = false;
     });
 
-    if (!_isLoggedIn) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AuthScreen()));
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainScreen(userId: userId)),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MainScreen(userId: userId),
+      ),
+    );
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +227,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _initializeScreens() {
     _screens = [
-      HomeScreen(userName: "Guest"),
+      HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "User"),
       SoulJourneyScreen(userId: widget.userId),
       ProfileScreen(userId: Supabase.instance.client.auth.currentUser!.id), // ✅ Pass user ID
       FriendsPage(), // ✅ Only one Friends Page now
@@ -208,49 +258,9 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: _screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(
-            icon: FutureBuilder<int>(
-              future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
-              builder: (context, snapshot) {
-                int count = snapshot.data ?? 0;
-                return Stack(
-                  children: [
-                    Icon(Icons.people, size: 30), // Friends Icon
-                    if (count > 0) // ✅ Show notification only if requests exist
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: EdgeInsets.all(5),
-                          decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                          child: Text(
-                            count.toString(),
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-            label: 'Friends',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.light_mode), label: 'Aura Catcher'),
-          BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Spiritual Guidance'),
-          BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot Reading'),
-          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'), // ✅ More menu button
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
+      bottomNavigationBar: CustomNavBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: _onItemTapped,
       ),
     );
   }

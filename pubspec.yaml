@@ -16,7 +16,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
   url_launcher: ^6.3.1
-  http: ^0.13.3
+  http: ^0.13.6
   speech_to_text: ^7.0.0
   image_picker: ^1.1.2
   encrypt: ^5.0.3
@@ -40,6 +40,8 @@ dependencies:
   firebase_core: ^2.15.0
   firebase_messaging: ^14.6.5
   postgrest: ^2.1.0
+  dart_openai: ^1.0.0
+  audioplayers: ^5.2.0  # ✅ Add this line for sound playback
 
 dev_dependencies:
   flutter_test:
@@ -66,7 +68,7 @@ flutter:
     - assets/model.tflite
     - .env
     - assets/default_avatar.png
-
+    - assets/sounds/card_flip.mp3
   fonts:
     - family: Fo
       fonts:

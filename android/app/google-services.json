@@ -37,6 +37,13 @@
             {
               "client_id": "960260575633-f36g7jqao57udu1canightlrm37hqh3u.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "960260575633-udua2shdrns1ttquo9acs7ah0q675ve5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kris.aurana"
+              }
             }
           ]
         }

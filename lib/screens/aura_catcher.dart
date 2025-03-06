@@ -1,17 +1,20 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:math' as math;
+import 'dart:convert'; // ✅ Fixes jsonDecode and jsonEncode issues
+import 'package:http/http.dart' as http; // ✅ Needed for API calls
 import 'package:path_provider/path_provider.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:intl/intl.dart';
 import '../database/aura_database_helper.dart';
 import 'aura_history_screen.dart';
 import 'aura_analysis_screen.dart';
+import 'dart:convert'; // ✅ Needed for jsonEncode and jsonDecode
 
 class AuraCatcherScreen extends StatefulWidget {
   const AuraCatcherScreen({Key? key}) : super(key: key);
-
 
   @override
   _AuraCatcherScreenState createState() => _AuraCatcherScreenState();
@@ -42,8 +45,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
       print("Error initializing camera: $e");
     }
   }
-
-  // Set the active camera
   Future<void> _setCamera(CameraDescription cameraDescription) async {
     if (_cameraController != null) {
       await _cameraController!.dispose();
@@ -59,42 +60,44 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     });
   }
 
-  // Capture image and navigate to analysis page
+
+  // Set the active camera
   Future<void> _captureImage() async {
     try {
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         final image = await _cameraController!.takePicture();
 
-        // Detect if a person is in the image
+        // ✅ Detect if a person is in the image
         bool isPersonDetected = await _detectPerson(image.path);
 
         if (isPersonDetected) {
           setState(() {
             _capturedImage = image;
-            _auraColor = _generateRandomColor(); // Generate a random aura color
+            _auraColor = _generateRandomColor();
           });
+
+          // ✅ Fetch AI-generated aura meaning
+          String auraMeaning = await _getAuraMeaning(_auraColor); // ✅ Get aura meaning
 
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => AuraAnalysisScreen(
                 imagePath: image.path,
-                auraColor: _auraColor, // Pass the generated aura color
-                auraMeaning: _getAuraMeaning(_auraColor), // Pass the calculated aura meaning
-                affirmations: _generateAffirmations(_auraColor), // Generate random affirmations
+                auraColor: _auraColor,
+                auraMeaning: auraMeaning,
+                affirmations: _generateAffirmations(_auraColor),
               ),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("No person detected in the image. Please try again."),
-            ),
+            SnackBar(content: Text("No person detected. Please try again.")),
           );
         }
       }
     } catch (e) {
-      print("Error capturing image: $e");
+      print("❌ Error capturing image: $e");
     }
   }
 
@@ -121,17 +124,55 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
       random.nextInt(256),
     );
   }
+  // Get meaning of the aura color using OpenAI API
+    Future<String> _getAuraMeaning(Color color) async {
+    try {
+      print("🔄 Fetching AI-generated aura meaning from OpenRouter...");
 
-  // Get meaning of the aura color
-  String _getAuraMeaning(Color color) {
-    if (color.red > color.green && color.red > color.blue) {
-      return "Energetic and Passionate";
-    } else if (color.green > color.red && color.green > color.blue) {
-      return "Grounded and Balanced";
-    } else if (color.blue > color.red && color.blue > color.green) {
-      return "Calm and Peaceful";
+      final String? apiKey = dotenv.env['OPENROUTER_API_KEY'];
+
+      if (apiKey == null || apiKey.isEmpty) {
+        throw Exception("❌ Missing OpenRouter API Key in .env file!");
+      }
+
+      final response = await http.post(
+        Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
+        headers: {
+          "Authorization": "Bearer $apiKey",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "model": "openai/gpt-3.5-turbo",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an expert in aura interpretation and spiritual energy reading."
+            },
+            {
+              "role": "user",
+              "content":
+              "Act as an advanced spiritual energy interpreter. Analyze the aura color '${color.toString()}' in a deep metaphysical and spiritual sense. "
+                  "Describe its meaning in terms of personality, energy vibration, and how it influences one's spiritual growth. "
+                  "Also, provide 2-3 affirmations for someone with this aura color."
+            }
+          ],
+          "max_tokens": 150,
+        }),
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        print("✅ AI-generated meaning: ${responseData["choices"][0]["message"]["content"]}");
+        return responseData["choices"][0]["message"]["content"] ?? "No insight found.";
+      } else {
+        print("❌ API Error: ${responseData["error"]["message"]}");
+        return "Spiritual insight unavailable.";
+      }
+    } catch (e) {
+      print("❌ Error getting AI-generated aura meaning: $e");
+      return "Spiritual insight unavailable.";
     }
-    return "Unique Energy Detected";
   }
 
   // Generate affirmations for the aura color
