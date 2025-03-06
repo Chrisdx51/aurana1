@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
+import '../widgets/custom_nav_bar.dart';
 import 'profile_screen.dart';
 import 'tarot_reading_screen.dart';
 import 'aura_catcher.dart';
@@ -29,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   bool _challengeCompleted = false;
   bool _profileChecked = false;
   late TabController _tabController;
+  int _selectedIndex = 0;
 
   final List<String> backgroundImages = [
     'assets/images/bg1.png',
@@ -195,6 +197,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         SnackBar(content: Text("Error: User not logged in")),
       );
     }
+  }
+
+  void _onItemTapped(int index) {
+    // Navigate to different screens based on the index
+    Navigator.pushReplacementNamed(
+      context,
+      ['/home', '/aura', '/tarot', '/profile'][index],
+    );
   }
 
   @override

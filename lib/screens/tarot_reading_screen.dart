@@ -1,39 +1,26 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'package:audioplayers/audioplayers.dart';
+import 'package:aurana/screens/home_screen.dart';
 
 class TarotReadingScreen extends StatefulWidget {
-
   @override
   _TarotReadingScreenState createState() => _TarotReadingScreenState();
 }
 
-class _TarotReadingScreenState extends State<TarotReadingScreen> {
+class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTickerProviderStateMixin {
   final List<String> tarotCards = [
-    'The Fool',
-    'The Magician',
-    'The High Priestess',
-    'The Empress',
-    'The Emperor',
-    'The Hierophant',
-    'The Lovers',
-    'The Chariot',
-    'Strength',
-    'The Hermit',
-    'Wheel of Fortune',
-    'Justice',
-    'The Hanged Man',
-    'Death',
-    'Temperance',
-    'The Devil',
-    'The Tower',
-    'The Star',
-    'The Moon',
-    'The Sun',
-    'Judgment',
-    'The World',
+    'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
+    'The Hierophant', 'The Lovers', 'The Chariot', 'Strength', 'The Hermit',
+    'Wheel of Fortune', 'Justice', 'The Hanged Man', 'Death', 'Temperance',
+    'The Devil', 'The Tower', 'The Star', 'The Moon', 'The Sun', 'Judgment', 'The World',
   ];
 
   final Map<String, String> tarotInterpretations = {
@@ -62,28 +49,36 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
   };
 
   final List<String> selectedCards = [];
-  DateTime? lastReadingTime; // Track the last reading time
+  DateTime? lastReadingTime;
   bool isSpinning = false;
-  int cardsSelected = 0; // Track how many cards have been selected for the current reading
-  Timer? countdownTimer; // Timer for countdown updates
-  Duration? remainingTime; // Time remaining until the next reading
+  int cardsSelected = 0;
+  Timer? countdownTimer;
+  Duration? remainingTime;
+  late AudioPlayer _audioPlayer;
+  late AnimationController _backButtonController;
 
   @override
   void initState() {
     super.initState();
+    _audioPlayer = AudioPlayer();
+    _backButtonController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 500),
+    )..repeat(reverse: true);
     _loadLastReadingTime();
   }
 
   @override
   void dispose() {
     countdownTimer?.cancel();
+    _audioPlayer.dispose();
+    _backButtonController.dispose();
     super.dispose();
   }
 
   Future<void> _loadLastReadingTime() async {
     final prefs = await SharedPreferences.getInstance();
     final lastTime = prefs.getString('last_reading_time');
-
     if (lastTime != null) {
       setState(() {
         lastReadingTime = DateTime.parse(lastTime);
@@ -107,7 +102,7 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
   void _updateRemainingTime() {
     if (lastReadingTime != null) {
       final now = DateTime.now();
-      final nextReadingTime = lastReadingTime!.add(Duration(hours: 12));
+      final nextReadingTime = lastReadingTime!.add(Duration(hours: 6));
       remainingTime = nextReadingTime.difference(now).isNegative
           ? Duration.zero
           : nextReadingTime.difference(now);
@@ -132,15 +127,85 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
     return remainingTime == null || remainingTime == Duration.zero;
   }
 
+  Future<String> getTarotReadingAI(String selectedCard) async {
+    try {
+      final String? apiKey = dotenv.env['OPENROUTER_API_KEY'];
+      if (apiKey == null || apiKey.isEmpty) {
+        throw Exception("❌ Missing OpenRouter AI Key in .env file!");
+      }
+      final response = await http.post(
+        Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
+        headers: {
+          "Authorization": "Bearer $apiKey",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "model": "openai/gpt-3.5-turbo",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a mystical tarot expert that gives deep and insightful interpretations of tarot cards."
+            },
+            {
+              "role": "user",
+              "content": "What is the spiritual meaning of the tarot card: $selectedCard?"
+            }
+          ],
+          "max_tokens": 100
+        }),
+      );
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseData["choices"][0]["message"]["content"].trim();
+      } else {
+        print("❌ OpenRouter API Error: ${responseData["error"]["message"]}");
+        return "Spiritual insight could not be retrieved.";
+      }
+    } catch (e) {
+      print("❌ Error getting AI-generated tarot reading: $e");
+      return "Spiritual insight unavailable.";
+    }
+  }
+
+  void _playCardFlipSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('sounds/card_flip.mp3'));
+    } catch (e) {
+      print("❌ Error playing sound: $e");
+    }
+  }
+
+  void _selectRandomCard() async {
+    if (selectedCards.length < 3) {
+      int randomIndex;
+      do {
+        randomIndex = Random().nextInt(tarotCards.length);
+      } while (selectedCards.contains(tarotCards[randomIndex]));
+
+      _playCardFlipSound();
+
+      String chosenCard = tarotCards[randomIndex];
+      String aiReading = await getTarotReadingAI(chosenCard);
+
+      setState(() {
+        selectedCards.add(chosenCard);
+        tarotInterpretations[chosenCard] = aiReading;
+        cardsSelected++;
+      });
+
+      if (selectedCards.length == 3) {
+        _saveLastReadingTime();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black87, // Mystic black color
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        backgroundColor: Colors.black87,
         title: Text(
           'Tarot Reading',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
@@ -148,7 +213,6 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
       ),
       body: Stack(
         children: [
-          // Background
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
@@ -171,12 +235,11 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
                   ),
                 ),
                 SizedBox(height: 20),
-                // Display selected cards
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: List.generate(
                     3,
-                    (index) => Container(
+                        (index) => Container(
                       height: 140,
                       width: 100,
                       margin: EdgeInsets.symmetric(horizontal: 8),
@@ -192,22 +255,22 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
                       ),
                       child: selectedCards.length > index
                           ? Image.asset(
-                              'assets/images/tarot/${selectedCards[index].toLowerCase().replaceAll(" ", "_")}.png',
-                              fit: BoxFit.cover,
-                            )
+                        'assets/images/tarot/${selectedCards[index].toLowerCase().replaceAll(" ", "_")}.png',
+                        fit: BoxFit.cover,
+                      )
                           : Container(
-                              color: Colors.black26,
-                              child: Center(
-                                child: Text(
-                                  '?',
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
+                        color: Colors.black26,
+                        child: Center(
+                          child: Text(
+                            '?',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -216,8 +279,8 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
                   onPressed: !_canStartNewReading()
                       ? null
                       : (isSpinning || cardsSelected >= 3)
-                          ? null
-                          : _startReading,
+                      ? null
+                      : _startReading,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black87,
                     padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
@@ -229,14 +292,13 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
                     !_canStartNewReading()
                         ? 'Next Reading Available in ${remainingTime?.inHours ?? 0}h ${(remainingTime?.inMinutes ?? 0) % 60}m'
                         : cardsSelected >= 3
-                            ? 'Max Cards Selected'
-                            : 'Pick a Card',
+                        ? 'Max Cards Selected'
+                        : 'Pick a Card',
                     style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
                 if (selectedCards.length == 3) ...[
                   SizedBox(height: 20),
-                  // Show reading below cards
                   Container(
                     padding: EdgeInsets.all(16),
                     margin: EdgeInsets.symmetric(horizontal: 16),
@@ -257,35 +319,84 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
                         ),
                         SizedBox(height: 12),
                         ...selectedCards.map((card) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    card,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    tarotInterpretations[card] ?? '',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black54,
-                                    ),
-                                  ),
-                                ],
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                card,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
                               ),
-                            )),
+                              SizedBox(height: 4),
+                              FutureBuilder<String>(
+                                future: getTarotReadingAI(card),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return CircularProgressIndicator();
+                                  } else if (snapshot.hasError) {
+                                    return Text("❌ Error fetching tarot reading.");
+                                  } else {
+                                    return Text(
+                                      snapshot.data ?? "No interpretation found.",
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        )),
                       ],
                     ),
                   ),
                 ],
                 SizedBox(height: 20),
+                Text(
+                  selectedCards.length < 3
+                      ? "🔮 Choose three cards to unlock your reading! 🔮"
+                      : "✨ Your fate is revealed! ✨",
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontStyle: FontStyle.italic),
+                ),
+                SizedBox(height: 20),
               ],
+            ),
+          ),
+          Positioned(
+            top: 20,
+            left: 20,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HomeScreen(
+                      userName: Supabase.instance.client.auth.currentUser?.email ?? "Guest",
+                    ),
+                  ),
+                );
+              },
+              child: ScaleTransition(
+                scale: Tween(begin: 0.9, end: 1.1).animate(_backButtonController),
+                child: Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(Icons.arrow_back, size: 30, color: Colors.black),
+                ),
+              ),
             ),
           ),
         ],
@@ -304,23 +415,5 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
         _selectRandomCard();
       });
     });
-  }
-
-  void _selectRandomCard() {
-    if (selectedCards.length < 3) {
-      int randomIndex;
-      do {
-        randomIndex = Random().nextInt(tarotCards.length);
-      } while (selectedCards.contains(tarotCards[randomIndex]));
-
-      setState(() {
-        selectedCards.add(tarotCards[randomIndex]);
-        cardsSelected++;
-      });
-
-      if (selectedCards.length == 3) {
-        _saveLastReadingTime(); // Save the last reading time
-      }
-    }
   }
 }

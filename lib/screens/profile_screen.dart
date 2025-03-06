@@ -12,8 +12,9 @@ import 'friends_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
+  final bool forceComplete; // ✅ Add this to force profile completion
 
-  ProfileScreen({required this.userId});
+  ProfileScreen({required this.userId, this.forceComplete = false});
 
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
