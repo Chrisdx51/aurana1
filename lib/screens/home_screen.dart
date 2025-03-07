@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
@@ -9,7 +10,7 @@ import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
 import 'soul_journey_screen.dart';
 import 'user_discovery_screen.dart';
-import 'friends_page.dart'; // Make sure to import the FriendsPage
+import 'friends_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -20,17 +21,14 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   final SupabaseService supabaseService = SupabaseService();
   UserModel? user;
   bool _isLoading = true;
   bool _hasError = false;
-  int _spiritualXP = 0;
-  int _spiritualLevel = 1;
-  bool _challengeCompleted = false;
-  bool _profileChecked = false;
-  late TabController _tabController;
-  int _selectedIndex = 0;
+  double _buttonScale = 1.0;
+  Timer? _inactivityTimer; // ✅ Track inactivity timer
+  Timer? _periodicTimer; // ✅ Periodic timer for marking offline
 
   final List<String> backgroundImages = [
     'assets/images/bg1.png',
@@ -38,50 +36,73 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     'assets/images/bg3.png',
   ];
 
-  final List<String> _challengeList = [
-    "Take 5 minutes to meditate and breathe deeply.",
-    "Write down 3 things you're grateful for.",
-    "Spend 10 minutes in silence, listening to your breath.",
-    "Do one act of kindness today.",
-    "Step outside and connect with nature.",
-    "Visualize yourself achieving your goals for 5 minutes.",
-    "Stretch your body and release tension for 5 minutes.",
-  ];
-
-  String _todaysChallenge = "Take 5 minutes to meditate and breathe deeply.";
-  DateTime? _lastCompletedTime;
-
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
-    _loadChallengeStatus();
+    _updateOnlineStatus(); // ✅ Mark user online when app starts
+    _resetInactivityTimer(); // ✅ Start tracking inactivity
 
-    // ✅ Subscribe to real-time friend request notifications
-    Supabase.instance.client
-        .channel('friend_requests')
-        .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'friend_requests',
-        callback: (payload) {
-          if (mounted) {
-            setState(() {}); // ✅ Refresh UI when a new friend request is received
-          }
-        }
-    )
-        .subscribe();
+    // ✅ Auto Mark Offline After 10 Mins of Inactivity
+    _periodicTimer = Timer.periodic(Duration(minutes: 10), (timer) async {
+      if (!mounted) return;
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'is_online': false})
+          .eq('id', userId);
+    });
   }
 
   @override
   void dispose() {
+    _inactivityTimer?.cancel();
+    _periodicTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _loadUserProfile() async {
-    if (_profileChecked) return;
-    _profileChecked = true;
+  void _resetInactivityTimer() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
 
+    // ✅ Mark user as online immediately
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'is_online': true})
+        .eq('id', userId);
+
+    print("🟢 User marked as online.");
+
+    // ✅ Cancel previous timer
+    _inactivityTimer?.cancel();
+
+    // ✅ Set new timer for 10 minutes
+    _inactivityTimer = Timer(Duration(minutes: 10), () async {
+      if (!mounted) return;
+
+      // ✅ Mark user offline after 10 minutes of inactivity
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'is_online': false})
+          .eq('id', userId);
+
+      print("🔴 User marked as offline due to inactivity.");
+    });
+  }
+
+  Future<void> _updateOnlineStatus() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'is_online': true})
+        .eq('id', userId);
+  }
+
+  Future<void> _loadUserProfile() async {
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -101,8 +122,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if (profile != null) {
         setState(() {
           user = profile;
-          _spiritualXP = profile.spiritualXP ?? 0;
-          _spiritualLevel = profile.spiritualLevel ?? 1;
           _isLoading = false;
         });
       } else {
@@ -119,65 +138,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  Future<void> _loadChallengeStatus() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    try {
-      final response = await Supabase.instance.client
-          .from('challenge_status')
-          .select('last_completed')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      if (response != null && response['last_completed'] != null) {
-        _lastCompletedTime = DateTime.parse(response['last_completed']);
-        if (DateTime.now().difference(_lastCompletedTime!).inHours < 24) {
-          setState(() {
-            _challengeCompleted = true;
-          });
-        }
-      }
-    } catch (error) {
-      print("Error loading challenge status: $error");
-    }
-
-    _generateDailyChallenge();
-  }
-
-  void _generateDailyChallenge() {
-    int today = DateTime.now().day;
-    int challengeIndex = today % _challengeList.length;
-    setState(() {
-      _todaysChallenge = _challengeList[challengeIndex];
-    });
-  }
-
-  void _completeChallenge() async {
-    if (_challengeCompleted) return;
-
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    try {
-      await Supabase.instance.client
-          .from('challenge_status')
-          .upsert({'user_id': userId, 'last_completed': DateTime.now().toIso8601String()});
-
-      setState(() {
-        _challengeCompleted = true;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ Challenge completed! +10 XP')),
-      );
-
-      setState(() {
-        _spiritualXP += 10;
-      });
-    } catch (error) {
-      print("Error updating challenge status: $error");
-    }
+  void _navigateToPage(Widget page) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => page),
+    );
   }
 
   String getRotatingBackground() {
@@ -185,155 +150,133 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
   }
 
-  void _navigateToPage(Widget page) {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => page),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: User not logged in")),
-      );
-    }
-  }
-
-  void _onItemTapped(int index) {
-    // Navigate to different screens based on the index
-    Navigator.pushReplacementNamed(
-      context,
-      ['/home', '/aura', '/tarot', '/profile'][index],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final userId = Supabase.instance.client.auth.currentUser?.id;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Celestial Path',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+    return GestureDetector(
+      onTap: _resetInactivityTimer, // ✅ Reset inactivity timer on tap
+      onPanDown: (_) => _resetInactivityTimer(), // ✅ Reset on swipe/touch
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Celestial Path',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blueAccent, Colors.white],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.notifications, size: 30, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => FriendsPage()),
+                );
+              },
+            ),
+          ],
         ),
-        flexibleSpace: Container(
+        body: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blueAccent, Colors.white],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            image: DecorationImage(
+              image: AssetImage(getRotatingBackground()),
+              fit: BoxFit.cover,
             ),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: Stack(
-              children: [
-                Icon(Icons.notifications, size: 30, color: Colors.white), // Bell Icon
-                FutureBuilder<int>(
-                  future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
-                  builder: (context, snapshot) {
-                    int count = snapshot.data ?? 0;
-                    return count > 0
-                        ? Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(5),
-                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                        child: Text(
-                          count.toString(),
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    )
-                        : SizedBox();
-                  },
-                ),
-              ],
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => FriendsPage()), // ✅ Navigate to Friends Page
-              );
-            },
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(getRotatingBackground()), // ✅ Dynamic Background
-            fit: BoxFit.cover, // ✅ Ensures full coverage
-            alignment: Alignment.topCenter, // ✅ Aligns correctly
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: BouncingScrollPhysics(),
-                child: Column(
+          child: Column(
+            children: [
+              SizedBox(height: 20),
+              _buildGreetingSection(),
+              SizedBox(height: 20),
+              _buildAnimatedButtons(userId),
+              SizedBox(height: 20),
+              Expanded(
+                child: Row(
                   children: [
-                    _isLoading
-                        ? Center(child: CircularProgressIndicator(color: Colors.purple))
-                        : _hasError
-                        ? _buildErrorMessage()
-                        : _buildGreetingSection(),
-                    SizedBox(height: 10),
-                    _buildXPProgressBar(),
-                    SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.style, color: Colors.blueAccent),
-                          onPressed: () => _navigateToPage(TarotReadingScreen()),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.blur_on, color: Colors.blueAccent),
-                          onPressed: () => _navigateToPage(AuraCatcherScreen()),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.brightness_2, color: Colors.blueAccent),
-                          onPressed: () => _navigateToPage(MoonCycleScreen()),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.auto_awesome, color: Colors.blueAccent),
-                          onPressed: () {
-                            if (userId != null) {
-                              _navigateToPage(SoulJourneyScreen(userId: userId));
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Error: User not logged in")),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-                    _buildCardSection(
-                      title: "Today's Affirmation",
-                      content: '“I am in alignment with my higher purpose.”',
-                      icon: Icons.lightbulb_outline,
-                    ),
-                    SizedBox(height: 10),
-                    _buildCardSection(
-                      title: "Today's Challenge",
-                      content: _todaysChallenge,
-                      icon: Icons.check_circle_outline,
-                      onTap: _completeChallenge,
-                      isDisabled: _challengeCompleted,
-                    ),
-                    SizedBox(height: 20),
+                    Expanded(child: _buildInspirationSection()),
+                    SizedBox(width: 10),
+                    Expanded(child: _buildRecentUsersSection()),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnimatedButtons(String? userId) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildAnimatedButton("Soul Journey", Colors.deepPurple,
+                userId != null ? SoulJourneyScreen(userId: userId) : HomeScreen(userName: widget.userName)),
+            _buildAnimatedButton("Aura Catcher", Colors.blueAccent, AuraCatcherScreen()),
+          ],
+        ),
+        SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildAnimatedButton("Discovery", Colors.teal, UserDiscoveryScreen()),
+            _buildAnimatedButton("Tarot", Colors.orange, TarotReadingScreen()),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnimatedButton(String text, Color color, Widget page) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _buttonScale = 0.9; // Shrink animation
+        });
+        Future.delayed(Duration(milliseconds: 200), () {
+          setState(() {
+            _buttonScale = 1.0; // Reset scale
+          });
+        });
+        _navigateToPage(page);
+      },
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 300),
+        width: 160,
+        height: 90,
+        transform: Matrix4.diagonal3Values(_buttonScale, _buttonScale, 1),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.9), color.withOpacity(0.5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.6),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: Offset(0, 3),
             ),
           ],
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
         ),
       ),
     );
@@ -343,25 +286,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.black.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 25,
-            backgroundImage: user != null && user!.icon != null && user!.icon!.isNotEmpty
+            backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
                 ? NetworkImage(user!.icon!)
-                : AssetImage("assets/images/default_avatar.png") as ImageProvider, // ✅ Fallback image
-
-          ), // ✅ Fixed null safety issues
-
+                : AssetImage("assets/images/default_avatar.png") as ImageProvider,
+          ),
           SizedBox(width: 10),
-
           Expanded(
             child: Text(
               'Welcome back, ${user?.name ?? "Guest"}!',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -369,54 +313,109 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildXPProgressBar() {
-    int xpNeeded = _spiritualLevel * 100;
-    double progress = _spiritualXP / xpNeeded;
-
-    return Column(
-      children: [
-        Text(
-          'Level $_spiritualLevel • XP: $_spiritualXP / $xpNeeded',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-        ),
-        SizedBox(height: 5),
-        LinearProgressIndicator(
-          value: progress > 1 ? 1 : progress,
-          backgroundColor: Colors.grey[300],
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCardSection({
-    required String title,
-    required String content,
-    IconData? icon,
-    VoidCallback? onTap,
-    bool isDisabled = false,
-  }) {
+  Widget _buildInspirationSection() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.8),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      child: Column(
         children: [
-          if (icon != null) Icon(icon, size: 28, color: Colors.blueAccent),
-          SizedBox(width: 10),
-          Expanded(child: Text(content)),
-          IconButton(
-            icon: Icon(Icons.people, color: Colors.blueAccent),
-            onPressed: () => _navigateToPage(UserDiscoveryScreen()),
+          Text(
+            "✨ Daily Affirmations ✨",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          SizedBox(height: 10),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildAffirmation("I am at peace with my past and embrace my future."),
+                _buildAffirmation("I radiate love, happiness, and positivity."),
+                _buildAffirmation("I am in alignment with my higher self."),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildErrorMessage() {
-    return Center(child: Text("Error loading profile", style: TextStyle(color: Colors.red)));
+  Widget _buildAffirmation(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        "• $text",
+        style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.black87),
+      ),
+    );
+  }
+
+  Widget _buildRecentUsersSection() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(
+            "👤 Recent Users",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          SizedBox(height: 10),
+          Expanded(
+            child: FutureBuilder<List<UserModel>>(
+              future: supabaseService.getRecentUsers(5), // ✅ Fetch last 5 users
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return Center(child: CircularProgressIndicator()); // ✅ Show loader while fetching
+                }
+                final users = snapshot.data!;
+
+                if (users.isEmpty) {
+                  return Center(child: Text("No recent users yet!", style: TextStyle(color: Colors.white)));
+                }
+
+                return SizedBox(
+                  height: 100, // ✅ Prevents stacking
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: users.length,
+                    itemBuilder: (context, index) {
+                      final user = users[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => ProfileScreen(userId: user.id)),
+                          );
+                        },
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 30,
+                                backgroundImage: (user.icon != null && user.icon!.isNotEmpty)
+                                    ? NetworkImage(user.icon!)
+                                    : AssetImage("assets/default_avatar.png") as ImageProvider,
+                              ),
+                              SizedBox(height: 5),
+                              Text(user.name, style: TextStyle(fontSize: 14, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

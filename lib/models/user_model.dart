@@ -14,12 +14,14 @@ class UserModel {
   final List<Map<String, dynamic>>? visitorLog;
   final List<Map<String, dynamic>>? giftInventory;
   final bool? isJourneyPublic;
+  final bool? isOnline; // ✅ Added isOnline
 
   UserModel({
     required this.id,
     required this.name,
     required this.bio,
     this.icon,
+    required this.isOnline, // ✅ Ensure it is required
     this.dob,
     this.zodiacSign, // ✅ Added
     this.spiritualPath,
@@ -41,6 +43,7 @@ class UserModel {
       bio: json['bio'] ?? '',
       icon: json['icon'],
       dob: json['dob'],
+      isOnline: json['is_online'] == true, // ✅ Convert 'is_online' from DB to bool
       zodiacSign: json['zodiac_sign'], // ✅ Ensure it's mapped from Supabase
       spiritualPath: json['spiritual_path'],
       element: json['element'],
@@ -71,6 +74,7 @@ class UserModel {
       'visitor_log': visitorLog,
       'gift_inventory': giftInventory,
       'is_journey_public': isJourneyPublic,
+      'is_online': isOnline, // ✅ Fix: Added to JSON output
     };
   }
 
@@ -90,6 +94,8 @@ class UserModel {
     List<Map<String, dynamic>>? visitorLog,
     List<Map<String, dynamic>>? giftInventory,
     bool? isJourneyPublic,
+    bool? isOnline, // ✅ Fix: Added isOnline
+
   }) {
     return UserModel(
       id: this.id,
@@ -107,6 +113,7 @@ class UserModel {
       giftInventory: giftInventory ?? this.giftInventory,
       isJourneyPublic: isJourneyPublic ?? this.isJourneyPublic,
       privacy: privacy ?? this.privacy, // ✅ Added privacy
+      isOnline: isOnline ?? this.isOnline, // ✅ Fix: Ensure isOnline can be updated
     );
   }
 }

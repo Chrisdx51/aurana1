@@ -28,6 +28,22 @@ class SupabaseService {
     return null;
   }
 
+  // ✅ Fetch Recent Users (Last 5 Users Logged In)
+  Future<List<UserModel>> getRecentUsers(int limit) async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('id, name, icon, is_online') // ✅ Make sure 'is_online' is selected
+          .order('last_active', ascending: false)
+          .limit(limit);
+
+      return response.map((user) => UserModel.fromJson(user)).toList();
+    } catch (error) {
+      print("❌ Error fetching recent users: $error");
+      return [];
+    }
+  }
+
   Future<UserModel?> fetchUserProfileWithPrivacy(String viewerId, String targetUserId) async {
     try {
       final response = await supabase
@@ -387,6 +403,23 @@ class SupabaseService {
       }
     } catch (error) {
       print("❌ Error toggling like: $error");
+    }
+  }
+
+  // ✅ Set User Online/Offline
+  Future<void> updateOnlineStatus(bool isOnline) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await supabase.from('profiles').update({
+        'is_online': isOnline,
+        'last_active': DateTime.now().toIso8601String(), // ✅ Update last seen
+      }).eq('id', userId);
+
+      print("✅ User online status updated: ${isOnline ? 'Online' : 'Offline'}");
+    } catch (error) {
+      print("❌ Error updating online status: $error");
     }
   }
 

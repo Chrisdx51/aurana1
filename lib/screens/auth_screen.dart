@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
+import '../services/supabase_service.dart'; // Import SupabaseService
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -15,6 +16,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isSignUp = false;
   bool _isLoading = false;
+  final SupabaseService supabaseService = SupabaseService(); // Initialize SupabaseService here
 
   // 🔥 Validate email format
   bool _isValidEmail(String email) {
@@ -32,11 +34,13 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (response == null) return false;
 
-    return response['name'] != null &&
-        response['name'].toString().isNotEmpty &&
-        response['bio'] != null &&
-        response['bio'].toString().isNotEmpty &&
-        response['dob'] != null;
+    // ✅ Force users to complete Name, Bio, and DOB before proceeding
+    bool isComplete = response['name'] != null && response['name'].toString().trim().isNotEmpty &&
+        response['bio'] != null && response['bio'].toString().trim().isNotEmpty &&
+        response['dob'] != null && response['dob'].toString().trim().isNotEmpty;
+
+    print("🔍 Profile Completion Check: $isComplete");
+    return isComplete;
   }
 
   // 🔥 Handle authentication
@@ -69,17 +73,19 @@ class _AuthScreenState extends State<AuthScreen> {
         if (response.user != null) {
           final String userId = response.user!.id;
 
+          // ✅ Create an empty profile but force completion later
           await supabase.from('profiles').insert({
             'id': userId,
             'email': email,
             'bio': '',
             'dob': null,
+            'name': '', // ✅ Ensure name is empty so they are forced to complete it
           });
 
           _showMessage("✅ Account Created! Redirecting to Profile Setup...");
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
+            MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId, forceComplete: true)),
           );
           return;
         } else {
@@ -97,6 +103,9 @@ class _AuthScreenState extends State<AuthScreen> {
           // ✅ Save FCM Token
           await saveFCMToken();
 
+          // ✅ Mark user as online
+          await supabaseService.updateOnlineStatus(true);
+
           if (profileComplete) {
             // ✅ Redirect to Home Screen if complete
             Navigator.pushReplacement(
@@ -105,9 +114,10 @@ class _AuthScreenState extends State<AuthScreen> {
             );
           } else {
             // ✅ Redirect to Profile Setup if incomplete
+            _showMessage("⚠️ Profile incomplete! Redirecting to Profile Setup...");
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
+              MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId, forceComplete: true)),
             );
           }
         } else {
