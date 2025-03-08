@@ -132,7 +132,7 @@ class AuthGate extends StatefulWidget {
   _AuthGateState createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final SupabaseService supabaseService = SupabaseService();
   bool _isChecking = true;
   bool _isLoggedIn = false;
@@ -141,7 +141,36 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkSession();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    if (state == AppLifecycleState.resumed) {
+      // App is active again
+      await Supabase.instance.client.from('profiles').update({
+        'is_online': true,
+        'last_seen': null, // Reset last seen
+      }).eq('id', user.id);
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      // App is closed or in background
+      await Supabase.instance.client.from('profiles').update({
+        'is_online': false,
+        'last_seen': DateTime.now().toIso8601String(), // Save last active time
+      }).eq('id', user.id);
+    }
   }
 
   Future<void> _checkSession() async {
@@ -159,6 +188,12 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     String userId = user.id;
+
+    // ✅ Set user as ONLINE in Supabase
+    await Supabase.instance.client.from('profiles').update({
+      'is_online': true,
+      'last_seen': null, // Reset last seen when user logs in
+    }).eq('id', userId);
 
     // 🔍 Check if the user has completed their profile
     final response = await Supabase.instance.client
@@ -196,8 +231,6 @@ class _AuthGateState extends State<AuthGate> {
       ),
     );
   }
-
-
 
   @override
   Widget build(BuildContext context) {

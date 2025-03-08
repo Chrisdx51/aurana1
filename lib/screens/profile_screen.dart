@@ -20,7 +20,7 @@ class ProfileScreen extends StatefulWidget {
   _ProfileScreenState createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserver {
   final SupabaseService supabaseService = SupabaseService();
   UserModel? user;
   final ImagePicker _picker = ImagePicker();
@@ -44,10 +44,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance?.addObserver(this); // ✅ FIX: Add null check
+
     _loadUserProfile();
     _checkProfileCompletion(); // ✅ Ensures users complete profiles before proceeding
     _loadAchievements();
     _checkFriendshipStatus();
+
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance?.removeObserver(this); // ✅ FIXED: Prevents errors
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      // ✅ App is back in focus → Set user as online
+      await Supabase.instance.client.from('profiles').update({
+        'is_online': true,
+        'last_seen': null, // ✅ Reset last seen when user is active
+      }).eq('id', widget.userId);
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -93,6 +113,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
+  Widget buildOnlineStatus(String userId) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: Supabase.instance.client
+          .from('profiles')
+          .stream(primaryKey: ['id'])
+          .eq('id', userId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return SizedBox.shrink();
+
+        final user = snapshot.data![0];
+        bool isOnline = user['is_online'] ?? false;
+
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isOnline ? Colors.green : Colors.grey, // 🟢 Online | ⚪ Offline
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+        );
+      },
+    );
+  }
   Future<void> _loadAchievements() async {
     if (widget.userId.isEmpty) {
       print("⚠️ Cannot load achievements: User ID is empty.");
@@ -606,32 +650,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
     SizedBox(height: 20),
-    GestureDetector(
-    onTap: widget.userId == Supabase.instance.client.auth.currentUser?.id
-    ? _changeProfilePicture
-        : null,
-    child: Stack(
-    alignment: Alignment.center,
-    children: [
-    CircleAvatar(
-    radius: 65,
-    backgroundColor: widget.userId == Supabase.instance.client.auth.currentUser?.id
-    ? Colors.white
-        : Colors.blueAccent,
-    child: CircleAvatar(
-    radius: 60,
-    backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
-    ? NetworkImage(user!.icon!)
-        : AssetImage('assets/default_avatar.png') as ImageProvider                        ),
-    ),
-      Positioned(
-        bottom: 5,
-        right: 5,
-        child: Icon(Icons.camera_alt, color: Colors.blueAccent),
+      GestureDetector(
+        onTap: widget.userId == Supabase.instance.client.auth.currentUser?.id
+            ? _changeProfilePicture
+            : null,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CircleAvatar(
+              radius: 65,
+              backgroundColor: widget.userId == Supabase.instance.client.auth.currentUser?.id
+                  ? Colors.white
+                  : Colors.blueAccent,
+              child: CircleAvatar(
+                radius: 60,
+                backgroundImage: (user?.icon != null && user!.icon!.isNotEmpty && user!.icon!.startsWith('http'))
+                    ? NetworkImage(user!.icon!)
+                    : AssetImage('assets/default_avatar.png') as ImageProvider,
+              ),
+            ),
+            // ✅ Online Indicator Positioned at Bottom Right
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: buildOnlineStatus(widget.userId),
+            ),
+          ],
+        ),
       ),
-    ],
-    ),
-    ),
+
       SizedBox(height: 30),
       Column(
         children: [

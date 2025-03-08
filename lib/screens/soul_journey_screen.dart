@@ -9,9 +9,7 @@ import '../widgets/video_widget.dart';
 class SoulJourneyScreen extends StatefulWidget {
   final String userId;
 
-
   SoulJourneyScreen({required this.userId});
-
 
   @override
   _SoulJourneyScreenState createState() => _SoulJourneyScreenState();
@@ -23,7 +21,6 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
   bool _isLoading = true;
   final supabase = Supabase.instance.client;
   bool _isGlobal = false; // ✅ Default to "Soul Journey" (User's own posts)
-
 
   @override
   void initState() {
@@ -59,8 +56,6 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
       });
     }
   }
-
-
 
   Future<void> _deleteMilestone(String milestoneId) async {
     bool confirmDelete = await showDialog(
@@ -103,7 +98,6 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,36 +109,43 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
           Column(
             children: [
               AppBar(
-                title: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isGlobal = false; // ✅ Show only user's posts & Open posts
-                          _loadMilestones();
-                        });
-                      },
-                      child: Text("Soul Journey", style: TextStyle(
-                          color: !_isGlobal ? Colors.white : Colors.white70, fontSize: 18)),
-                    ),
-                    SizedBox(width: 20),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isGlobal = true; // ✅ Show only Open posts from all users
-                          _loadMilestones();
-                        });
-                      },
-                      child: Text("Global Wall", style: TextStyle(
-                          color: _isGlobal ? Colors.white : Colors.white70, fontSize: 18)),
-                    ),
-                  ],
+                title: Flexible( // ✅ Prevents overflow
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded( // ✅ Ensures buttons do not overflow
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isGlobal = false;
+                              _loadMilestones();
+                            });
+                          },
+                          child: Text("Soul Journey",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: !_isGlobal ? Colors.white : Colors.white70, fontSize: 18)),
+                        ),
+                      ),
+                      SizedBox(width: 10), // ✅ Reduce width to avoid overflow
+                      Expanded( // ✅ Ensures buttons do not overflow
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isGlobal = true;
+                              _loadMilestones();
+                            });
+                          },
+                          child: Text("Global Wall",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: _isGlobal ? Colors.white : Colors.white70, fontSize: 18)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
               ),
-
               Expanded(
                 child: _isLoading
                     ? Center(child: CircularProgressIndicator())
@@ -188,10 +189,7 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
                                       ? Icon(Icons.person, color: Colors.white, size: 24) // Placeholder icon
                                       : null,
                                 ),
-
                               ),
-
-
                               SizedBox(width: 10),
                               GestureDetector(
                                 onTap: () {
