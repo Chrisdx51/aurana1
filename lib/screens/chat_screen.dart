@@ -12,7 +12,8 @@ class ChatScreen extends StatefulWidget {
   _ChatScreenState createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
+
   final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController(); // Auto-scroll fix
@@ -44,12 +45,33 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ✅ Track app lifecycle
     updateOnlineStatus(true); // ✅ Mark user as online
     fetchLastSeen();
     updateLastSeen();
     fetchMessages();
     listenForNewMessages();
     listenForUserStatus(); // ✅ Listen for user's online status
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // ✅ Prevent memory leaks
+    updateOnlineStatus(false); // ✅ Mark user as offline when leaving chat
+    updateLastSeen(); // ✅ Update last seen timestamp
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      // ✅ User comes back to the chat → Mark online
+      await updateOnlineStatus(true);
+    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      // ✅ User leaves the chat → Mark offline
+      await updateOnlineStatus(false);
+      await updateLastSeen();
+    }
   }
 
   // ✅ Update Online Status in Supabase
@@ -79,36 +101,56 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    updateOnlineStatus(false); // ✅ Mark user as offline
-    updateLastSeen(); // ✅ Update last seen timestamp
-    super.dispose();
-  }
-
-  Future<void> fetchLastSeen() async {
-    try {
-      final response = await supabase
-          .from('profiles')
-          .select('last_seen')
-          .eq('id', widget.receiverId)
-          .maybeSingle();
-
-      if (response != null && response['last_seen'] != null) {
-        DateTime lastSeenTime = DateTime.parse(response['last_seen']).toLocal();
-        setState(() {
-          lastSeen = "Last seen: ${formatTimestamp(lastSeenTime.toIso8601String())}";
-        });
-      } else {
-        setState(() {
-          lastSeen = "Last seen: Unknown";
-        });
+  void fetchLastSeen() async {
+    Timer.periodic(Duration(seconds: 10), (timer) async {
+      if (!mounted) {
+        timer.cancel(); // ✅ Stop the timer if chat is closed
+        return;
       }
-    } catch (error) {
-      print("❌ Error fetching last seen: $error");
-    }
+
+      try {
+        final response = await supabase
+            .from('profiles')
+            .select('last_seen')
+            .eq('id', widget.receiverId)
+            .maybeSingle();
+
+        if (response != null && response['last_seen'] != null) {
+          DateTime lastSeenTime = DateTime.parse(response['last_seen']).toLocal();
+          setState(() {
+            lastSeen = "Last seen: ${formatTimestamp(lastSeenTime.toIso8601String())}";
+          });
+        } else {
+          setState(() {
+            lastSeen = "Last seen: Unknown";
+          });
+        }
+      } catch (error) {
+        print("❌ Error fetching last seen: $error");
+      }
+    });
   }
-// Fetch Messages & Ensure Profile Pictures Persist
+
+  void listenForUserStatus() {
+    supabase
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.receiverId)
+        .listen((data) {
+      if (data.isNotEmpty) {
+        bool isReceiverOnline = data.first['is_online'] ?? false;
+        bool isReceiverTyping = data.first['is_typing'] ?? false;
+
+        setState(() {
+          receiverIsOnline = isReceiverOnline;
+          isTyping = isReceiverTyping; // ✅ Show typing status in real-time
+        });
+
+        print("👤 ${widget.receiverName} is now ${isReceiverOnline ? 'Online' : 'Offline'} | Typing: $isReceiverTyping");
+      }
+    });
+  }
+  // Fetch Messages & Ensure Profile Pictures Persist
   Future<void> fetchMessages() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -163,24 +205,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void listenForUserStatus() {
-    supabase
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('id', widget.receiverId)
-        .listen((data) {
-      if (data.isNotEmpty) {
-        bool isReceiverOnline = data.first['is_online'] ?? false;
-        setState(() {
-          receiverIsOnline = isReceiverOnline;
-        });
-
-        print("👤 ${widget.receiverName} is now ${isReceiverOnline ? 'Online' : 'Offline'}");
-      }
-    });
-  }
-
-  // Listen for new messages in real-time
   // Listen for new messages in real-time
   void listenForNewMessages() {
     final user = supabase.auth.currentUser;
@@ -223,6 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
   }
+
   // Send a Message with Timestamp
   Future<void> sendMessage() async {
     final user = supabase.auth.currentUser;
@@ -273,7 +298,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ),
-
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -365,20 +389,32 @@ class _ChatScreenState extends State<ChatScreen> {
                       labelText: 'Type a message...',
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (text) {
+                    onChanged: (text) async {
                       setState(() {
                         isTyping = text.isNotEmpty;
                       });
+
+                      // ✅ Update Supabase to show sender is typing
+                      final userId = supabase.auth.currentUser?.id;
+                      if (userId != null) {
+                        await supabase.from('profiles').update({'is_typing': text.isNotEmpty}).eq('id', userId);
+                      }
 
                       // Cancel previous timer if user keeps typing
                       _typingTimer?.cancel();
 
                       // Start a new timer to stop typing indicator after 2 seconds
                       if (text.isNotEmpty) {
-                        _typingTimer = Timer(Duration(seconds: 2), () {
+                        _typingTimer = Timer(Duration(seconds: 2), () async {
                           setState(() {
                             isTyping = false;
                           });
+                          // ✅ Stop typing indicator in Supabase
+                          final userId = supabase.auth.currentUser?.id;
+                          if (userId != null) {
+                            await supabase.from('profiles').update({'is_typing': false}).eq('id', userId);
+                          }
+
                         });
                       }
                     },
