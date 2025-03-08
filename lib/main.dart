@@ -19,6 +19,7 @@ import 'screens/more_menu_screen.dart'; // ✅ More Menu Screen
 import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
 import '../widgets/custom_nav_bar.dart'; // Import custom navigation bar
+import 'screens/splash_screen.dart';  // ✅ Import splash screen
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -122,7 +123,7 @@ class AuranaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Aurana App',
       theme: ThemeData(primarySwatch: Colors.teal),
-      home: AuthGate(),
+      home: SplashScreen(),
     );
   }
 }
