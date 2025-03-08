@@ -42,6 +42,15 @@ dependencies:
   postgrest: ^2.1.0
   dart_openai: ^1.0.0
   audioplayers: ^5.2.0  # ✅ Add this line for sound playback
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  android: true
+  ios: false  # ✅ This prevents any iOS changes
+  image_path: "assets/aurana.png"  # ✅ Change this to your icon path
+  adaptive_icon_foreground: "assets/aurana.png"
+  adaptive_icon_background: "#000000"
+
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +78,8 @@ flutter:
     - .env
     - assets/default_avatar.png
     - assets/sounds/card_flip.mp3
+    - assets/media/splash.gif
+
   fonts:
     - family: Fo
       fonts:
