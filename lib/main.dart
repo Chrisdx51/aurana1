@@ -173,6 +173,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         'is_online': false,
         'last_seen': DateTime.now().toIso8601String(), // Save last active time
       }).eq('id', user.id);
+      print("❌ User is now OFFLINE");
     }
   }
 
