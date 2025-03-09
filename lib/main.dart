@@ -272,7 +272,7 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "User"),
       SoulJourneyScreen(userId: widget.userId),
-      ProfileScreen(userId: widget.userId),
+      ProfileScreen(userId: widget.userId), // ✅ Pass user ID properly
       FriendsPage(),
       AuraCatcherScreen(),
       SpiritualGuidanceScreen(),
@@ -281,13 +281,11 @@ class _MainScreenState extends State<MainScreen> {
     ];
   }
 
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +294,7 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: _screens,
       ),
-      bottomNavigationBar: CustomNavBar(
+      bottomNavigationBar: CustomNavBar( // ✅ This ensures the nav bar is always there
         selectedIndex: _selectedIndex,
         onItemTapped: _onItemTapped,
       ),
