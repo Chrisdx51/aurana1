@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import '../services/supabase_service.dart'; // Import SupabaseService
+import '../widgets/animated_background.dart'; // ✅ Import the Animated Background
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -103,9 +104,6 @@ class _AuthScreenState extends State<AuthScreen> {
           // ✅ Save FCM Token
           await saveFCMToken();
 
-          // ✅ Mark user as online
-          await supabaseService.updateOnlineStatus(true);
-
           if (profileComplete) {
             // ✅ Redirect to Home Screen if complete
             Navigator.pushReplacement(
@@ -130,6 +128,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => _isLoading = false);
   }
+
 
   // 🔥 Save FCM Token
   Future<void> saveFCMToken() async {
@@ -160,12 +159,15 @@ class _AuthScreenState extends State<AuthScreen> {
       body: Stack(
         children: [
           // 📌 Background Image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/media/bg2.png',
-              fit: BoxFit.cover,
-            ),
-          ),
+         // Positioned.fill(
+          //  child: Image.asset(
+            //  'assets/images/bg0.gif',
+           //   fit: BoxFit.cover,
+          //  ),
+        //  ),
+          // 📌 Use Optimized Animated Background
+          Positioned.fill(child: AnimatedBackground()),
+
 
           // 📌 Login Form
           Center(

@@ -406,6 +406,27 @@ class SupabaseService {
     }
   }
 
+  Future<bool> restoreSession() async {
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        print("🔄 Session Restored!");
+        return true;
+      } else {
+        print("❌ No active session found! User must log in.");
+        return false;
+      }
+    } catch (error) {
+      print("❌ Error restoring session: $error");
+      return false;
+    }
+  }
+
+
+
+
+  // ✅ Update User Profile
+
   // ✅ Set User Online/Offline
   Future<void> updateOnlineStatus(bool isOnline) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
