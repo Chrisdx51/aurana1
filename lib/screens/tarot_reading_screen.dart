@@ -210,7 +210,7 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/parchment_background.png'),
+                image: AssetImage('assets/images/27.png'),
                 fit: BoxFit.cover,
               ),
             ),
@@ -223,7 +223,7 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
                 Text(
                   'Your Tarot Reading',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -353,7 +353,7 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
                   selectedCards.length < 3
                       ? "🔮 Choose three cards to unlock your reading! 🔮"
                       : "✨ Your fate is revealed! ✨",
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontStyle: FontStyle.italic),
+                  style: TextStyle(color: Colors.yellowAccent, fontSize: 18, fontStyle: FontStyle.italic),
                 ),
                 SizedBox(height: 20),
               ],

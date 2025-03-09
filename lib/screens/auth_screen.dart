@@ -5,6 +5,7 @@ import 'home_screen.dart';
 import 'profile_screen.dart';
 import '../services/supabase_service.dart'; // Import SupabaseService
 import '../widgets/animated_background.dart'; // ✅ Import the Animated Background
+import 'package:aurana/main.dart';
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -105,12 +106,13 @@ class _AuthScreenState extends State<AuthScreen> {
           await saveFCMToken();
 
           if (profileComplete) {
-            // ✅ Redirect to Home Screen if complete
+            // ✅ Redirect to Main Screen (with Navigation Bar)
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => HomeScreen(userName: email)),
+              MaterialPageRoute(builder: (context) => MainScreen(userId: userId)), // ✅ Correct destination
             );
-          } else {
+          }
+          else {
             // ✅ Redirect to Profile Setup if incomplete
             _showMessage("⚠️ Profile incomplete! Redirecting to Profile Setup...");
             Navigator.pushReplacement(
@@ -128,7 +130,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => _isLoading = false);
   }
-
 
   // 🔥 Save FCM Token
   Future<void> saveFCMToken() async {
@@ -158,16 +159,8 @@ class _AuthScreenState extends State<AuthScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 📌 Background Image
-         // Positioned.fill(
-          //  child: Image.asset(
-            //  'assets/images/bg0.gif',
-           //   fit: BoxFit.cover,
-          //  ),
-        //  ),
           // 📌 Use Optimized Animated Background
           Positioned.fill(child: AnimatedBackground()),
-
 
           // 📌 Login Form
           Center(
@@ -176,30 +169,63 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // ✅ Typing Effect for "Aurana"
+                  _typingEffect(),
+                  const SizedBox(height: 20),
+
                   _buildInputField(_emailController, "Email Address", Icons.email),
                   const SizedBox(height: 10),
                   _buildInputField(_passwordController, "Password", Icons.lock, obscureText: true),
                   const SizedBox(height: 20),
+
+                  // 📌 Gradient Login/Sign-up Button
                   _isLoading
                       ? const CircularProgressIndicator()
-                      : ElevatedButton(
-                    onPressed: _authenticate,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF22A45D),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      : Container(
+                    width: 200, // ✅ Smaller button width
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blue, Colors.white], // ✅ Blue-to-white gradient
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _authenticate,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        _isSignUp ? "Sign Up" : "Log In",
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    child: Text(_isSignUp ? "Sign Up" : "Log In"),
                   ),
+
                   const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => setState(() => _isSignUp = !_isSignUp),
-                    child: Text(
-                      _isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up",
-                      style: const TextStyle(color: Colors.blue),
+
+                  // 📌 Transparent Box for Sign In/Sign Up Toggle
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5), // ✅ Semi-transparent black
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: TextButton(
+                      onPressed: () => setState(() => _isSignUp = !_isSignUp),
+                      child: Text(
+                        _isSignUp ? "Already a user? Log In" : "Don't have an account? Sign Up",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],
@@ -210,25 +236,35 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+}
 
-  Widget _buildInputField(TextEditingController controller, String label, IconData icon,
-      {bool obscureText = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9), // ✅ Make fields readable over background
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.blue),
-          border: InputBorder.none,
-          labelText: label,
-        ),
+
+// ✅ Typing Effect for "Aurana"
+  Widget _typingEffect() {
+    return Text(
+      "Aurana",
+      style: TextStyle(
+        fontSize: 36,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        shadows: [Shadow(blurRadius: 10, color: Colors.white)],
       ),
     );
   }
-}
+
+  // ✅ Fixed: Restored missing _buildInputField method
+  Widget _buildInputField(TextEditingController controller, String label, IconData icon,
+      {bool obscureText = false}) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.blue),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
