@@ -422,10 +422,17 @@ class SupabaseService {
     }
   }
 
+  Future<void> signOutUser() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      await Supabase.instance.client.from('profiles').update({
+        'is_online': false,
+        'last_seen': DateTime.now().toIso8601String(),
+      }).eq('id', user.id);
+    }
+    await Supabase.instance.client.auth.signOut();
+  }
 
-
-
-  // ✅ Update User Profile
 
   // ✅ Set User Online/Offline
   Future<void> updateOnlineStatus(bool isOnline) async {
