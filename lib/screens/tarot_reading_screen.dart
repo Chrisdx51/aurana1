@@ -55,16 +55,11 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
   Timer? countdownTimer;
   Duration? remainingTime;
   late AudioPlayer _audioPlayer;
-  late AnimationController _backButtonController;
 
   @override
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
-    _backButtonController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 500),
-    )..repeat(reverse: true);
     _loadLastReadingTime();
   }
 
@@ -72,7 +67,6 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
   void dispose() {
     countdownTimer?.cancel();
     _audioPlayer.dispose();
-    _backButtonController.dispose();
     super.dispose();
   }
 
@@ -363,40 +357,6 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> with SingleTick
                 ),
                 SizedBox(height: 20),
               ],
-            ),
-          ),
-          Positioned(
-            top: 20,
-            left: 20,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => HomeScreen(
-                      userName: Supabase.instance.client.auth.currentUser?.email ?? "Guest",
-                    ),
-                  ),
-                );
-              },
-              child: ScaleTransition(
-                scale: Tween(begin: 0.9, end: 1.1).animate(_backButtonController),
-                child: Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.8),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 4,
-                        offset: Offset(2, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(Icons.arrow_back, size: 30, color: Colors.black),
-                ),
-              ),
             ),
           ),
         ],

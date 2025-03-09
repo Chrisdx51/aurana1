@@ -93,7 +93,14 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
           _spiritualXP = profile.spiritualXP ?? 0;
           _spiritualLevel = profile.spiritualLevel ?? 1;
           _isLoading = false;
+
+          // ✅ Fix: Initialize _selectedDOB properly
+          if (profile.dob != null && profile.dob!.isNotEmpty) {
+            _selectedDOB = DateTime.tryParse(profile.dob!);
+            _zodiacSign = _selectedDOB != null ? _getZodiacSign(_selectedDOB!) : null;
+          }
         });
+
 
         // ✅ Load achievements AFTER user is loaded
         _loadAchievements();
@@ -226,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => AuthScreen()));
   }
 
-  Future<void> _pickDate() async {
+  void _pickDate() async {
     DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDOB ?? DateTime(2000),
@@ -244,16 +251,17 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
         widget.userId,
         _nameController.text,
         _bioController.text,
-        DateFormat('yyyy-MM-dd').format(pickedDate),
+        DateFormat('yyyy-MM-dd').format(pickedDate), // ✅ Fix: Save formatted DOB
         user?.icon ?? '',
         _spiritualPathController.text,
         _selectedElement,
-        _selectedPrivacy ?? "public", // ✅ Ensures a valid string
+        _selectedPrivacy ?? "public",
         _spiritualXP,
         _spiritualLevel,
       );
     }
   }
+
 
   String _getZodiacSign(DateTime dob) {
     int day = dob.day;

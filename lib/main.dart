@@ -123,7 +123,9 @@ class AuranaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Aurana App',
       theme: ThemeData(primarySwatch: Colors.teal),
-      home: SplashScreen(),
+      //home: SplashScreen(),
+      home: AuthGate(),  // ✅ Go directly to login or home
+
     );
   }
 }
@@ -177,10 +179,20 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   Future<void> _checkSession() async {
     await Future.delayed(Duration(seconds: 2));
 
-    final user = Supabase.instance.client.auth.currentUser;
+    bool sessionRestored = await supabaseService.restoreSession();
 
+    if (!sessionRestored) {
+      print("❌ No session found. Redirecting to login.");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => AuthScreen()),
+      );
+      return;
+    }
+
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      print("❌ User is null. Redirecting to login.");
+      print("❌ No user found. Redirecting to login.");
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => AuthScreen()),
@@ -193,24 +205,24 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     // ✅ Set user as ONLINE in Supabase
     await Supabase.instance.client.from('profiles').update({
       'is_online': true,
-      'last_seen': null, // Reset last seen when user logs in
+      'last_seen': null,
     }).eq('id', userId);
 
     // 🔍 Check if the user has completed their profile
     final response = await Supabase.instance.client
         .from('profiles')
-        .select('username, bio, dob')
+        .select('name, bio, dob')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
     if (response == null ||
-        response['username'] == null ||
+        response['name'] == null ||
         response['bio'] == null ||
         response['dob'] == null ||
-        response['username'].toString().trim().isEmpty ||
+        response['name'].toString().trim().isEmpty ||
         response['bio'].toString().trim().isEmpty ||
         response['dob'].toString().trim().isEmpty) {
-      print("❌ Incomplete Profile! Redirecting to Profile Completion Screen.");
+      print("❌ Incomplete Profile! Redirecting to Profile Setup.");
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -221,10 +233,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     }
 
     // ✅ User has completed profile → Proceed to Main Screen
-    setState(() {
-      _isChecking = false;
-    });
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -232,6 +240,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -263,27 +272,22 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "User"),
       SoulJourneyScreen(userId: widget.userId),
-      ProfileScreen(userId: Supabase.instance.client.auth.currentUser!.id), // ✅ Pass user ID
-      FriendsPage(), // ✅ Only one Friends Page now
+      ProfileScreen(userId: widget.userId),
+      FriendsPage(),
       AuraCatcherScreen(),
       SpiritualGuidanceScreen(),
       TarotReadingScreen(),
-      MoreMenuScreen(), // ✅ More Menu for extra features
+      MoreMenuScreen(),
     ];
   }
 
+
   void _onItemTapped(int index) {
-    if (index == 7) {  // 7 is the More button index
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => MoreMenuScreen()),
-      );
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
+    setState(() {
+      _selectedIndex = index;
+    });
   }
+
 
   @override
   Widget build(BuildContext context) {
