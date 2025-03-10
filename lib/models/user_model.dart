@@ -8,6 +8,7 @@ class UserModel {
   final String? spiritualPath; // ✅ Spiritual Path
   final String? element; // ✅ Elemental Connection
   final String? privacy; // 🔒 Profile Privacy Setting (public, friends_only, private)
+  final String? lastSeen; // ✅ Add this field
   final int spiritualXP; // ✅ Spiritual XP
   final int spiritualLevel; // ✅ Spiritual Level (New)
   final List<String>? friends;
@@ -33,6 +34,7 @@ class UserModel {
     this.giftInventory,
     this.isJourneyPublic,
     this.privacy, // ✅ Added privacy
+    this.lastSeen, // ✅ Nullable last seen
   });
 
   // ✅ Convert JSON Data from Supabase
@@ -54,6 +56,7 @@ class UserModel {
       giftInventory: List<Map<String, dynamic>>.from(json['gift_inventory'] ?? []),
       isJourneyPublic: json['is_journey_public'] ?? true,
       privacy: json['privacy'] as String? ?? 'public', // ✅ Added privacy
+      lastSeen: json['last_seen'], // ✅ FIXED: Corrected `data` to `json`
     );
   }
 
@@ -75,6 +78,7 @@ class UserModel {
       'gift_inventory': giftInventory,
       'is_journey_public': isJourneyPublic,
       'is_online': isOnline, // ✅ Fix: Added to JSON output
+      'last_seen': lastSeen, // ✅ Ensure last_seen is saved
     };
   }
 
@@ -95,7 +99,7 @@ class UserModel {
     List<Map<String, dynamic>>? giftInventory,
     bool? isJourneyPublic,
     bool? isOnline, // ✅ Fix: Added isOnline
-
+    String? lastSeen, // ✅ Added to copyWith
   }) {
     return UserModel(
       id: this.id,
@@ -114,6 +118,7 @@ class UserModel {
       isJourneyPublic: isJourneyPublic ?? this.isJourneyPublic,
       privacy: privacy ?? this.privacy, // ✅ Added privacy
       isOnline: isOnline ?? this.isOnline, // ✅ Fix: Ensure isOnline can be updated
+      lastSeen: lastSeen ?? this.lastSeen,
     );
   }
 }

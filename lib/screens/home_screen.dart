@@ -11,6 +11,9 @@ import 'moon_cycle_screen.dart';
 import 'soul_journey_screen.dart';
 import 'user_discovery_screen.dart';
 import 'friends_page.dart';
+import 'business_profile_page.dart';
+import 'submit_service_page.dart';
+import 'all_ads_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -26,9 +29,10 @@ class _HomeScreenState extends State<HomeScreen> {
   UserModel? user;
   bool _isLoading = true;
   bool _hasError = false;
-  double _buttonScale = 1.0;
+  double _buttonScale = 1.0; // ✅ Tracks button press animation
   Timer? _inactivityTimer; // ✅ Track inactivity timer
   Timer? _periodicTimer; // ✅ Periodic timer for marking offline
+  bool _isPanelOpen = false; // ✅ Tracks if the recent users panel is open
 
   final List<String> backgroundImages = [
     'assets/images/bg1.png',
@@ -191,28 +195,184 @@ class _HomeScreenState extends State<HomeScreen> {
               fit: BoxFit.cover,
             ),
           ),
-          child: Column(
-            children: [
-              SizedBox(height: 20),
-              _buildGreetingSection(),
-              SizedBox(height: 20),
-              _buildAnimatedButtons(userId),
-              SizedBox(height: 20),
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(child: _buildInspirationSection()),
-                    SizedBox(width: 10),
-                    Expanded(child: _buildRecentUsersSection()),
-                  ],
+          child: SingleChildScrollView( // ✅ Make page scrollable!
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 20),
+                  _buildGreetingSection(),
+                  SizedBox(height: 20),
+                  _buildAnimatedButtons(userId),
+                  SizedBox(height: 20),
+                  _buildAdCarousel(),
+                  SizedBox(height: 20),
+// "See All Ads" Button
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => AllAdsPage()), // ✅ Make sure you have imported this page
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurpleAccent, // Button color
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 5,
+                      ),
+                      child: Text(
+                        'See All Ads',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20), // Adjust height if you want more or less space
+                  // ❌ DO NOT wrap in Expanded inside SingleChildScrollView
+                  Container(
+                    height: 300,  // ✅ You can adjust the height later!
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildInspirationSection()),
+                        SizedBox(width: 10),
+                        Expanded(child: _buildRecentUsersSection()),
+                      ],
+                    ),
+                  ),
+
+
+                  SizedBox(height: 40), // ✅ Bottom spacing for scrolling
+                ],
+              ),
+            ),
+          ),
+        ),
+
+      ),
+    );
+  }
+
+  Widget _buildAdCarousel() {
+    return Container(
+      height: 180,
+      margin: EdgeInsets.symmetric(vertical: 10),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildAdCard(isCallToAction: true),   // CTA Card (First)
+          _buildAdCard(),                      // Placeholder Ad
+          _buildAdCard(),                      // Placeholder Ad
+          _buildAdCard(isCallToAction: true),   // CTA Card (Last)
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdCard({bool isCallToAction = false}) {
+    return GestureDetector(
+      onTap: () {
+        print('Tapped! isCallToAction: $isCallToAction'); // 👈 Add this for debugging!
+
+        if (isCallToAction) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SubmitYourServicePage()),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BusinessProfilePage(
+                name: 'Celestial Healer',
+                serviceType: 'Tarot Reader',
+                tagline: 'Unlock your destiny!',
+                description: 'I am an experienced Tarot Reader helping you find clarity and purpose in life. Connect with your higher self today!',
+                profileImageUrl: 'https://i.pravatar.cc/300',
+                rating: 4.5,
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: 140,
+        height: 180,
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isCallToAction
+                ? [Colors.amberAccent, Colors.orangeAccent]
+                : [Colors.deepPurpleAccent.withOpacity(0.8), Colors.indigo.withOpacity(0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: Offset(2, 4),
+            ),
+          ],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: EdgeInsets.all(10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              isCallToAction ? Icons.add_circle_outline : Icons.auto_awesome,
+              size: 40,
+              color: Colors.white,
+            ),
+            SizedBox(height: 10),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                isCallToAction ? "✨ Place Your Ad Here! ✨" : "Spiritual Guide",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
               ),
-            ],
-          ),
+            ),
+            if (isCallToAction)
+              SizedBox(height: 8),
+            if (isCallToAction)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      "Share your spiritual services with the community!",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
+
 
   Widget _buildAnimatedButtons(String? userId) {
     return Column(
@@ -243,11 +403,14 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _buttonScale = 0.9; // Shrink animation
         });
+
         Future.delayed(Duration(milliseconds: 200), () {
+          if (!mounted) return;
           setState(() {
             _buttonScale = 1.0; // Reset scale
           });
         });
+
         _navigateToPage(page);
       },
       child: AnimatedContainer(
@@ -302,10 +465,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               'Welcome back, ${user?.name ?? "Guest"}!',
               style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.white,
-              ),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.white),
             ),
           ),
         ],
@@ -321,13 +483,17 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             "✨ Daily Affirmations ✨",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+            textAlign: TextAlign.center,
           ),
           SizedBox(height: 10),
-          Expanded(
+
+          // ✅ Wrap Affirmations in Flexible
+          Flexible(
             child: ListView(
               children: [
                 _buildAffirmation("I am at peace with my past and embrace my future."),
@@ -336,10 +502,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+
         ],
       ),
     );
   }
+
 
   Widget _buildAffirmation(String text) {
     return Padding(
@@ -352,70 +520,136 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentUsersSection() {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          Text(
-            "👤 Recent Users",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          SizedBox(height: 10),
-          Expanded(
-            child: FutureBuilder<List<UserModel>>(
-              future: supabaseService.getRecentUsers(5), // ✅ Fetch last 5 users
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator()); // ✅ Show loader while fetching
-                }
-                final users = snapshot.data!;
-
-                if (users.isEmpty) {
-                  return Center(child: Text("No recent users yet!", style: TextStyle(color: Colors.white)));
-                }
-
-                return SizedBox(
-                  height: 100, // ✅ Prevents stacking
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: users.length,
-                    itemBuilder: (context, index) {
-                      final user = users[index];
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => ProfileScreen(userId: user.id)),
-                          );
-                        },
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 30,
-                                backgroundImage: (user.icon != null && user.icon!.isNotEmpty)
-                                    ? NetworkImage(user.icon!)
-                                    : AssetImage("assets/default_avatar.png") as ImageProvider,
-                              ),
-                              SizedBox(height: 5),
-                              Text(user.name, style: TextStyle(fontSize: 14, color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+    return Stack(
+      children: [
+        // ✅ Slide-Out Panel
+        AnimatedPositioned(
+          duration: Duration(milliseconds: 300),
+          left: _isPanelOpen ? 0 : -250, // ✅ Slide from left
+          top: 0,
+          bottom: 0,
+          child: GestureDetector(
+            onTap: () {
+              if (!mounted) return;
+              setState(() {
+                _isPanelOpen = false;
+              });
+            },
+            child: Container(
+              width: 200,
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8), // ✅ Dark background
+                borderRadius: BorderRadius.only(topRight: Radius.circular(10), bottomRight: Radius.circular(10)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "👤 Recent Users",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
-                );
-              },
+                  SizedBox(height: 10),
+                  Expanded(
+                    child: FutureBuilder<List<UserModel>>(
+                      future: supabaseService.getRecentUsers(10), // ✅ Fetch last 10 users
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+
+                        final users = snapshot.data!;
+                        if (users.isEmpty) {
+                          return Center(child: Text("No recent users yet!", style: TextStyle(color: Colors.white)));
+                        }
+
+                        return ListView.builder(
+                          itemCount: users.length,
+                          itemBuilder: (context, index) {
+                            final user = users[index];
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() => _isPanelOpen = false);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => ProfileScreen(userId: user.id)),
+                                );
+                              },
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Column( // ✅ NEW layout here!
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundImage: (user.icon != null && user.icon!.isNotEmpty)
+                                          ? NetworkImage(user.icon!)
+                                          : AssetImage("assets/default_avatar.png") as ImageProvider,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(user.name, style: TextStyle(fontSize: 14, color: Colors.white)),
+                                        Text(
+                                          user.isOnline == true
+                                              ? "🟢 Online"
+                                              : (user.lastSeen != null
+                                              ? "🔴 Last Seen: ${_formatLastSeen(user.lastSeen!)}"
+                                              : "🔴 Last Seen: Unknown"),
+                                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+
+
+        // ✅ Open Panel Button
+        Positioned(
+          left: 0,
+          top: 20,
+          child: IconButton(
+            icon: Icon(Icons.chevron_right, size: 30, color: Colors.white),
+            onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
+          ),
+        ),
+      ],
     );
   }
 }
+
+// ✅ Format lastSeen as 'X time ago' or a friendly date
+String _formatLastSeen(String isoDateString) {
+  try {
+    DateTime lastSeenTime = DateTime.parse(isoDateString);
+    Duration difference = DateTime.now().difference(lastSeenTime);
+
+    if (difference.inMinutes < 1) {
+      return "Just now";
+    } else if (difference.inMinutes < 60) {
+      return "${difference.inMinutes} min ago";
+    } else if (difference.inHours < 24) {
+      return "${difference.inHours} hrs ago";
+    } else if (difference.inDays == 1) {
+      return "Yesterday";
+    } else {
+      return "${difference.inDays} days ago";
+    }
+  } catch (e) {
+    print("❌ Error parsing lastSeen: $e");
+    return "Unknown";
+  }
+}
+
+
+
