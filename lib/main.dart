@@ -20,6 +20,7 @@ import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
 import '../widgets/custom_nav_bar.dart'; // Import custom navigation bar
 import 'screens/splash_screen.dart';  // ✅ Import splash screen
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -53,6 +54,15 @@ void main() async {
     print("🔄 Loading environment variables...");
     await dotenv.load(fileName: ".env");
     print("✅ Environment variables loaded!");
+
+    // Initialize In-App Purchase Connection
+    final bool available = await InAppPurchase.instance.isAvailable();
+
+    if (!available) {
+      print("❌ In-App Purchase not available on this device.");
+    } else {
+      print("✅ In-App Purchase is available!");
+    }
 
     // ✅ Load OpenAI API Key from the environment
     final String? openAiKey = dotenv.env['OPENAI_API_KEY']; // ✅ Fetch key properly
@@ -116,6 +126,7 @@ void main() async {
   }
 }
 
+
 class AuranaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -129,6 +140,7 @@ class AuranaApp extends StatelessWidget {
     );
   }
 }
+
 
 class AuthGate extends StatefulWidget {
   @override

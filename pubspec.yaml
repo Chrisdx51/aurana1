@@ -43,6 +43,7 @@ dependencies:
   dart_openai: ^1.0.0
   audioplayers: ^5.2.0  # ✅ Add this line for sound playback
   flutter_launcher_icons: ^0.13.1
+  in_app_purchase: ^3.1.5
 
 flutter_icons:
   android: true
@@ -76,6 +77,7 @@ flutter:
     - assets/images/bg0.png
     - assets/images/27.png
     - assets/images/30.png
+    - assets/images/serv1.png
     - assets/images/profile.png
     - assets/model.tflite
     - .env

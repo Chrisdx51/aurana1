@@ -33,9 +33,12 @@ class SupabaseService {
     try {
       final response = await supabase
           .from('profiles')
-          .select('id, name, icon, is_online') // ✅ Make sure 'is_online' is selected
-          .order('last_active', ascending: false)
+          .select('id, name, icon, is_online, last_seen') // ✅ Make sure 'is_online' is selected
+          .order('last_seen', ascending: false)
           .limit(limit);
+
+      // Cast the response directly
+      final List<dynamic> data = response as List<dynamic>;
 
       return response.map((user) => UserModel.fromJson(user)).toList();
     } catch (error) {
@@ -244,6 +247,41 @@ class SupabaseService {
       return null;
     }
   }
+
+  // ✅ Fetch All Business Ads for the Home Page or Discovery Page
+  Future<List<Map<String, dynamic>>> fetchBusinessAds() async {
+    try {
+      final response = await supabase
+          .from('service_ads')
+          .select('''
+          id,
+          user_id,
+          name,
+          business_name,
+          service_type,
+          tagline,
+          description,
+          price,
+          phone_number,
+          profile_image_url,
+          show_profile,
+          created_at
+        ''')
+          .order('created_at', ascending: false);
+
+      if (response.isEmpty) {
+        print("⚠️ No business ads found.");
+        return [];
+      }
+
+      print("✅ Fetched ${response.length} ads from service_ads.");
+      return List<Map<String, dynamic>>.from(response);
+    } catch (error) {
+      print("❌ Error fetching business ads: $error");
+      return [];
+    }
+  }
+
   // Add Milestone to Supabase Database
   Future<List<MilestoneModel>> fetchMilestones({String? userId, bool global = false}) async {
     try {
