@@ -221,6 +221,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       'last_seen': null,
     }).eq('id', userId);
 
+    // ✅ Get the FCM token
+    String? fcmToken = await FirebaseMessaging.instance.getToken();
+    // ✅ Save the FCM token to Supabase
+    if (fcmToken != null) {
+      await Supabase.instance.client.from('profiles').update({
+        'fcm_token': fcmToken,
+      }).eq('id', userId);
+      print("✅ FCM token saved to Supabase: $fcmToken");
+    } else {
+      print("❌ Failed to get FCM token");
+    }
+
     // 🔍 Check if the user has completed their profile
     final response = await Supabase.instance.client
         .from('profiles')

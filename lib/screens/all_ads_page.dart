@@ -165,7 +165,9 @@ class _AllAdsPageState extends State<AllAdsPage> {
                               tagline: ad['tagline'] ?? '',
                               description: ad['description'] ?? '',
                               profileImageUrl: ad['profile_image_url'] ?? '',
-                              rating: 4.5,
+                              rating: ad['rating'] != null ? double.tryParse(ad['rating'].toString()) ?? 0.0 : 0.0,
+                              adCreatedDate: ad['created_at'] ?? 'Unknown Date',
+                              userId: ad['user_id'] ?? '', // ✅ correct reference!
                             ),
                           ),
                         );

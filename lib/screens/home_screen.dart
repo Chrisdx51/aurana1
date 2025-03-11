@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
@@ -14,6 +16,8 @@ import 'friends_page.dart';
 import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
+import '../services/push_notification_service.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -40,12 +44,18 @@ class _HomeScreenState extends State<HomeScreen> {
     'assets/images/bg3.png',
   ];
 
+  // 1️⃣ Declare your ads list
+  List<Map<String, dynamic>> _ads = [];
+  bool _adsLoading = true;
+
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
     _updateOnlineStatus(); // ✅ Mark user online when app starts
     _resetInactivityTimer(); // ✅ Start tracking inactivity
+
+    _loadAds();  // ✅ Load ads when HomeScreen starts!
 
     // ✅ Auto Mark Offline After 10 Mins of Inactivity
     _periodicTimer = Timer.periodic(Duration(minutes: 10), (timer) async {
@@ -96,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+
   Future<void> _updateOnlineStatus() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
@@ -141,6 +152,41 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+// 2️⃣ Create the function to load ads from Supabase
+  Future<void> _loadAds() async {
+    setState(() {
+      _adsLoading = true;
+    });
+
+    try {
+      final fetchedAds = await SupabaseService().fetchBusinessAds();
+      print("✅ Ads fetched from Supabase: ${fetchedAds.length}"); // <<< This line!
+      print("📝 Raw Ads Data: $fetchedAds");
+
+      final now = DateTime.now();
+
+      final activeAds = fetchedAds.where((ad) {
+        final expiryDate = DateTime.tryParse(ad['expiry_date'] ?? '');
+        return expiryDate == null || expiryDate.isAfter(now);
+      }).toList();
+
+      activeAds.shuffle();
+
+      setState(() {
+        _ads = activeAds.take(4).toList(); // Or just activeAds if you don't want to limit
+        _adsLoading = false;
+      });
+
+      print("✅ Final Ads Loaded: ${_ads.length}");
+
+    } catch (error) {
+      print("❌ Failed to load ads: $error");
+      setState(() {
+        _adsLoading = false;
+      });
+    }
+  }
+
 
   void _navigateToPage(Widget page) {
     Navigator.push(
@@ -152,6 +198,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String getRotatingBackground() {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
+  }
+
+  String _formatDate(String isoDate) {
+    final date = DateTime.parse(isoDate);
+    return "${date.day}/${date.month}/${date.year}";
   }
 
   @override
@@ -211,12 +262,25 @@ class _HomeScreenState extends State<HomeScreen> {
 // "See All Ads" Button
                   Center(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
+                        // ✅ Step 1: Send the notification first
+                        final supabaseService = SupabaseService();
+
+                        // ❗️ REPLACE this with the actual FCM token of your user.
+                        await PushNotificationService.sendPushNotification(
+                          fcmToken: 'put_the_target_fcm_token_here',
+                          title: 'Hello from Aurana!',
+                          body: 'This is a test notification from your app!',
+                        );
+
+
+                        // ✅ Step 2: Navigate to the ads page after sending the notification.
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => AllAdsPage()), // ✅ Make sure you have imported this page
+                          MaterialPageRoute(builder: (context) => AllAdsPage()),
                         );
                       },
+
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.deepPurpleAccent, // Button color
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -261,112 +325,173 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
   Widget _buildAdCarousel() {
     return Container(
-      height: 180,
+      height: 200,
       margin: EdgeInsets.symmetric(vertical: 10),
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        children: [
-          _buildAdCard(isCallToAction: true),   // CTA Card (First)
-          _buildAdCard(),                      // Placeholder Ad
-          _buildAdCard(),                      // Placeholder Ad
-          _buildAdCard(isCallToAction: true),   // CTA Card (Last)
-        ],
+        itemCount: (_ads.isNotEmpty ? _ads.length : 0) + 1, // Always show CTA card!
+        itemBuilder: (context, index) {
+          // ✅ If there are ads, show them first.
+          if (_ads.isNotEmpty && index < _ads.length) {
+            final ad = _ads[index];
+            return _buildAdCard(ad);
+          }
+
+          // ✅ This is always the last card: "Place Your Ad Here!"
+          return _buildCTAAdCard();
+        },
       ),
     );
   }
 
-  Widget _buildAdCard({bool isCallToAction = false}) {
+  Widget _buildAdCard(Map<String, dynamic> ad) {
     return GestureDetector(
-      onTap: () {
-        print('Tapped! isCallToAction: $isCallToAction'); // 👈 Add this for debugging!
-
-        if (isCallToAction) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => SubmitYourServicePage()),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => BusinessProfilePage(
-                name: 'Celestial Healer',
-                serviceType: 'Tarot Reader',
-                tagline: 'Unlock your destiny!',
-                description: 'I am an experienced Tarot Reader helping you find clarity and purpose in life. Connect with your higher self today!',
-                profileImageUrl: 'https://i.pravatar.cc/300',
-                rating: 4.5,
-              ),
+      onTap: () async {   // ✅ Add async here
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BusinessProfilePage(
+              name: ad['name'] ?? '',
+              serviceType: ad['service_type'] ?? '',
+              tagline: ad['tagline'] ?? '',
+              description: ad['description'] ?? '',
+              profileImageUrl: ad['profile_image_url'] ?? '',
+              rating: 4.5,
+              adCreatedDate: ad['created_at'] ?? 'Unknown Date',
+              userId: ad['user_id'] ?? '',
             ),
-          );
+          ),
+        );
+
+        if (result == true) {
+          // ✅ They deleted something! Reload ads.
+          _loadAds();
         }
+
       },
       child: Container(
         width: 140,
-        height: 180,
         margin: EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isCallToAction
-                ? [Colors.amberAccent, Colors.orangeAccent]
-                : [Colors.deepPurpleAccent.withOpacity(0.8), Colors.indigo.withOpacity(0.8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              offset: Offset(2, 4),
-            ),
-          ],
+          color: Colors.black.withOpacity(0.6),
           borderRadius: BorderRadius.circular(16),
         ),
-        padding: EdgeInsets.all(10),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ Space evenly
           children: [
-            Icon(
-              isCallToAction ? Icons.add_circle_outline : Icons.auto_awesome,
-              size: 40,
-              color: Colors.white,
-            ),
-            SizedBox(height: 10),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                isCallToAction ? "✨ Place Your Ad Here! ✨" : "Spiritual Guide",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
+            // IMAGE ✅
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              child: ad['profile_image_url'] != null &&
+                  ad['profile_image_url'].isNotEmpty
+                  ? Image.network(
+                ad['profile_image_url'],
+                height: 100,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              )
+                  : Image.asset(
+                'assets/images/serv1.png',
+                height: 100,
+                width: double.infinity,
+                fit: BoxFit.cover,
               ),
             ),
-            if (isCallToAction)
-              SizedBox(height: 8),
-            if (isCallToAction)
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      "Share your spiritual services with the community!",
-                      textAlign: TextAlign.center,
+
+            // DETAILS ✅
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // SERVICE TYPE
+                    Text(
+                      ad['service_type'] ?? 'Service',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
                       ),
-                      maxLines: 3,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+
+                    // POST DATE
+                    Text(
+                      ad['created_at'] != null
+                          ? 'Posted: ${_formatDate(ad['created_at'])}'
+                          : 'No date',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    // RATING
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.star, size: 12, color: Colors.amber),
+                        SizedBox(width: 2),
+                        Text(
+                          ad['rating'] != null
+                              ? ad['rating'].toString()
+                              : '4.5',
+                          style: TextStyle(fontSize: 10, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+// 👉 CTA "Place Your Ad" Card
+  Widget _buildCTAAdCard() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => SubmitYourServicePage()),
+        );
+      },
+      child: Container(
+        width: 140,
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.amberAccent, Colors.orangeAccent],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_circle_outline, size: 40, color: Colors.white),
+            SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                "✨ Place Your Ad Here! ✨",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
       ),

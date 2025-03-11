@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace = "com.kris.aurana"
-    compileSdkVersion 34 // ✅ Ensure SDK is 34 or higher
-    compileSdk = 34
+    compileSdkVersion 35 // ✅ Ensure SDK is 34 or higher
+    compileSdk = 35
 
     buildFeatures {
         buildConfig true // ✅ Enable BuildConfig for Firebase ML
@@ -16,7 +16,7 @@ android {
     defaultConfig {
         applicationId "com.kris.aurana"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode 1
         versionName "1.0"
     }

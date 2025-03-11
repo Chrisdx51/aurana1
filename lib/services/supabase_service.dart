@@ -1,6 +1,9 @@
+import 'dart:convert'; // ⬅️ Make sure this is at the top of your file
+import 'package:http/http.dart' as http; // ⬅️ Add this import too
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
 import '../models/milestone_model.dart';
 
@@ -405,6 +408,7 @@ class SupabaseService {
     }
   }
 
+
   Future<void> toggleLike(String milestoneId) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -460,6 +464,18 @@ class SupabaseService {
     }
   }
 
+  Future<void> deleteBusinessAd(String ownerId) async {
+    try {
+      await Supabase.instance.client
+          .from('service_ads')
+          .delete()
+          .eq('owner_id', ownerId); // Or adId if you have a separate column!
+    } catch (error) {
+      print('❌ Failed to delete ad: $error');
+      throw error;
+    }
+  }
+
   Future<void> signOutUser() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user != null) {
@@ -489,6 +505,43 @@ class SupabaseService {
     }
   }
 
+  // 🔔 Send Push Notification Function
+  Future<void> sendPushNotification(String fcmToken, String title, String body) async {
+    final String serverKey = dotenv.env['FIREBASE_SERVER_KEY'] ?? '';
+
+    if (serverKey.isEmpty) {
+      print("❌ Firebase Server Key not found in .env!");
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://fcm.googleapis.com/fcm/send'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'key=$serverKey',
+        },
+        body: jsonEncode({
+          'to': fcmToken,
+          'notification': {
+            'title': title,
+            'body': body,
+          },
+          'data': {
+            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+          },
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Push notification sent successfully!');
+      } else {
+        print('❌ Failed to send notification: ${response.body}');
+      }
+    } catch (error) {
+      print('❌ Error sending notification: $error');
+    }
+  }
   // ✅ Update XP & Level
   Future<void> updateSpiritualXP(String userId, int xpEarned) async {
     try {
@@ -795,6 +848,8 @@ class SupabaseService {
     }
   }
 }
+
+
 
 extension on PostgrestTransformBuilder<PostgrestList> {
   void eq(String s, String t) {}
