@@ -16,8 +16,7 @@ import 'friends_page.dart';
 import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
-import '../services/push_notification_service.dart';
-
+import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -54,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadUserProfile();
     _updateOnlineStatus(); // ✅ Mark user online when app starts
     _resetInactivityTimer(); // ✅ Start tracking inactivity
+    _startFriendRequestListener();
 
     _loadAds();  // ✅ Load ads when HomeScreen starts!
 
@@ -68,6 +68,25 @@ class _HomeScreenState extends State<HomeScreen> {
           .update({'is_online': false})
           .eq('id', userId);
     });
+  }
+  void _startFriendRequestListener() {
+    final supabase = Supabase.instance.client;
+
+    final channel = supabase.channel('public:friend_requests');
+
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'friend_requests',
+      callback: (payload) {
+        print('🔔 New friend request received!');
+
+        // Show a snackbar or notification in your app
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('You have a new friend request!')),
+        );
+      },
+    ).subscribe();
   }
 
   @override
@@ -105,7 +124,6 @@ class _HomeScreenState extends State<HomeScreen> {
       print("🔴 User marked as offline due to inactivity.");
     });
   }
-
 
   Future<void> _updateOnlineStatus() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -187,7 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-
   void _navigateToPage(Widget page) {
     Navigator.push(
       context,
@@ -262,27 +279,14 @@ class _HomeScreenState extends State<HomeScreen> {
 // "See All Ads" Button
                   Center(
                     child: ElevatedButton(
-                      onPressed: () async {
-                        // ✅ Step 1: Send the notification first
-                        final supabaseService = SupabaseService();
-
-                        // ❗️ REPLACE this with the actual FCM token of your user.
-                        await PushNotificationService.sendPushNotification(
-                          fcmToken: 'put_the_target_fcm_token_here',
-                          title: 'Hello from Aurana!',
-                          body: 'This is a test notification from your app!',
-                        );
-
-
-                        // ✅ Step 2: Navigate to the ads page after sending the notification.
+                      onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => AllAdsPage()),
                         );
                       },
-
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurpleAccent, // Button color
+                        backgroundColor: Colors.deepPurpleAccent,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
@@ -299,32 +303,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(height: 20), // Adjust height if you want more or less space
-                  // ❌ DO NOT wrap in Expanded inside SingleChildScrollView
-                  Container(
-                    height: 300,  // ✅ You can adjust the height later!
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _buildInspirationSection()),
-                        SizedBox(width: 10),
-                        Expanded(child: _buildRecentUsersSection()),
-                      ],
-                    ),
-                  ),
-
-
                   SizedBox(height: 40), // ✅ Bottom spacing for scrolling
                 ],
               ),
             ),
           ),
         ),
-
       ),
     );
   }
-
 
   Widget _buildAdCarousel() {
     return Container(

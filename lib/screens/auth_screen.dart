@@ -5,7 +5,7 @@ import 'home_screen.dart';
 import 'profile_screen.dart';
 import '../services/supabase_service.dart'; // Import SupabaseService
 import '../widgets/animated_background.dart'; // ✅ Import the Animated Background
-import 'package:aurana/main.dart';
+import '../../main.dart';
 
 class AuthScreen extends StatefulWidget {
   @override

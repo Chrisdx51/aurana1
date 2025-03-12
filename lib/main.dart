@@ -51,6 +51,9 @@ void _showNotification(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    await Firebase.initializeApp();
+
+
     print("🔄 Loading environment variables...");
     await dotenv.load(fileName: ".env");
     print("✅ Environment variables loaded!");
@@ -91,6 +94,30 @@ void main() async {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
+    // Add the new FCM token listener
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      print('🔄 Refreshed FCM Token: $newToken');
+
+      final user = Supabase.instance.client.auth.currentUser;
+
+      if (user == null) {
+        print("❌ No logged-in user. Can't save token!");
+        return;
+      }
+
+      try {
+        await Supabase.instance.client
+            .from('profiles')
+            .update({'fcm_token': newToken})
+            .eq('id', user.id);
+
+        print("✅ New FCM token saved to Supabase!");
+      } catch (error) {
+        print("❌ Error saving FCM token to Supabase: $error");
+      }
+    });
+
+
     // 🔥 Initialize Local Notifications
     const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initSettings = InitializationSettings(android: androidInit);
@@ -109,12 +136,27 @@ void main() async {
 
     FirebaseMessaging.instance.getToken().then((token) {
       print("🔥 FCM Token: $token");
+
+    });
+
+    String? fcmToken = await messaging.getToken();
+
+
+    if (fcmToken != null) {
+      print("🔥 NEW FCM Token: $fcmToken");
+    } else {
+      print("❌ No FCM Token generated.");
+    }
+    // ✅ Step 3: Listen for token refresh (optional but good practice)
+    messaging.onTokenRefresh.listen((newToken) {
+      print("🔄 Refreshed FCM Token: $newToken");
     });
 
     // 🔔 Handle foreground notifications
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("🔔 Foreground notification received: ${message.notification?.title}");
       _showNotification(message); // 🔥 Display Notification in Foreground
+
     });
 
     print("✅ Firebase initialized!");

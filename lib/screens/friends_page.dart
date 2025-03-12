@@ -10,277 +10,270 @@ class FriendsPage extends StatefulWidget {
 
 class _FriendsPageState extends State<FriendsPage> {
   final SupabaseClient supabase = Supabase.instance.client;
+
   List<Map<String, dynamic>> friends = [];
-  List<Map<String, dynamic>> receivedFriendRequests = [];
-  List<Map<String, dynamic>> blockedUsers = []; // ✅ Blocked users list
-  bool isLoading = true;
-  String searchQuery = "";
-  int _pendingFriendRequestsCount = 0;
+  List<Map<String, dynamic>> suggestedFriends = [];
+  String searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     fetchFriends();
-    fetchBlockedUsers();
-    refreshNotifications();
+    fetchSuggestedFriends();
   }
 
-  Future<void> refreshNotifications() async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    try {
-      final countResponse = await supabase
-          .from('friend_requests')
-          .select()
-          .eq('receiver_id', userId)
-          .eq('status', 'pending');
-
-      setState(() {
-        _pendingFriendRequestsCount = countResponse.length;
-      });
-    } catch (error) {
-      print("❌ Error refreshing notifications: $error");
-    }
-  }
-
-  // ✅ Fetch Friends & Friend Requests
   Future<void> fetchFriends() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    setState(() {
-      isLoading = true;
-    });
-
     try {
-      final friendsResponse = await supabase
+      final response = await supabase
           .from('relations')
           .select('friend_id, friend:profiles!fk_friend(id, name, icon)')
           .or('user_id.eq.${user.id}, friend_id.eq.${user.id}')
-          .eq('status', 'accepted')
-          .order('created_at', ascending: false);
+          .eq('status', 'accepted');
 
-      List<Map<String, dynamic>> formattedFriends = friendsResponse
+      final formattedFriends = response
           .map((relation) => relation['friend'] as Map<String, dynamic>)
           .where((friend) => friend['id'] != user.id)
           .toList();
 
-      final requestsResponse = await supabase
-          .from('friend_requests')
-          .select('sender_id, sender:profiles!fk_sender(id, name, icon)')
-          .eq('receiver_id', user.id)
-          .eq('status', 'pending');
-
-      List<Map<String, dynamic>> formattedRequests = requestsResponse
-          .map((request) => request['sender'] as Map<String, dynamic>)
-          .toList();
-
-      setState(() {
-        friends = formattedFriends;
-        receivedFriendRequests = formattedRequests;
-        isLoading = false;
-      });
+      setState(() => friends = formattedFriends);
     } catch (error) {
       print("❌ Error fetching friends: $error");
-      setState(() {
-        isLoading = false;
-      });
     }
   }
 
-
-  // ✅ Fetch Blocked Users
-  Future<void> fetchBlockedUsers() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
+  Future<void> fetchSuggestedFriends() async {
     try {
-      final blockedResponse = await supabase
-          .from('blocked_users')
-          .select('blocked_id, blocked:profiles!blocked_id(id, name, icon)')
-          .eq('blocker_id', user.id);
-
-      setState(() {
-        blockedUsers = blockedResponse
-            .map((entry) => entry['blocked'] as Map<String, dynamic>)
-            .cast<Map<String, dynamic>>()
-            .toList();
-      });
-
-      print("✅ Blocked users loaded: ${blockedUsers.length}");
+      final response = await supabase.from('profiles').select('id, name, icon').limit(5);
+      setState(() => suggestedFriends = response);
     } catch (error) {
-      print("❌ Error fetching blocked users: $error");
-    }
-  }
-
-  // ✅ Block a User
-  Future<void> blockUser(String blockedId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await supabase.from('blocked_users').insert({
-        'blocker_id': user.id,
-        'blocked_id': blockedId,
-      });
-
-      await supabase.from('relations').delete().or(
-          'and(user_id.eq.${user.id},friend_id.eq.$blockedId),and(user_id.eq.$blockedId,friend_id.eq.${user.id})');
-
-      print("✅ User blocked successfully!");
-
-      await fetchFriends();
-      await fetchBlockedUsers();
-    } catch (error) {
-      print("❌ Error blocking user: $error");
-    }
-  }
-
-  // ✅ Unblock a User
-  Future<void> unblockUser(String blockedId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await supabase
-          .from('blocked_users')
-          .delete()
-          .eq('blocker_id', user.id)
-          .eq('blocked_id', blockedId);
-
-      print("✅ User unblocked successfully!");
-
-      await fetchBlockedUsers();
-      await fetchFriends();
-    } catch (error) {
-      print("❌ Error unblocking user: $error");
+      print("❌ Error fetching suggested friends: $error");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg2.png',
+      body: SafeArea(
+        child: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/bg2.png'),
               fit: BoxFit.cover,
             ),
           ),
-          Column(
-            children: [
-              AppBar(
-                title: Text('My Friends'),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Search Friends',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  onChanged: (query) {
-                    setState(() {
-                      searchQuery = query.toLowerCase();
-                    });
-                  },
-                ),
-              ),
-
-              Expanded(
-                child: ListView(
-                  children: [
-                    // ✅ Blocked Users Section
-                    if (blockedUsers.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Text(
-                          "Blocked Users",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Friends',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                      ...blockedUsers.map(
-                            (blockedUser) => ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: blockedUser['icon'] != null
-                                ? NetworkImage(blockedUser['icon'])
-                                : AssetImage('assets/default_avatar.png') as ImageProvider,
-                          ),
-                          title: Text(blockedUser['name']),
-                          trailing: IconButton(
-                            icon: Icon(Icons.lock_open, color: Colors.orange, size: 28),
-                            onPressed: () async {
-                              await unblockUser(blockedUser['id']);
-                            },
-                          ),
-                        ),
-                      ),
+                      Icon(Icons.notifications_none, color: Colors.white, size: 28),
                     ],
+                  ),
 
-                    // ✅ Friends List
-                    ...friends.map(
-                          (friend) => Card(
-                        margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: friend['icon'] != null
-                                ? NetworkImage(friend['icon'])
-                                : AssetImage('assets/default_avatar.png') as ImageProvider,
-                          ),
-                          title: Text(friend['name']),
-                          trailing: Wrap(
-                            spacing: 8,
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.person, color: Colors.teal, size: 28),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ProfileScreen(userId: friend['id']),
-                                    ),
-                                  );
-                                },
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.message, color: Colors.blue, size: 28),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ChatScreen(
-                                        receiverId: friend['id'],
-                                        receiverName: friend['name'],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.block, color: Colors.red, size: 28),
-                                onPressed: () async {
-                                  await blockUser(friend['id']);
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
+                  SizedBox(height: 20),
+
+                  // Search Bar
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: TextField(
+                      onChanged: (value) => setState(() => searchQuery = value.toLowerCase()),
+                      decoration: InputDecoration(
+                        icon: Icon(Icons.search, color: Colors.grey),
+                        hintText: 'Search friends...',
+                        border: InputBorder.none,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  SizedBox(height: 30),
+
+                  // Friends Grid
+                  _buildSectionTitle('My Friends'),
+                  SizedBox(height: 10),
+                  friends.isEmpty
+                      ? _buildEmptyState('No friends found.')
+                      : _buildFriendsGrid(friends),
+
+                  SizedBox(height: 30),
+
+                  // Suggested Friends
+                  _buildSectionTitle('Suggested Friends'),
+                  SizedBox(height: 10),
+                  suggestedFriends.isEmpty
+                      ? _buildEmptyState('No suggestions available.')
+                      : _buildSuggestedFriendsList(suggestedFriends),
+
+                  SizedBox(height: 50),
+                ],
               ),
-            ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --------------------------
+  // Helper Widgets Below Here
+  // --------------------------
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Text(
+        message,
+        style: TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+
+  Widget _buildFriendsGrid(List<Map<String, dynamic>> friendList) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(), // parent scroll view handles scrolling
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: friendList.length,
+      itemBuilder: (context, index) {
+        final friend = friendList[index];
+        return _buildFriendCard(friend);
+      },
+    );
+  }
+
+  Widget _buildFriendCard(Map<String, dynamic> friend) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFFB0E0E6).withOpacity(0.8),
+            Colors.white.withOpacity(0.7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 6,
+            offset: Offset(2, 2),
           ),
         ],
       ),
+      padding: EdgeInsets.all(12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircleAvatar(
+            radius: 35,
+            backgroundImage: friend['icon'] != null
+                ? NetworkImage(friend['icon'])
+                : AssetImage('assets/default_avatar.png') as ImageProvider,
+          ),
+          SizedBox(height: 12),
+          Text(
+            friend['name'],
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(
+                    receiverId: friend['id'],
+                    receiverName: friend['name'],
+                  ),
+                ),
+              );
+            },
+            icon: Icon(Icons.message, size: 18),
+            label: Text('Chat'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestedFriendsList(List<Map<String, dynamic>> suggestedList) {
+    return Column(
+      children: suggestedList.map((user) {
+        return ListTile(
+          contentPadding: EdgeInsets.symmetric(vertical: 8),
+          leading: CircleAvatar(
+            radius: 25,
+            backgroundImage: user['icon'] != null
+                ? NetworkImage(user['icon'])
+                : AssetImage('assets/default_avatar.png') as ImageProvider,
+          ),
+          title: Text(
+            user['name'],
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          trailing: ElevatedButton(
+            onPressed: () {
+              // Future implementation: send friend request!
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text('Add'),
+          ),
+        );
+      }).toList(),
     );
   }
 }

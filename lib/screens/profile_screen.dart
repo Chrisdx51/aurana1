@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import 'auth_screen.dart';
-import '../main.dart';
+import '../../main.dart';
 import 'friends_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
