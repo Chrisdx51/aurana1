@@ -21,6 +21,7 @@ import 'screens/journal_screen.dart';
 import '../widgets/custom_nav_bar.dart'; // Import custom navigation bar
 import 'screens/splash_screen.dart';  // ✅ Import splash screen
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'screens/soul_match_page.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -338,6 +339,7 @@ class _MainScreenState extends State<MainScreen> {
   void _initializeScreens() {
     _screens = [
       HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "User"),
+      SoulMatchPage(),
       SoulJourneyScreen(userId: widget.userId),
       ProfileScreen(userId: widget.userId), // ✅ Pass user ID properly
       FriendsPage(),

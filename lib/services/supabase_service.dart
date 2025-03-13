@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http; // ⬅️ Add this import too
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart'; // ✅ for PostgresChangeEvent (optional, depends on version)
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
 import '../models/milestone_model.dart';

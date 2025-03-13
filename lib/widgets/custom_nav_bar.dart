@@ -23,6 +23,7 @@ class CustomNavBar extends StatelessWidget {
     return BottomNavigationBar(
       items: [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Soul Match'),
         BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
         BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         BottomNavigationBarItem(
