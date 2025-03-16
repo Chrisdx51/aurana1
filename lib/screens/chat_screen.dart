@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:aurana/services/supabase_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -254,20 +255,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (user == null || _messageController.text.trim().isEmpty) return;
 
     try {
+      // 1️⃣ Insert message into Supabase
       await supabase.from('messages').insert({
         'sender_id': user.id,
         'receiver_id': widget.receiverId,
         'message': _messageController.text.trim(),
         'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'sent', // ✅ Mark message as sent
+        'status': 'sent',
       });
 
+      // 2️⃣ Fetch receiver's FCM token from Supabase
+      final receiverProfile = await supabase
+          .from('profiles')
+          .select('fcm_token')
+          .eq('id', widget.receiverId)
+          .maybeSingle();
+
+      final fcmToken = receiverProfile?['fcm_token'];
+
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        // 3️⃣ Send push notification using SupabaseService function
+        await SupabaseService.sendPushNotification(
+          fcmToken,
+          '💬 New message from ${user.email ?? "Someone"}',
+          _messageController.text.trim(),
+        );
+        print("✅ Push notification sent to receiver");
+      } else {
+        print("⚠️ No FCM token found for receiver");
+      }
+
       _messageController.clear();
-      fetchMessages(); // ✅ Refresh chat after sending
+      fetchMessages(); // ✅ Reload messages in chat
     } catch (error) {
       print("❌ Error sending message: $error");
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

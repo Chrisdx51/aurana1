@@ -12,13 +12,24 @@ class _NotificationPageState extends State<NotificationPage> {
   List<Map<String, dynamic>> friendRequests = [];
   List<Map<String, dynamic>> appNotifications = [];
 
+  late RealtimeChannel _notificationsChannel;
+  int notificationCount = 0;
+
   @override
   void initState() {
     super.initState();
     fetchFriendRequests();
     fetchAppNotifications();
+    setupRealtimeNotifications();
   }
 
+  @override
+  void dispose() {
+    _notificationsChannel.unsubscribe();
+    super.dispose();
+  }
+
+  // ✅ Fetch Friend Requests
   Future<void> fetchFriendRequests() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -38,6 +49,7 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  // ✅ Fetch App Notifications
   Future<void> fetchAppNotifications() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -45,7 +57,7 @@ class _NotificationPageState extends State<NotificationPage> {
     try {
       final response = await supabase
           .from('notifications')
-          .select('id, type, message, created_at')
+          .select('id, type, message, created_at, has_read')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
@@ -57,6 +69,7 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  // ✅ Accept Friend Request
   Future<void> acceptFriendRequest(String requestId, String senderId) async {
     final receiverId = supabase.auth.currentUser?.id;
     if (receiverId == null) return;
@@ -79,6 +92,7 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  // ✅ Decline Friend Request
   Future<void> declineFriendRequest(String requestId) async {
     try {
       await supabase.from('friend_requests').delete().eq('id', requestId);
@@ -89,21 +103,98 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  // ✅ Mark Notification As Read
+  Future<void> markNotificationAsRead(String notificationId) async {
+    try {
+      await supabase
+          .from('notifications')
+          .update({'has_read': true})
+          .eq('id', notificationId);
+
+      fetchAppNotifications();
+      print("✅ Notification marked as read");
+    } catch (error) {
+      print('❌ Error marking notification as read: $error');
+    }
+  }
+
+  // ✅ Realtime Notifications Listener
+  void setupRealtimeNotifications() {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    _notificationsChannel = supabase.channel('notifications_channel');
+
+    _notificationsChannel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'notifications',
+      callback: (payload) {
+        final newNotification = payload.newRecord;
+
+        if (newNotification['user_id'] == userId) {
+          print('🔔 New notification received: $newNotification');
+
+          setState(() {
+            appNotifications.insert(0, newNotification);
+            notificationCount += 1; // ✅ Increase counter
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '${newNotification['title'] ?? 'New Notification'}: ${newNotification['body'] ?? ''}'),
+              duration: Duration(seconds: 3),
+              backgroundColor: Colors.deepPurpleAccent,
+            ),
+          );
+        }
+      },
+    ).subscribe((status, [error]) {
+      print('✅ Realtime subscription status: $status');
+      if (error != null) {
+        print('❌ Realtime subscription error: $error');
+      }
+    });
+  }
+
+  // ✅ Notification Icon Selector
+  Icon _getNotificationIcon(String type) {
+    switch (type) {
+      case 'friend_request':
+        return Icon(Icons.person_add, color: Colors.blueAccent);
+      case 'friend_accept':
+        return Icon(Icons.person, color: Colors.green);
+      case 'message':
+        return Icon(Icons.message, color: Colors.orange);
+      case 'like':
+        return Icon(Icons.thumb_up, color: Colors.pink);
+      case 'comment':
+        return Icon(Icons.comment, color: Colors.purple);
+      default:
+        return Icon(Icons.notifications_active, color: Colors.deepPurpleAccent);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true, // Allows background behind AppBar
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // No solid color
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('Notifications', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          'Notifications',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Color(0xFF6A11CB).withOpacity(0.9), // Mystic purple
-                Color(0xFF2575FC).withOpacity(0.8), // Deep blue
-                Color(0xFF5F72BE).withOpacity(0.8), // Spiritual blue/lavender
+                Color(0xFF6A11CB).withOpacity(0.9),
+                Color(0xFF2575FC).withOpacity(0.8),
+                Color(0xFF5F72BE).withOpacity(0.8),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -139,20 +230,25 @@ class _NotificationPageState extends State<NotificationPage> {
                       radius: 28,
                       backgroundImage: sender['icon'] != null
                           ? NetworkImage(sender['icon'])
-                          : AssetImage('assets/default_avatar.png') as ImageProvider,
+                          : AssetImage('assets/default_avatar.png')
+                      as ImageProvider,
                     ),
-                    title: Text(sender['name'], style: TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(sender['name'],
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Wants to connect with you!'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: Icon(Icons.check_circle, color: Colors.green),
-                          onPressed: () => acceptFriendRequest(request['id'], sender['id']),
+                          icon: Icon(Icons.check_circle,
+                              color: Colors.green),
+                          onPressed: () => acceptFriendRequest(
+                              request['id'], sender['id']),
                         ),
                         IconButton(
                           icon: Icon(Icons.cancel, color: Colors.red),
-                          onPressed: () => declineFriendRequest(request['id']),
+                          onPressed: () => declineFriendRequest(
+                              request['id']),
                         ),
                       ],
                     ),
@@ -167,24 +263,35 @@ class _NotificationPageState extends State<NotificationPage> {
                 ? _buildEmptyState('No new notifications.')
                 : Column(
               children: appNotifications.map((notif) {
-                return Card(
-                  color: Colors.white.withOpacity(0.85),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  margin: EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.notifications_active,
-                      color: Colors.deepPurpleAccent,
+                bool isRead = notif['has_read'] ?? false;
+
+                return GestureDetector(
+                  onTap: () {
+                    markNotificationAsRead(notif['id']);
+                  },
+                  child: Card(
+                    color: isRead
+                        ? Colors.grey.withOpacity(0.5)
+                        : Colors.white.withOpacity(0.85),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    title: Text(
-                      notif['message'],
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      _formatTimestamp(notif['created_at']),
-                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: _getNotificationIcon(notif['type']),
+                      title: Text(
+                        notif['message'],
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isRead
+                                ? Colors.grey[600]
+                                : Colors.black),
+                      ),
+                      subtitle: Text(
+                        _formatTimestamp(notif['created_at']),
+                        style: TextStyle(
+                            color: Colors.black54, fontSize: 12),
+                      ),
                     ),
                   ),
                 );
@@ -192,6 +299,43 @@ class _NotificationPageState extends State<NotificationPage> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: Stack(
+        children: [
+          FloatingActionButton(
+            backgroundColor: Colors.deepPurpleAccent,
+            onPressed: () {
+              setState(() {
+                notificationCount = 0;
+              });
+              // Optional: navigate to notifications or refresh
+            },
+            child: Icon(Icons.notifications_active, color: Colors.white),
+          ),
+          if (notificationCount > 0)
+            Positioned(
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: BoxConstraints(
+                  minWidth: 20,
+                  minHeight: 20,
+                ),
+                child: Text(
+                  '$notificationCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -43,8 +43,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
           return ListTile(
             leading: CircleAvatar(
-              backgroundImage: user.icon != null && user.icon!.isNotEmpty
-                  ? NetworkImage(user.icon!)
+              backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
+                  ? NetworkImage(user.avatar!)
                   : AssetImage('assets/default_avatar.png') as ImageProvider,
             ),
             title: Text(user.name ?? "Unknown"),

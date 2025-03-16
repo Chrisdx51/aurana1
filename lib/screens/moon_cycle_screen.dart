@@ -70,7 +70,7 @@ class _MoonCycleScreenState extends State<MoonCycleScreen> {
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/parchment_background.png'),
+                image: AssetImage('assets/images/misc2.png'),
                 fit: BoxFit.cover,
               ),
             ),

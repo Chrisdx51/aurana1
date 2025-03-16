@@ -43,12 +43,14 @@ dependencies:
   dart_openai: ^1.0.0
   audioplayers: ^5.2.0  # ✅ Add this line for sound playback
   flutter_launcher_icons: ^0.13.1
-  in_app_purchase: ^3.1.5
+  in_app_purchase: ^3.1.7
   googleapis_auth: ^1.4.1
   swipable_stack: ^1.1.0
   shimmer: ^3.0.0
   geolocator: ^10.0.0
   geocoding: ^2.0.5
+
+
 flutter_icons:
   android: true
   ios: false  # ✅ This prevents any iOS changes
@@ -88,8 +90,27 @@ flutter:
     - assets/default_avatar.png
     - assets/sounds/card_flip.mp3
     - assets/media/splash.gif
-
-
+    - assets/images/guide.png
+    - assets/images/aura.png
+    - assets/images/home.png
+    - assets/images/catcher.png
+    - assets/images/misc.png
+    - assets/images/misc2.png
+    - assets/images/profile.png
+    - assets/sounds/level_up.mp3
+    - assets/zodiac/aries.png
+    - assets/zodiac/taurus.png
+    - assets/zodiac/gemini.png
+    - assets/zodiac/cancer.png
+    - assets/zodiac/leo.png
+    - assets/zodiac/virgo.png
+    - assets/zodiac/libra.png
+    - assets/zodiac/scorpio.png
+    - assets/zodiac/sagittarius.png
+    - assets/zodiac/capricorn.png
+    - assets/zodiac/aquarius.png
+    - assets/zodiac/pisces.png
+    - assets/images/default_avatar.png
   fonts:
     - family: Fo
       fonts:
@@ -110,3 +131,4 @@ flutter:
         - asset: assets/fonts/fo16.ttf
         - asset: assets/fonts/fo17.ttf
         - asset: assets/fonts/fo18.ttf
+

@@ -2,123 +2,152 @@ class UserModel {
   final String id;
   final String name;
   final String bio;
-  final String? icon; // ✅ Profile Picture URL
-  final String? dob;  // ✅ Date of Birth
-  final String? zodiacSign; // ✅ Zodiac Sign (FIXED)
-  final String? spiritualPath; // ✅ Spiritual Path
-  final String? element; // ✅ Elemental Connection
-  final String? privacy; // 🔒 Profile Privacy Setting (public, friends_only, private)
-  final String? lastSeen; // ✅ Add this field
-  final int spiritualXP; // ✅ Spiritual XP
-  final int spiritualLevel; // ✅ Spiritual Level (New)
-  final List<String>? friends;
-  final List<Map<String, dynamic>>? visitorLog;
-  final List<Map<String, dynamic>>? giftInventory;
-  final bool? isJourneyPublic;
-  final bool? isOnline; // ✅ Added isOnline
+
+  final String? avatar;
+  final String? dob;
+  final String? zodiacSign;
+  final String? spiritualPath;
+  final String? element;
+  final String? privacySetting;
+
+  final String? city;
+  final String? country;
+
+  final String? lastSeen;
+  final bool? isOnline;
+  final String? soulMatchMessage;
+
+  final int spiritualXP;
+  final int spiritualLevel;
+
+  final List<String> friends;
+  final List<Map<String, dynamic>> visitorLog;
+  final List<Map<String, dynamic>> giftInventory;
+
+  final String? journeyVisibility; // ✅ New field for controlling Soul Journey wall visibility
 
   UserModel({
     required this.id,
     required this.name,
     required this.bio,
-    this.icon,
-    required this.isOnline, // ✅ Ensure it is required
+    this.avatar,
     this.dob,
-    this.zodiacSign, // ✅ Added
+    this.zodiacSign,
     this.spiritualPath,
     this.element,
+    this.privacySetting = 'public',
+    this.city,
+    this.country,
+    this.lastSeen,
+    this.isOnline,
+    this.soulMatchMessage,
     this.spiritualXP = 0,
-    this.spiritualLevel = 1, // ✅ Default to level 1
-    this.friends,
-    this.visitorLog,
-    this.giftInventory,
-    this.isJourneyPublic,
-    this.privacy, // ✅ Added privacy
-    this.lastSeen, // ✅ Nullable last seen
+    this.spiritualLevel = 1,
+    this.friends = const [],
+    this.visitorLog = const [],
+    this.giftInventory = const [],
+    this.journeyVisibility = 'public', // ✅ Default to public
   });
 
-  // ✅ Convert JSON Data from Supabase
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       bio: json['bio'] ?? '',
-      icon: json['icon'],
+      avatar: json['avatar'],
       dob: json['dob'],
-      isOnline: json['is_online'] == true, // ✅ Convert 'is_online' from DB to bool
-      zodiacSign: json['zodiac_sign'], // ✅ Ensure it's mapped from Supabase
+      zodiacSign: json['zodiac_sign'],
       spiritualPath: json['spiritual_path'],
       element: json['element'],
+      privacySetting: json['privacy_setting'] ?? 'public',
+      city: json['city'],
+      country: json['country'],
+      lastSeen: json['last_seen'],
+      isOnline: json['is_online'] == true,
+      soulMatchMessage: json['soul_match_message'],
       spiritualXP: json['spiritual_xp'] ?? 0,
-      spiritualLevel: json['spiritual_level'] ?? 1, // ✅ Ensure we fetch the correct level
-      friends: List<String>.from(json['friends'] ?? []),
-      visitorLog: List<Map<String, dynamic>>.from(json['visitor_log'] ?? []),
-      giftInventory: List<Map<String, dynamic>>.from(json['gift_inventory'] ?? []),
-      isJourneyPublic: json['is_journey_public'] ?? true,
-      privacy: json['privacy'] as String? ?? 'public', // ✅ Added privacy
-      lastSeen: json['last_seen'], // ✅ FIXED: Corrected `data` to `json`
+      spiritualLevel: json['spiritual_level'] ?? 1,
+      friends: json['friends'] != null
+          ? List<String>.from(json['friends'])
+          : [],
+      visitorLog: json['visitor_log'] != null
+          ? List<Map<String, dynamic>>.from(json['visitor_log'])
+          : [],
+      giftInventory: json['gift_inventory'] != null
+          ? List<Map<String, dynamic>>.from(json['gift_inventory'])
+          : [],
+      journeyVisibility: json['journey_visibility'] ?? 'public', // ✅ This syncs with Supabase!
     );
   }
 
-  // ✅ Convert UserModel back to JSON for Supabase updates
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
       'bio': bio,
-      'icon': icon,
+      'avatar': avatar,
       'dob': dob,
-      'zodiac_sign': zodiacSign, // ✅ Added
+      'zodiac_sign': zodiacSign,
       'spiritual_path': spiritualPath,
       'element': element,
+      'privacy_setting': privacySetting,
+      'city': city,
+      'country': country,
+      'last_seen': lastSeen,
+      'is_online': isOnline,
+      'soul_match_message': soulMatchMessage,
       'spiritual_xp': spiritualXP,
-      'spiritual_level': spiritualLevel, // ✅ Store Spiritual Level in Supabase
+      'spiritual_level': spiritualLevel,
       'friends': friends,
       'visitor_log': visitorLog,
       'gift_inventory': giftInventory,
-      'is_journey_public': isJourneyPublic,
-      'is_online': isOnline, // ✅ Fix: Added to JSON output
-      'last_seen': lastSeen, // ✅ Ensure last_seen is saved
+      'journey_visibility': journeyVisibility, // ✅ This updates Supabase correctly
     };
   }
 
-  // ✅ CopyWith Method (For Updating State)
   UserModel copyWith({
+    String? id,
     String? name,
     String? bio,
-    String? icon,
+    String? avatar,
     String? dob,
-    String? zodiacSign, // ✅ Added
+    String? zodiacSign,
     String? spiritualPath,
     String? element,
-    String? privacy, // ✅ Added privacy
+    String? privacySetting,
+    String? city,
+    String? country,
+    String? lastSeen,
+    bool? isOnline,
+    String? soulMatchMessage,
     int? spiritualXP,
-    int? spiritualLevel, // ✅ Allow updating Spiritual Level
+    int? spiritualLevel,
     List<String>? friends,
     List<Map<String, dynamic>>? visitorLog,
     List<Map<String, dynamic>>? giftInventory,
-    bool? isJourneyPublic,
-    bool? isOnline, // ✅ Fix: Added isOnline
-    String? lastSeen, // ✅ Added to copyWith
+    String? journeyVisibility,
   }) {
     return UserModel(
-      id: this.id,
+      id: id ?? this.id,
       name: name ?? this.name,
       bio: bio ?? this.bio,
-      icon: icon ?? this.icon,
+      avatar: avatar ?? this.avatar,
       dob: dob ?? this.dob,
-      zodiacSign: zodiacSign ?? this.zodiacSign, // ✅ Ensure copyWith updates it
+      zodiacSign: zodiacSign ?? this.zodiacSign,
       spiritualPath: spiritualPath ?? this.spiritualPath,
       element: element ?? this.element,
+      privacySetting: privacySetting ?? this.privacySetting,
+      city: city ?? this.city,
+      country: country ?? this.country,
+      lastSeen: lastSeen ?? this.lastSeen,
+      isOnline: isOnline ?? this.isOnline,
+      soulMatchMessage: soulMatchMessage ?? this.soulMatchMessage,
       spiritualXP: spiritualXP ?? this.spiritualXP,
-      spiritualLevel: spiritualLevel ?? this.spiritualLevel, // ✅ Update Spiritual Level
+      spiritualLevel: spiritualLevel ?? this.spiritualLevel,
       friends: friends ?? this.friends,
       visitorLog: visitorLog ?? this.visitorLog,
       giftInventory: giftInventory ?? this.giftInventory,
-      isJourneyPublic: isJourneyPublic ?? this.isJourneyPublic,
-      privacy: privacy ?? this.privacy, // ✅ Added privacy
-      isOnline: isOnline ?? this.isOnline, // ✅ Fix: Ensure isOnline can be updated
-      lastSeen: lastSeen ?? this.lastSeen,
+      journeyVisibility: journeyVisibility ?? this.journeyVisibility,
     );
   }
 }

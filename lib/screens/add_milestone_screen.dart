@@ -12,176 +12,107 @@ class AddMilestoneScreen extends StatefulWidget {
 class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _milestoneController = TextEditingController();
-  String _selectedMilestoneType = "meditation";
   bool _isSubmitting = false;
-  File? _selectedImage;
-  File? _selectedVideo;
+  File? _selectedMedia;
+  bool _isPrivate = true;
   final ImagePicker _picker = ImagePicker();
-  bool _isPrivate = true; // ✅ Default to Sacred
 
-  Future<void> _pickImage() async {
-    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+  Future<void> _pickMedia({required bool isVideo}) async {
+    final pickedFile = isVideo
+        ? await _picker.pickVideo(source: ImageSource.gallery)
+        : await _picker.pickImage(source: ImageSource.gallery);
+
     if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-        _selectedVideo = null;
-      });
+      setState(() => _selectedMedia = File(pickedFile.path));
     }
   }
 
-  Future<void> _pickVideo() async {
-    final XFile? pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _selectedVideo = File(pickedFile.path);
-        _selectedImage = null;
-      });
-    }
-  }
+  Future<void> _submitMilestone() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
 
-  Future<void> _addMilestone() async {
-    final String? userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) {
+    if (userId == null || _milestoneController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Error: User not logged in")),
+        SnackBar(content: Text("⚠️ Please describe your Soul Journey.")),
       );
       return;
     }
 
-    if (_milestoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Please enter your spiritual experience")),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     String? mediaUrl;
-    if (_selectedImage != null) {
-      mediaUrl = await _supabaseService.uploadMedia(_selectedImage!);
-    } else if (_selectedVideo != null) {
-      mediaUrl = await _supabaseService.uploadMedia(_selectedVideo!);
+    if (_selectedMedia != null) {
+      mediaUrl = await _supabaseService.uploadMedia(_selectedMedia!);
     }
-
-    // ✅ Save "sacred" (private) or "open" (public)
-    String visibility = _isPrivate ? "sacred" : "open";
 
     bool success = await _supabaseService.addMilestone(
       userId,
-      _milestoneController.text,
-      _selectedMilestoneType,
+      _milestoneController.text.trim(),
+      "soul_journey",
       mediaUrl,
-      visibility, // ✅ Save visibility setting
+      _isPrivate ? "sacred" : "open",
     );
 
     if (success) {
       await _supabaseService.updateSpiritualXP(userId, 10);
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Journey saved & XP earned!")),
+        SnackBar(content: Text("✨ Journey recorded! +10 XP!")),
       );
-
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Failed to add milestone")),
+        SnackBar(content: Text("❌ Something went wrong. Try again.")),
       );
     }
 
-    setState(() {
-      _isSubmitting = false;
-    });
+    setState(() => _isSubmitting = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFE3F2FD),
+      backgroundColor: Colors.blueGrey[50],
       appBar: AppBar(
-        title: Text("Record Your Journey", style: TextStyle(fontSize: 18)),
-        backgroundColor: Color(0xFFBBDEFB),
+        title: Text("Soul Share", style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.indigo,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 25),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildTextField(),
+            _visibilitySelector(),
             SizedBox(height: 20),
-            _buildDropdown(),
+            _journeyDescriptionInput(),
+            SizedBox(height: 8),
+            Text(
+              "🌟 Share your soul journey with the world or keep it sacred just for you.",
+              style: TextStyle(color: Colors.grey[700], fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
             SizedBox(height: 20),
-            _buildVisibilityToggle(), // ✅ Added Visibility Toggle
-            SizedBox(height: 20),
-            _buildMediaButtons(),
-            SizedBox(height: 10),
-            _buildMediaPreview(),
-            SizedBox(height: 20),
-            _buildSubmitButton(),
+            _mediaPickerButtons(),
+            _mediaPreview(),
+            SizedBox(height: 30),
+            _submitButton(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField() {
-    return TextField(
-      controller: _milestoneController,
-      maxLines: 3,
-      decoration: InputDecoration(
-        border: OutlineInputBorder(),
-        hintText: "Describe your spiritual journey...",
-        fillColor: Colors.white,
-        filled: true,
-      ),
-    );
-  }
-
-  Widget _buildDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Journey Type:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        DropdownButton<String>(
-          value: _selectedMilestoneType,
-          isExpanded: true,
-          items: ["meditation", "tarot_reading", "healing", "energy_work"]
-              .map((type) => DropdownMenuItem<String>(
-            value: type,
-            child: Text(type.replaceAll("_", " ").toUpperCase()),
-          ))
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _selectedMilestoneType = value;
-              });
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  // ✅ New Visibility Toggle
-  Widget _buildVisibilityToggle() {
+  Widget _visibilitySelector() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text("✨ Visibility:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text("✨ Visibility:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         Row(
           children: [
-            Text(_isPrivate ? "Sacred" : "Open",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.purple)),
+            Text(_isPrivate ? "Sacred" : "Open", style: TextStyle(fontWeight: FontWeight.bold)),
             Switch(
+              activeColor: Colors.indigo,
               value: _isPrivate,
-              onChanged: (value) {
-                setState(() {
-                  _isPrivate = value;
-                });
-              },
+              onChanged: (val) => setState(() => _isPrivate = val),
             ),
           ],
         ),
@@ -189,54 +120,84 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
     );
   }
 
-  Widget _buildMediaButtons() {
+  Widget _journeyDescriptionInput() {
+    return TextField(
+      controller: _milestoneController,
+      maxLines: 4,
+      decoration: InputDecoration(
+        hintText: "Describe your soul journey...",
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        fillColor: Colors.white,
+        filled: true,
+      ),
+    );
+  }
+
+  Widget _mediaPickerButtons() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        ElevatedButton.icon(
-          onPressed: _pickImage,
-          icon: Icon(Icons.image),
-          label: Text("Image"),
+        Expanded(
+          child: ElevatedButton.icon(
+            icon: Icon(Icons.photo, color: Colors.white),
+            label: Text("Image"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+            onPressed: () => _pickMedia(isVideo: false),
+          ),
         ),
         SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: _pickVideo,
-          icon: Icon(Icons.video_camera_back),
-          label: Text("Video"),
+        Expanded(
+          child: ElevatedButton.icon(
+            icon: Icon(Icons.videocam, color: Colors.white),
+            label: Text("Video"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+            onPressed: () => _pickMedia(isVideo: true),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildMediaPreview() {
-    return Column(
-      children: [
-        if (_selectedImage != null)
-          Padding(
-            padding: EdgeInsets.only(top: 10),
-            child: Image.file(_selectedImage!, height: 150),
-          ),
-        if (_selectedVideo != null)
-          Padding(
-            padding: EdgeInsets.only(top: 10),
-            child: Icon(Icons.videocam, size: 100),
-          ),
-      ],
+  Widget _mediaPreview() {
+    if (_selectedMedia == null) return SizedBox(height: 0);
+
+    return Container(
+      margin: EdgeInsets.only(top: 20),
+      height: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        color: Colors.black12,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: _selectedMedia!.path.endsWith('.mp4')
+            ? Center(
+          child: Icon(Icons.videocam, size: 80, color: Colors.blueAccent),
+        )
+            : Image.file(_selectedMedia!, fit: BoxFit.cover, width: double.infinity),
+      ),
     );
   }
 
-  Widget _buildSubmitButton() {
-    return Center(
-      child: _isSubmitting
-          ? CircularProgressIndicator()
-          : ElevatedButton(
-        onPressed: _addMilestone,
-        child: Text("Record Journey"),
+  Widget _submitButton() {
+    return SizedBox(
+      height: 50,
+      child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blueAccent,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: Colors.indigo,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
+        child: _isSubmitting
+            ? CircularProgressIndicator(color: Colors.white)
+            : Text("✨ Share Journey", style: TextStyle(fontSize: 18)),
+        onPressed: _submitMilestone,
       ),
     );
   }

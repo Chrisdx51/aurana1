@@ -4,14 +4,15 @@ class MilestoneModel {
   final String content;
   final String milestoneType;
   final DateTime createdAt;
-  final String visibility;
-  int energyBoosts; // ✅ Allow modification
-  final String? mediaUrl; // ✅ Allow images/videos
-  final String? username; // ✅ Allow username
-  late final String? icon; // ✅ Allow profile pictures
-  final bool userHasBoosted; // ✅ Track if user boosted
+  final String visibility;             // ✅ Visibility of this post (open, friends_only, private)
+  final String journeyVisibility;      // ✅ Journey visibility (optional, depending on your table design)
 
-  // ✅ Added fields for likes and comments
+  int energyBoosts;
+  String? mediaUrl;
+  String? username;
+  String? avatar;                      // ✅ Renamed from icon to avatar
+  bool userHasBoosted;
+
   int likeCount;
   int commentCount;
   bool likedByMe;
@@ -23,39 +24,49 @@ class MilestoneModel {
     required this.milestoneType,
     required this.createdAt,
     required this.visibility,
+    this.journeyVisibility = 'public',  // ✅ Default to public if not specified
     this.energyBoosts = 0,
     this.mediaUrl,
     this.username,
-    this.icon, // ✅ Store profile picture URL
-    this.userHasBoosted = false, // ✅ Default to false
-    this.likeCount = 0, // ✅ New field for like count
-    this.commentCount = 0, // ✅ New field for comment count
-    this.likedByMe = false, // ✅ Track if user liked the post
+    this.avatar,                         // ✅ Renamed
+    this.userHasBoosted = false,
+    this.likeCount = 0,
+    this.commentCount = 0,
+    this.likedByMe = false,
   });
 
-  // ✅ Convert from Supabase JSON
-  // ✅ Convert from Supabase JSON
+  /// FROM SUPABASE JSON
   factory MilestoneModel.fromJson(Map<String, dynamic> json) {
+    final profile = json['profiles'];
+
     return MilestoneModel(
       id: json['id'] as String,
       userId: json['user_id'] as String,
-      content: json['content'] as String,
-      milestoneType: json['milestone_type'] as String,
+      content: json['content'] ?? '',
+      milestoneType: json['milestone_type'] ?? '',
       createdAt: DateTime.parse(json['created_at']),
+      visibility: json['visibility'] ?? 'open',
+      journeyVisibility: json['journey_visibility'] ?? 'public', // ✅ Added field support
+
       energyBoosts: json['energy_boosts'] ?? 0,
-      mediaUrl: json['media_url'] as String?, // ✅ Prevents null issues
-      username: json['profiles']?['name'] as String? ?? "", // ✅ Safe username retrieval
-      icon: json['profiles']?['icon'] as String? ?? "", // ✅ Safe profile picture retrieval
-      userHasBoosted: json.containsKey('user_boosted') ? json['user_boosted'] as bool : false, // ✅ Ensure it's fetched properly
+      mediaUrl: json['media_url'],
+
+      username: profile != null ? profile['username'] ?? '' : '',
+      avatar: profile != null ? profile['avatar'] ?? '' : '',    // ✅ Changed to avatar
+
+      userHasBoosted: json['user_boosted'] ?? false,
       likeCount: json['like_count'] ?? 0,
       commentCount: json['comment_count'] ?? 0,
       likedByMe: json['liked_by_me'] ?? false,
-      visibility: json['visibility'] ?? 'open', // ✅ Ensure visibility is included!
     );
   }
 
+  /// NEW: ALIAS FOR fromMap
+  factory MilestoneModel.fromMap(Map<String, dynamic> map) {
+    return MilestoneModel.fromJson(map);
+  }
 
-  // ✅ Convert to JSON for Supabase
+  /// TO JSON
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -63,50 +74,19 @@ class MilestoneModel {
       'content': content,
       'milestone_type': milestoneType,
       'created_at': createdAt.toIso8601String(),
-      'energy_boosts': energyBoosts,
-      if (mediaUrl != null) 'media_url': mediaUrl, // ✅ Prevents storing null
-      if (username != null) 'username': username, // ✅ Include username
-      if (icon != null) 'icon': icon, // ✅ Include profile picture
-      'user_boosted': userHasBoosted, // ✅ Store the value
+      'visibility': visibility,
+      'journey_visibility': journeyVisibility,   // ✅ Include in JSON
 
-      // ✅ Include new fields for Supabase
+      'energy_boosts': energyBoosts,
+      'media_url': mediaUrl,
+
+      'username': username,
+      'avatar': avatar,                          // ✅ Changed to avatar
+
+      'user_boosted': userHasBoosted,
       'like_count': likeCount,
       'comment_count': commentCount,
       'liked_by_me': likedByMe,
     };
-  }
-
-  // ✅ Allow modifications
-  MilestoneModel copyWith({
-    String? id,
-    String? userId,
-    String? content,
-    String? milestoneType,
-    DateTime? createdAt,
-    int? energyBoosts,
-    String? mediaUrl,
-    String? username,
-    String? icon,
-    bool? userHasBoosted,
-    int? likeCount,
-    int? commentCount,
-    bool? likedByMe,
-  }) {
-
-    return MilestoneModel(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      content: content ?? this.content,
-      milestoneType: milestoneType ?? this.milestoneType,
-      createdAt: createdAt ?? this.createdAt,
-      energyBoosts: energyBoosts ?? this.energyBoosts,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
-      username: username ?? this.username,
-      icon: icon ?? this.icon,
-      userHasBoosted: userHasBoosted ?? this.userHasBoosted,
-      likeCount: likeCount ?? this.likeCount,
-      commentCount: commentCount ?? this.commentCount,
-      likedByMe: likedByMe ?? this.likedByMe, visibility: '',
-    );
   }
 }

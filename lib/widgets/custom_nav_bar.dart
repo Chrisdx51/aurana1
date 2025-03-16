@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/home_screen.dart';
-import '../screens/soul_journey_screen.dart';
-import '../screens/profile_screen.dart';
-import '../screens/friends_page.dart';
-import '../screens/aura_catcher.dart';
-import '../screens/spiritual_guidance_screen.dart';
-import '../screens/tarot_reading_screen.dart';
-import '../screens/more_menu_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ Ensure this is here!
 
 class CustomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -24,8 +17,9 @@ class CustomNavBar extends StatelessWidget {
       items: [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
         BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Soul Match'),
-        BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "Soul Journey"),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: 'Soul Journey'),
+
+        // ✅ Friends with pending request badge
         BottomNavigationBarItem(
           icon: FutureBuilder<int>(
             future: _getPendingFriendRequests(),
@@ -33,8 +27,8 @@ class CustomNavBar extends StatelessWidget {
               int count = snapshot.data ?? 0;
               return Stack(
                 children: [
-                  Icon(Icons.people, size: 30), // Friends Icon
-                  if (count > 0) // ✅ Show notification only if requests exist
+                  Icon(Icons.people),
+                  if (count > 0)
                     Positioned(
                       right: 0,
                       top: 0,
@@ -43,7 +37,7 @@ class CustomNavBar extends StatelessWidget {
                         decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                         child: Text(
                           count.toString(),
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -53,10 +47,12 @@ class CustomNavBar extends StatelessWidget {
           ),
           label: 'Friends',
         ),
-        BottomNavigationBarItem(icon: Icon(Icons.light_mode), label: 'Aura Catcher'),
-        BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Guidance'),
-        BottomNavigationBarItem(icon: Icon(Icons.style), label: 'Tarot'),
-        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'), // ✅ More menu button
+
+        // ✅ Profile tab (NEW!)
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+
+        // ✅ More menu to hold everything else
+        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
       ],
       currentIndex: selectedIndex,
       selectedItemColor: Colors.blue,
@@ -67,8 +63,25 @@ class CustomNavBar extends StatelessWidget {
     );
   }
 
-  // ✅ Fetch pending friend requests count
+  // ✅ Fetch pending friend requests
   Future<int> _getPendingFriendRequests() async {
-    return 0; // Replace with the actual API call to fetch the count
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      return 0;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('friend_requests') // Change if using a different table!
+          .select()
+          .eq('receiver_id', userId)
+          .eq('status', 'pending');
+
+      return response.length;
+    } catch (e) {
+      print('❌ Error fetching pending friend requests: $e');
+      return 0;
+    }
   }
 }

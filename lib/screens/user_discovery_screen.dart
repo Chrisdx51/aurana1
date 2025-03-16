@@ -306,8 +306,8 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
                                           builder: (context) => ProfileScreen(userId: user.id)));
                                 },
                                 child: CircleAvatar(
-                                  backgroundImage: user.icon != null && user.icon!.isNotEmpty
-                                      ? NetworkImage(user.icon!)
+                                  backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
+                                      ? NetworkImage(user.avatar!)
                                       : AssetImage("assets/default_avatar.png") as ImageProvider,
                                   radius: 35,
                                   backgroundColor: Colors.grey[300],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ✅ AdMob import
 import 'profile_screen.dart';
 import 'submit_service_page.dart';
 
@@ -9,7 +10,7 @@ class BusinessProfilePage extends StatefulWidget {
   final String tagline;
   final String description;
   final String profileImageUrl;
-  final double rating; // Can remove later if you want dynamic only.
+  final double rating; // Optional for dynamic rating.
   final String adCreatedDate;
   final String userId;
 
@@ -32,15 +33,46 @@ class BusinessProfilePage extends StatefulWidget {
 class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final supabase = Supabase.instance.client;
 
-  int selectedRating = 0; // What the user selects to submit
-  double averageRating = 0; // Average rating from database
+  int selectedRating = 0;
+  double averageRating = 0;
   String currentUserId = '';
+
+  // ✅ AdMob Banner
+  late BannerAd _bannerAd;
+  bool _isBannerAdReady = false;
 
   @override
   void initState() {
     super.initState();
     currentUserId = supabase.auth.currentUser?.id ?? '';
     _loadAverageRating();
+    _loadBannerAd(); // ✅ Load Ad
+  }
+
+  @override
+  void dispose() {
+    _bannerAd.dispose();
+    super.dispose();
+  }
+
+  // ✅ Initialize Banner Ad
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // <-- Replace with your Ad Unit ID
+      request: AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          setState(() {
+            _isBannerAdReady = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          print('Ad failed to load: $error');
+        },
+      ),
+    )..load();
   }
 
   @override
@@ -60,89 +92,96 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
           ),
         ),
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blueGrey.shade900, Colors.deepPurple.shade700],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Profile Image
-              CircleAvatar(
-                radius: 60,
-                backgroundImage: widget.profileImageUrl.isNotEmpty
-                    ? NetworkImage(widget.profileImageUrl)
-                    : AssetImage('assets/images/default_avatar.png') as ImageProvider,
-              ),
-              SizedBox(height: 16),
+      body: Column(
+        children: [
+          // ✅ Banner Ad Widget (only shows when ready)
+          if (_isBannerAdReady)
+            Container(
+              width: _bannerAd.size.width.toDouble(),
+              height: _bannerAd.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd),
+            ),
 
-              // Name & Service Type
-              Text(widget.name, style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
-              Text(widget.serviceType, style: TextStyle(fontSize: 18, color: Colors.white70)),
-
-              SizedBox(height: 10),
-
-              // ⭐ Average Rating Display
-              _buildAverageRatingDisplay(),
-
-              SizedBox(height: 10),
-
-              // Tagline
-              Text(
-                widget.tagline,
-                style: TextStyle(fontSize: 16, color: Colors.amberAccent, fontStyle: FontStyle.italic),
-                textAlign: TextAlign.center,
-              ),
-
-              SizedBox(height: 10),
-
-              // Date Posted
-              Text("Posted on: ${widget.adCreatedDate}", style: TextStyle(fontSize: 12, color: Colors.white54)),
-
-              SizedBox(height: 20),
-
-              // Description
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
+          // ✅ Page Content
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blueGrey.shade900, Colors.deepPurple.shade700],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-                child: Text(widget.description, style: TextStyle(fontSize: 14, color: Colors.black87), textAlign: TextAlign.justify),
               ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // ✅ Profile Image
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage: widget.profileImageUrl.isNotEmpty
+                          ? NetworkImage(widget.profileImageUrl)
+                          : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                    ),
+                    SizedBox(height: 16),
 
-              SizedBox(height: 30),
+                    // ✅ Name & Service
+                    Text(widget.name, style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(widget.serviceType, style: TextStyle(fontSize: 18, color: Colors.white70)),
+                    SizedBox(height: 10),
 
-              // Contact / View Profile Button
-              _buildContactOrProfileButton(isOwner),
+                    // ✅ Average Rating Display
+                    _buildAverageRatingDisplay(),
+                    SizedBox(height: 10),
 
-              SizedBox(height: 10),
+                    // ✅ Tagline
+                    Text(widget.tagline,
+                        style: TextStyle(fontSize: 16, color: Colors.amberAccent, fontStyle: FontStyle.italic),
+                        textAlign: TextAlign.center),
+                    SizedBox(height: 10),
 
-              // If owner, show Edit/Delete buttons
-              if (isOwner) ...[
-                _buildEditButton(),
-                SizedBox(height: 10),
-                _buildDeleteButton(),
-              ],
+                    // ✅ Date Posted
+                    Text("Posted on: ${widget.adCreatedDate}", style: TextStyle(fontSize: 12, color: Colors.white54)),
+                    SizedBox(height: 20),
 
-              SizedBox(height: 20),
+                    // ✅ Description
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(widget.description,
+                          style: TextStyle(fontSize: 14, color: Colors.black87), textAlign: TextAlign.justify),
+                    ),
+                    SizedBox(height: 30),
 
-              // ⭐ Star Rating Section (only for visitors)
-              if (!isOwner) _buildStarRatingSection(),
-            ],
+                    // ✅ Contact/Profile button
+                    _buildContactOrProfileButton(isOwner),
+                    SizedBox(height: 10),
+
+                    // ✅ Edit/Delete if Owner
+                    if (isOwner) ...[
+                      _buildEditButton(),
+                      SizedBox(height: 10),
+                      _buildDeleteButton(),
+                    ],
+
+                    SizedBox(height: 20),
+
+                    // ✅ Star Rating (for Visitors)
+                    if (!isOwner) _buildStarRatingSection(),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  // ✅ Display average rating stars
   Widget _buildAverageRatingDisplay() {
     int fullStars = averageRating.floor();
     bool hasHalfStar = (averageRating - fullStars) >= 0.5;
@@ -168,7 +207,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ✅ Build Star Rating Section for users to rate
   Widget _buildStarRatingSection() {
     return Column(
       children: [
@@ -197,7 +235,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ✅ Submit Rating to Supabase
   Future<void> _submitRating(int rating) async {
     try {
       await supabase.from('ratings').upsert({
@@ -213,7 +250,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     }
   }
 
-  // ✅ Load Average Rating from Supabase
   Future<void> _loadAverageRating() async {
     try {
       final result = await supabase
@@ -240,7 +276,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     }
   }
 
-  // ✅ Contact or View Profile Button
   Widget _buildContactOrProfileButton(bool isOwner) {
     return ElevatedButton.icon(
       onPressed: () {
@@ -270,14 +305,13 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ✅ Edit Ad Button
   Widget _buildEditButton() {
     return ElevatedButton.icon(
       onPressed: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SubmitYourServicePage(), // Pass adId if you want to
+            builder: (context) => SubmitYourServicePage(),
           ),
         );
       },
@@ -291,7 +325,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ✅ Delete Ad Button
   Widget _buildDeleteButton() {
     return ElevatedButton.icon(
       onPressed: () => _confirmDelete(),
@@ -305,7 +338,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ✅ Confirm Delete Dialog
   void _confirmDelete() {
     showDialog(
       context: context,

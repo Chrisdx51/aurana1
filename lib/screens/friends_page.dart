@@ -169,7 +169,7 @@ class _FriendsPageState extends State<FriendsPage> {
             child: Container(
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/bg2.png'),
+                  image: AssetImage('assets/images/guide.png'),
                   fit: BoxFit.cover,
                 ),
               ),

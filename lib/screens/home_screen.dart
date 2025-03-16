@@ -1,12 +1,15 @@
+// ⬇️ IMPORTS
 import 'dart:async';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:audioplayers/audioplayers.dart';
+
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import '../widgets/custom_nav_bar.dart';
 import 'profile_screen.dart';
+import 'soul_match_page.dart';
 import 'tarot_reading_screen.dart';
 import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
@@ -16,7 +19,6 @@ import 'friends_page.dart';
 import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
-import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -27,189 +29,121 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final SupabaseService supabaseService = SupabaseService();
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  final supabase = Supabase.instance.client;
+  final supabaseService = SupabaseService();
+  final _audioPlayer = AudioPlayer();
+
   UserModel? user;
   bool _isLoading = true;
   bool _hasError = false;
-  double _buttonScale = 1.0; // ✅ Tracks button press animation
-  Timer? _inactivityTimer; // ✅ Track inactivity timer
-  Timer? _periodicTimer; // ✅ Periodic timer for marking offline
-  bool _isPanelOpen = false; // ✅ Tracks if the recent users panel is open
+  bool _isAffirmationLoading = true;
+  bool _adsLoading = true;
+
+  Timer? _inactivityTimer;
+
+  Map<String, dynamic>? _affirmation;
+  List<Map<String, dynamic>> _ads = [];
 
   final List<String> backgroundImages = [
-    'assets/images/bg1.png',
-    'assets/images/bg2.png',
-    'assets/images/bg3.png',
+    'assets/images/home.png',
+    'assets/images/catcher.png',
+    'assets/images/misc.png',
   ];
 
-  // 1️⃣ Declare your ads list
-  List<Map<String, dynamic>> _ads = [];
-  bool _adsLoading = true;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    final userId = supabase.auth.currentUser?.id;
+
+    if (userId == null) {
+      Navigator.pushReplacementNamed(context, '/login');
+      return;
+    }
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 2),
+    )..repeat(reverse: true);
+
     _loadUserProfile();
-    _updateOnlineStatus(); // ✅ Mark user online when app starts
-    _resetInactivityTimer(); // ✅ Start tracking inactivity
-    _startFriendRequestListener();
-
-    _loadAds();  // ✅ Load ads when HomeScreen starts!
-
-    // ✅ Auto Mark Offline After 10 Mins of Inactivity
-    _periodicTimer = Timer.periodic(Duration(minutes: 10), (timer) async {
-      if (!mounted) return;
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'is_online': false})
-          .eq('id', userId);
-    });
-  }
-  void _startFriendRequestListener() {
-    final supabase = Supabase.instance.client;
-
-    final channel = supabase.channel('public:friend_requests');
-
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.insert,
-      schema: 'public',
-      table: 'friend_requests',
-      callback: (payload) {
-        print('🔔 New friend request received!');
-
-        // Show a snackbar or notification in your app
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You have a new friend request!')),
-        );
-      },
-    ).subscribe();
+    _fetchTodaysAffirmation();
+    _loadAds();
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _inactivityTimer?.cancel();
-    _periodicTimer?.cancel();
     super.dispose();
   }
 
-  void _resetInactivityTimer() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    // ✅ Mark user as online immediately
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'is_online': true})
-        .eq('id', userId);
-
-    print("🟢 User marked as online.");
-
-    // ✅ Cancel previous timer
-    _inactivityTimer?.cancel();
-
-    // ✅ Set new timer for 10 minutes
-    _inactivityTimer = Timer(Duration(minutes: 10), () async {
-      if (!mounted) return;
-
-      // ✅ Mark user offline after 10 minutes of inactivity
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'is_online': false})
-          .eq('id', userId);
-
-      print("🔴 User marked as offline due to inactivity.");
-    });
-  }
-
-  Future<void> _updateOnlineStatus() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'is_online': true})
-        .eq('id', userId);
-  }
-
   Future<void> _loadUserProfile() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
-        return;
-      }
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception("No user logged in");
 
       final profile = await supabaseService.getUserProfile(userId);
-      if (profile != null) {
-        setState(() {
-          user = profile;
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _hasError = true;
-          _isLoading = false;
-        });
-      }
-    } catch (error) {
+      setState(() {
+        user = profile;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error loading profile: $e");
       setState(() {
         _hasError = true;
         _isLoading = false;
       });
     }
   }
-// 2️⃣ Create the function to load ads from Supabase
+
+  Future<void> _fetchTodaysAffirmation() async {
+    setState(() => _isAffirmationLoading = true);
+
+    final result = await supabaseService.fetchTodaysAffirmation();
+
+    if (result != null) {
+      setState(() {
+        _affirmation = result;
+        _isAffirmationLoading = false;
+      });
+
+      try {
+        await _audioPlayer.play(AssetSource('sounds/affirmation_chime.mp3'));
+      } catch (e) {
+        print("🔇 Sound error: $e");
+      }
+    } else {
+      setState(() => _isAffirmationLoading = false);
+    }
+  }
+
   Future<void> _loadAds() async {
-    setState(() {
-      _adsLoading = true;
-    });
+    setState(() => _adsLoading = true);
 
     try {
-      final fetchedAds = await SupabaseService().fetchBusinessAds();
-      print("✅ Ads fetched from Supabase: ${fetchedAds.length}"); // <<< This line!
-      print("📝 Raw Ads Data: $fetchedAds");
-
+      final fetchedAds = await supabaseService.fetchBusinessAds();
       final now = DateTime.now();
 
       final activeAds = fetchedAds.where((ad) {
-        final expiryDate = DateTime.tryParse(ad['expiry_date'] ?? '');
-        return expiryDate == null || expiryDate.isAfter(now);
+        final expiry = DateTime.tryParse(ad['expiry_date'] ?? '');
+        return expiry == null || expiry.isAfter(now);
       }).toList();
 
       activeAds.shuffle();
 
       setState(() {
-        _ads = activeAds.take(4).toList(); // Or just activeAds if you don't want to limit
+        _ads = activeAds.take(4).toList();
         _adsLoading = false;
       });
-
-      print("✅ Final Ads Loaded: ${_ads.length}");
-
-    } catch (error) {
-      print("❌ Failed to load ads: $error");
-      setState(() {
-        _adsLoading = false;
-      });
+    } catch (e) {
+      print("❌ Ads load error: $e");
+      setState(() => _adsLoading = false);
     }
-  }
-
-  void _navigateToPage(Widget page) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => page),
-    );
   }
 
   String getRotatingBackground() {
@@ -217,340 +151,51 @@ class _HomeScreenState extends State<HomeScreen> {
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
   }
 
-  String _formatDate(String isoDate) {
-    final date = DateTime.parse(isoDate);
-    return "${date.day}/${date.month}/${date.year}";
-  }
-
   @override
   Widget build(BuildContext context) {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-
-    return GestureDetector(
-      onTap: _resetInactivityTimer, // ✅ Reset inactivity timer on tap
-      onPanDown: (_) => _resetInactivityTimer(), // ✅ Reset on swipe/touch
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Celestial Path',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blueAccent, Colors.white],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.notifications, size: 30, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => FriendsPage()),
-                );
-              },
-            ),
-          ],
-        ),
-        body: Container(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Welcome to Aurana 🌌'),
+        flexibleSpace: Container(
           decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage(getRotatingBackground()),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: SingleChildScrollView( // ✅ Make page scrollable!
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: 20),
-                  _buildGreetingSection(),
-                  SizedBox(height: 20),
-                  _buildAnimatedButtons(userId),
-                  SizedBox(height: 20),
-                  _buildAdCarousel(),
-                  SizedBox(height: 20),
-// "See All Ads" Button
-                  Center(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => AllAdsPage()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurpleAccent,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        elevation: 5,
-                      ),
-                      child: Text(
-                        'See All Ads',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 40), // ✅ Bottom spacing for scrolling
-                ],
-              ),
+            gradient: LinearGradient(
+              colors: [Colors.deepPurpleAccent, Colors.indigo],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAdCarousel() {
-    return Container(
-      height: 200,
-      margin: EdgeInsets.symmetric(vertical: 10),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: (_ads.isNotEmpty ? _ads.length : 0) + 1, // Always show CTA card!
-        itemBuilder: (context, index) {
-          // ✅ If there are ads, show them first.
-          if (_ads.isNotEmpty && index < _ads.length) {
-            final ad = _ads[index];
-            return _buildAdCard(ad);
-          }
-
-          // ✅ This is always the last card: "Place Your Ad Here!"
-          return _buildCTAAdCard();
-        },
-      ),
-    );
-  }
-
-  Widget _buildAdCard(Map<String, dynamic> ad) {
-    return GestureDetector(
-      onTap: () async {   // ✅ Add async here
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BusinessProfilePage(
-              name: ad['name'] ?? '',
-              serviceType: ad['service_type'] ?? '',
-              tagline: ad['tagline'] ?? '',
-              description: ad['description'] ?? '',
-              profileImageUrl: ad['profile_image_url'] ?? '',
-              rating: 4.5,
-              adCreatedDate: ad['created_at'] ?? 'Unknown Date',
-              userId: ad['user_id'] ?? '',
-            ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsPage())),
           ),
-        );
-
-        if (result == true) {
-          // ✅ They deleted something! Reload ads.
-          _loadAds();
-        }
-
-      },
-      child: Container(
-        width: 140,
-        margin: EdgeInsets.symmetric(horizontal: 8),
+        ],
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Container(
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ Space evenly
-          children: [
-            // IMAGE ✅
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              child: ad['profile_image_url'] != null &&
-                  ad['profile_image_url'].isNotEmpty
-                  ? Image.network(
-                ad['profile_image_url'],
-                height: 100,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              )
-                  : Image.asset(
-                'assets/images/serv1.png',
-                height: 100,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-
-            // DETAILS ✅
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // SERVICE TYPE
-                    Text(
-                      ad['service_type'] ?? 'Service',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    // POST DATE
-                    Text(
-                      ad['created_at'] != null
-                          ? 'Posted: ${_formatDate(ad['created_at'])}'
-                          : 'No date',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 10,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    // RATING
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.star, size: 12, color: Colors.amber),
-                        SizedBox(width: 2),
-                        Text(
-                          ad['rating'] != null
-                              ? ad['rating'].toString()
-                              : '4.5',
-                          style: TextStyle(fontSize: 10, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-
-// 👉 CTA "Place Your Ad" Card
-  Widget _buildCTAAdCard() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => SubmitYourServicePage()),
-        );
-      },
-      child: Container(
-        width: 140,
-        margin: EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.amberAccent, Colors.orangeAccent],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+          image: DecorationImage(
+            image: AssetImage(getRotatingBackground()),
+            fit: BoxFit.cover,
           ),
-          borderRadius: BorderRadius.circular(16),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_circle_outline, size: 40, color: Colors.white),
-            SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                "✨ Place Your Ad Here! ✨",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  Widget _buildAnimatedButtons(String? userId) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildAnimatedButton("Soul Journey", Colors.deepPurple,
-                userId != null ? SoulJourneyScreen(userId: userId) : HomeScreen(userName: widget.userName)),
-            _buildAnimatedButton("Aura Catcher", Colors.blueAccent, AuraCatcherScreen()),
-          ],
-        ),
-        SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildAnimatedButton("Discovery", Colors.teal, UserDiscoveryScreen()),
-            _buildAnimatedButton("Tarot", Colors.orange, TarotReadingScreen()),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAnimatedButton(String text, Color color, Widget page) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _buttonScale = 0.9; // Shrink animation
-        });
-
-        Future.delayed(Duration(milliseconds: 200), () {
-          if (!mounted) return;
-          setState(() {
-            _buttonScale = 1.0; // Reset scale
-          });
-        });
-
-        _navigateToPage(page);
-      },
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 300),
-        width: 160,
-        height: 90,
-        transform: Matrix4.diagonal3Values(_buttonScale, _buttonScale, 1),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color.withOpacity(0.9), color.withOpacity(0.5)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.6),
-              blurRadius: 10,
-              spreadRadius: 2,
-              offset: Offset(0, 3),
-            ),
-          ],
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Center(
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildGreetingSection(),
+              SizedBox(height: 20),
+              _buildAnimatedButtons(),
+              SizedBox(height: 20),
+              _affirmationSection(),
+              SizedBox(height: 20),
+              _spiritualServicesButton(),
+              SizedBox(height: 20),
+              _buildLatestSoulTribeSection(),
+              SizedBox(height: 40),
+            ],
           ),
         ),
       ),
@@ -561,25 +206,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
+        color: Colors.black.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 25,
-            backgroundImage: user?.icon != null && user!.icon!.isNotEmpty
-                ? NetworkImage(user!.icon!)
+            radius: 30,
+            backgroundImage: user?.avatar != null && user!.avatar!.isNotEmpty
+                ? NetworkImage(user!.avatar!)
                 : AssetImage("assets/images/default_avatar.png") as ImageProvider,
           ),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'Welcome back, ${user?.name ?? "Guest"}!',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
             ),
           ),
         ],
@@ -587,181 +229,177 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildInspirationSection() {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(10),
+  Widget _buildAnimatedButtons() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _animatedButton("Soul Journey", Colors.deepPurple, SoulJourneyScreen(userId: user!.id)),
+            _animatedButton("Aura Catcher", Colors.blueAccent, AuraCatcherScreen()),
+          ],
+        ),
+        SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _animatedButton("Discovery", Colors.teal, UserDiscoveryScreen()),
+            _animatedButton("Tarot", Colors.orange, TarotReadingScreen()),
+          ],
+        ),
+        SizedBox(height: 20),
+        _soulMatchButton(),
+      ],
+    );
+  }
+
+  Widget _animatedButton(String text, Color color, Widget page) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
+      child: Container(
+        width: 150,
+        height: 80,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [color.withOpacity(0.9), color.withOpacity(0.5)]),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Center(
+          child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        ),
       ),
+    );
+  }
+
+  Widget _soulMatchButton() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SoulMatchPage())),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min, // Keeps things neat!
         children: [
-          Text(
-            "✨ Daily Affirmations ✨",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-            textAlign: TextAlign.center,
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.deepPurpleAccent.withOpacity(0.8),
+                  Colors.purpleAccent.withOpacity(0.6),
+                ],
+                radius: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.deepPurpleAccent.withOpacity(0.8),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(
+                Icons.favorite,
+                size: 50,
+                color: Colors.white,
+              ),
+            ),
           ),
           SizedBox(height: 10),
-
-          // ✅ Wrap Affirmations in Flexible
-          Flexible(
-            child: ListView(
-              children: [
-                _buildAffirmation("I am at peace with my past and embrace my future."),
-                _buildAffirmation("I radiate love, happiness, and positivity."),
-                _buildAffirmation("I am in alignment with my higher self."),
+          Text(
+            'Soul Match',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  blurRadius: 10,
+                  color: Colors.purpleAccent.withOpacity(0.8),
+                  offset: Offset(0, 0),
+                ),
               ],
             ),
           ),
-
         ],
       ),
     );
   }
 
 
-  Widget _buildAffirmation(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        "• $text",
-        style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.black87),
+  Widget _affirmationSection() {
+    if (_isAffirmationLoading) return CircularProgressIndicator();
+
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          Text("✨ Today's Affirmation ✨", style: TextStyle(fontSize: 18, color: Colors.amberAccent)),
+          SizedBox(height: 12),
+          Text(_affirmation?['text'] ?? "No affirmation today.", style: TextStyle(color: Colors.white70)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(icon: Icon(Icons.favorite, color: Colors.pinkAccent), onPressed: () {}),
+              IconButton(icon: Icon(Icons.share, color: Colors.lightBlueAccent), onPressed: () {}),
+            ],
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildRecentUsersSection() {
-    return Stack(
-      children: [
-        // ✅ Slide-Out Panel
-        AnimatedPositioned(
-          duration: Duration(milliseconds: 300),
-          left: _isPanelOpen ? 0 : -250, // ✅ Slide from left
-          top: 0,
-          bottom: 0,
-          child: GestureDetector(
-            onTap: () {
-              if (!mounted) return;
-              setState(() {
-                _isPanelOpen = false;
-              });
-            },
-            child: Container(
-              width: 200,
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.8), // ✅ Dark background
-                borderRadius: BorderRadius.only(topRight: Radius.circular(10), bottomRight: Radius.circular(10)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "👤 Recent Users",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  SizedBox(height: 10),
-                  Expanded(
-                    child: FutureBuilder<List<UserModel>>(
-                      future: supabaseService.getRecentUsers(10), // ✅ Fetch last 10 users
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-
-                        final users = snapshot.data!;
-                        if (users.isEmpty) {
-                          return Center(child: Text("No recent users yet!", style: TextStyle(color: Colors.white)));
-                        }
-
-                        return ListView.builder(
-                          itemCount: users.length,
-                          itemBuilder: (context, index) {
-                            final user = users[index];
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() => _isPanelOpen = false);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => ProfileScreen(userId: user.id)),
-                                );
-                              },
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8),
-                                child: Column( // ✅ NEW layout here!
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundImage: (user.icon != null && user.icon!.isNotEmpty)
-                                          ? NetworkImage(user.icon!)
-                                          : AssetImage("assets/default_avatar.png") as ImageProvider,
-                                    ),
-                                    SizedBox(width: 10),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(user.name, style: TextStyle(fontSize: 14, color: Colors.white)),
-                                        Text(
-                                          user.isOnline == true
-                                              ? "🟢 Online"
-                                              : (user.lastSeen != null
-                                              ? "🔴 Last Seen: ${_formatLastSeen(user.lastSeen!)}"
-                                              : "🔴 Last Seen: Unknown"),
-                                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
+  Widget _spiritualServicesButton() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AllAdsPage())),
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16), // reduced horizontal padding
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.purpleAccent, Colors.deepPurpleAccent],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurpleAccent.withOpacity(0.6),
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                "Spiritual Services",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  overflow: TextOverflow.ellipsis, // 🛠️ Handles overflow safely!
+                ),
               ),
             ),
-          ),
+          ],
         ),
+      ),
+    );
+  }
 
 
-        // ✅ Open Panel Button
-        Positioned(
-          left: 0,
-          top: 20,
-          child: IconButton(
-            icon: Icon(Icons.chevron_right, size: 30, color: Colors.white),
-            onPressed: () => setState(() => _isPanelOpen = !_isPanelOpen),
-          ),
-        ),
+  Widget _buildLatestSoulTribeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("⭐ Latest Aurana Tribe Members", style: TextStyle(color: Colors.white, fontSize: 18)),
+        SizedBox(height: 10),
+        // You can add your own implementation for showing latest members here.
       ],
     );
   }
 }
-
-// ✅ Format lastSeen as 'X time ago' or a friendly date
-String _formatLastSeen(String isoDateString) {
-  try {
-    DateTime lastSeenTime = DateTime.parse(isoDateString);
-    Duration difference = DateTime.now().difference(lastSeenTime);
-
-    if (difference.inMinutes < 1) {
-      return "Just now";
-    } else if (difference.inMinutes < 60) {
-      return "${difference.inMinutes} min ago";
-    } else if (difference.inHours < 24) {
-      return "${difference.inHours} hrs ago";
-    } else if (difference.inDays == 1) {
-      return "Yesterday";
-    } else {
-      return "${difference.inDays} days ago";
-    }
-  } catch (e) {
-    print("❌ Error parsing lastSeen: $e");
-    return "Unknown";
-  }
-}
-
-
-

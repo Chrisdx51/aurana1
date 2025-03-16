@@ -16,52 +16,73 @@ class SupabaseService {
     try {
       final response = await supabase
           .from('profiles')
-          .select('id, name, email, bio, dob, icon, spiritual_path, element, spiritual_xp, spiritual_level, privacy') // ✅ Added privacy
+          .select('''
+      id,
+      name,
+      username,
+      display_name_choice,
+      email,
+      bio,
+      dob,
+      gender,
+      avatar,
+      spiritual_path,
+      element,
+      city,
+      country,
+      privacy_setting,
+      journey_visibility,
+      soul_match_message,
+      spiritual_xp,
+      spiritual_level
+    ''')
           .eq('id', userId)
           .single();
 
-      print("✅ Fetched DOB from Supabase: ${response['dob']}");
-
 
       if (response != null) {
+        print("✅ Fetched User Profile for $userId: ${response['dob']}");
         return UserModel.fromJson(response);
+      } else {
+        print("❌ No profile found for userId: $userId");
       }
     } catch (error) {
-      print("Error fetching user profile: $error");
+      print("❌ Error fetching user profile: $error");
     }
     return null;
-  }
-
-  // ✅ Fetch Recent Users (Last 5 Users Logged In)
-  Future<List<UserModel>> getRecentUsers(int limit) async {
-    try {
-      final response = await supabase
-          .from('profiles')
-          .select('id, name, icon, is_online, last_seen') // ✅ Make sure 'is_online' is selected
-          .order('last_seen', ascending: false)
-          .limit(limit);
-
-      // Cast the response directly
-      final List<dynamic> data = response as List<dynamic>;
-
-      return response.map((user) => UserModel.fromJson(user)).toList();
-    } catch (error) {
-      print("❌ Error fetching recent users: $error");
-      return [];
-    }
   }
 
   Future<UserModel?> fetchUserProfileWithPrivacy(String viewerId, String targetUserId) async {
     try {
       final response = await supabase
           .from('profiles')
-          .select('id, name, bio, dob, icon, privacy, spiritual_path, element, spiritual_xp, spiritual_level')
+          .select('''
+      id,
+      name,
+      username,
+      display_name_choice,
+      bio,
+      dob,
+      gender,
+      avatar,
+      spiritual_path,
+      element,
+      city,
+      country,
+      privacy_setting,
+      journey_visibility,
+      soul_match_message,
+      spiritual_xp,
+      spiritual_level
+    ''')
           .eq('id', targetUserId)
           .single();
 
+
       if (response == null) return null;
 
-      String privacy = response['privacy'] ?? 'public';
+      String privacy = response['privacy_setting'] ?? 'public';  // ✅ FIXED FIELD
+
 
       if (privacy == 'private' && viewerId != targetUserId) {
         print("🔒 Profile is private. Access denied.");
@@ -82,6 +103,60 @@ class SupabaseService {
       return null;
     }
   }
+  // ✅ Check if you sent a friend request
+  Future<bool> checkSentFriendRequest(String currentUserId, String targetUserId) async {
+    try {
+      final response = await supabase
+          .from('friend_requests')
+          .select('id')
+          .eq('sender_id', currentUserId)
+          .eq('receiver_id', targetUserId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      return response != null;
+    } catch (error) {
+      print("❌ Error in checkSentFriendRequest: $error");
+      return false;
+    }
+  }
+
+// ✅ Check if you received a friend request
+  Future<bool> checkReceivedFriendRequest(String currentUserId, String targetUserId) async {
+    try {
+      final response = await supabase
+          .from('friend_requests')
+          .select('id')
+          .eq('sender_id', targetUserId)
+          .eq('receiver_id', currentUserId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      return response != null;
+    } catch (error) {
+      print("❌ Error in checkReceivedFriendRequest: $error");
+      return false;
+    }
+  }
+
+// ✅ Cancel your sent friend request
+  Future<bool> cancelFriendRequest(String currentUserId, String targetUserId) async {
+    try {
+      await supabase
+          .from('friend_requests')
+          .delete()
+          .eq('sender_id', currentUserId)
+          .eq('receiver_id', targetUserId)
+          .eq('status', 'pending');
+
+      print("✅ Friend request cancelled.");
+      return true;
+    } catch (error) {
+      print("❌ Error in cancelFriendRequest: $error");
+      return false;
+    }
+  }
+
   // Check if profile is complete
   Future<bool> isProfileComplete(String userId) async {
     try {
@@ -89,7 +164,7 @@ class SupabaseService {
 
       final response = await supabase
           .from('profiles')
-          .select('name, bio, dob')
+          .select('name, bio, dob, avatar')
           .eq('id', userId)
           .maybeSingle();
 
@@ -98,12 +173,15 @@ class SupabaseService {
         return false;
       }
 
-      bool isComplete = response['name'] != null && response['name'].toString().isNotEmpty &&
-          response['bio'] != null && response['bio'].toString().isNotEmpty &&
-          response['dob'] != null;
+      final name = response['name'] ?? '';
+      final bio = response['bio'] ?? '';
+      final dob = response['dob'] ?? '';
+      final avatar = response['avatar'] ?? '';
+
+      // Profile is complete if ALL are filled properly
+      bool isComplete = name.isNotEmpty && bio.isNotEmpty && dob.isNotEmpty && avatar.isNotEmpty;
 
       print("✅ Profile completeness result: $isComplete");
-
       return isComplete;
     } catch (error) {
       print("❌ Error checking profile completeness: $error");
@@ -111,91 +189,142 @@ class SupabaseService {
     }
   }
 
-  Future<bool> updateProfilePrivacy(String userId, String newPrivacy) async {
+
+
+  Future<bool> updateProfilePrivacy(String userId, String newPrivacySetting) async {
     try {
-      await supabase.from('profiles').update({'privacy': newPrivacy}).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({'privacy_setting': newPrivacySetting})
+          .eq('id', userId);
       return true;
     } catch (error) {
-      print('Error updating privacy: $error');
+      print('Error updating privacy_setting: $error');
       return false;
     }
   }
 
-  Future<bool> updateUserProfile(String userId,
+  Future<bool> updateJourneyVisibility(String userId, String visibility) async {
+    try {
+      await supabase
+          .from('profiles')
+          .update({'journey_visibility': visibility})
+          .eq('id', userId);
+
+      print('✅ Journey visibility updated to $visibility');
+      return true;
+    } catch (error) {
+      print('❌ Error updating journey visibility: $error');
+      return false;
+    }
+  }
+
+  Future<bool> updateUserProfile(
+      String userId,
       String name,
+      String username,                      // ✅ Added
+      String displayNameChoice,             // ✅ Added
       String bio,
       String? dob,
-      String? icon,
+      String? gender,                       // ✅ Added
+      String? avatar,
       String? spiritualPath,
       String? element,
-      String? privacy, // ✅ Added privacy
+      String? privacySetting,
+      String? journeyVisibility,            // ✅ Added
+      String? soulMatchMessage,
+      String? city,
+      String? country,
       int spiritualXP,
-      int spiritualLevel) async {
+      int spiritualLevel,
+      ) async {
     try {
-      print("🔄 Updating profile with DOB: $dob");
-      print("🔄 Checking if profile exists in Supabase for user: $userId");
+      print("🔄 Updating profile for userId: $userId");
 
-      // ✅ Check if the profile already exists
+      // Step 1: Check if the profile already exists
       final checkProfile = await supabase
           .from('profiles')
-          .select('email') // Fetch email to avoid NULL constraint errors
+          .select('email') // Must get the email to avoid NULL issues
           .eq('id', userId)
           .maybeSingle();
 
       if (checkProfile == null) {
-        print('❌ Profile does not exist. Creating a new profile...');
+        print('❌ Profile does not exist. Creating a new one...');
 
-        // 🔥 Fetch email from Auth table to ensure email is included
         final user = Supabase.instance.client.auth.currentUser;
+
         if (user == null || user.email == null) {
-          print("❌ Error: Cannot create profile without an email.");
+          print("❌ Cannot create profile without an authenticated user.");
           return false;
         }
 
-        // ✅ Insert new profile with email
+        // ✅ INSERT New Profile
         await supabase.from('profiles').insert({
           'id': userId,
-          'email': user.email, // Ensures email is not NULL
+          'email': user.email,
           'name': name,
+          'username': username,                      // ✅ NEW
+          'display_name_choice': displayNameChoice,  // ✅ NEW
           'bio': bio,
           'dob': dob,
-          'icon': icon,
+          'gender': gender,                          // ✅ NEW
+          'avatar': avatar,
           'spiritual_path': spiritualPath,
           'element': element,
-          'privacy': privacy, // ✅ Save privacy setting
+          'privacy_setting': privacySetting,
+          'journey_visibility': journeyVisibility,   // ✅ NEW
+          'soul_match_message': soulMatchMessage,
+          'city': city,
+          'country': country,
           'spiritual_xp': spiritualXP,
           'spiritual_level': spiritualLevel,
-        }) .select();
+          'created_at': DateTime.now().toIso8601String(), // Optional, but recommended
+        }).select();
+
+        print('✅ New profile inserted successfully!');
       } else {
-        // ✅ Update existing profile
-        final response = await supabase
+        // ✅ UPDATE Existing Profile
+        final updateResponse = await supabase
             .from('profiles')
             .update({
           'name': name,
+          'username': username,                      // ✅ NEW
+          'display_name_choice': displayNameChoice,  // ✅ NEW
           'bio': bio,
           'dob': dob,
-          'icon': icon,
+          'gender': gender,                          // ✅ NEW
+          'avatar': avatar,
           'spiritual_path': spiritualPath,
           'element': element,
+          'privacy_setting': privacySetting,
+          'journey_visibility': journeyVisibility,   // ✅ NEW
+          'soul_match_message': soulMatchMessage,
+          'city': city,
+          'country': country,
           'spiritual_xp': spiritualXP,
           'spiritual_level': spiritualLevel,
+          'updated_at': DateTime.now().toIso8601String(), // ✅ For tracking updates
         })
             .eq('id', userId)
             .select();
 
-        if (response.isEmpty) {
-          print('❌ Failed to update profile: No rows modified.');
+        if (updateResponse == null || updateResponse.isEmpty) {
+          print('❌ Update failed: No rows affected.');
           return false;
         }
+
+        print('✅ Profile updated successfully!');
       }
 
-      print('✅ Profile updated successfully!');
       return true;
     } catch (error) {
-      print('❌ Error updating profile: $error');
+      print('❌ Error in updateUserProfile: $error');
       return false;
     }
   }
+
+
+
   // Upload Profile Picture to Supabase Storage
   Future<String?> uploadProfilePicture(String userId, File imageFile) async {
     try {
@@ -204,7 +333,7 @@ class SupabaseService {
           .millisecondsSinceEpoch}.png";
 
       // Remove old profile picture if it exists
-      final listResponse = await supabase.storage.from('profile_pictures').list(
+      final listResponse = await supabase.storage.from('avatars').list(
           path: "avatars/");
       if (listResponse is List && listResponse.isNotEmpty) {
         for (var file in listResponse) {
@@ -251,6 +380,31 @@ class SupabaseService {
       return null;
     }
   }
+// ✅ Fetch Recent Users (Last X Users Logged In)
+  // ✅ Fetch Recent Users (Returns List<UserModel>)
+  Future<List<UserModel>> getRecentUsers(int limit) async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('id, name, avatar, is_online, last_seen, bio, dob, zodiac_sign, spiritual_path, element, spiritual_xp, spiritual_level, soul_match_message, privacy_setting') // Include all fields needed by UserModel
+          .order('last_seen', ascending: false)
+          .limit(limit);
+
+      if (response == null || response.isEmpty) {
+        print('⚠️ No recent users found.');
+        return [];
+      }
+
+      // Convert response to List<UserModel>
+      final users = response.map<UserModel>((userMap) => UserModel.fromJson(userMap)).toList();
+
+      print('✅ Fetched ${users.length} recent users.');
+      return users;
+    } catch (error) {
+      print('❌ Error fetching recent users: $error');
+      return [];
+    }
+  }
 
   // ✅ Fetch All Business Ads for the Home Page or Discovery Page
   Future<List<Map<String, dynamic>>> fetchBusinessAds() async {
@@ -286,26 +440,75 @@ class SupabaseService {
     }
   }
 
-  // Add Milestone to Supabase Database
-  Future<List<MilestoneModel>> fetchMilestones({String? userId, bool global = false}) async {
-    try {
-      var query = supabase.from('milestones').select('''
-  id, user_id, content, milestone_type, media_url, created_at, 
-  energy_boosts, like_count, comment_count, visibility,
-  profiles(name, icon)  -- ✅ Fetch profile picture correctly
-''');
+  Future<List<String>> fetchFriendsIds(String userId) async {
+    final response = await supabase
+        .from('friends')
+        .select('friend_id')
+        .eq('user_id', userId)
+        .eq('status', 'accepted'); // ✅ Adjust to your table's field if needed
 
-      if (global) {
-        query = query.eq('visibility', 'open'); // ✅ Fetch only public posts
-      } else if (userId != null) {
-        query = query.eq('user_id', userId); // ✅ Fetch only the user's posts
+    final friendIds = response.map<String>((item) => item['friend_id'] as String).toList();
+
+    print('✅ Friends IDs fetched for $userId: $friendIds');
+
+    return friendIds;
+  }
+
+  // Add Milestone to Supabase Database
+  Future<List<MilestoneModel>> fetchMilestones({
+    String? userId,
+    bool global = false,
+  }) async {
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        print("❌ No user logged in!");
+        return [];
       }
 
-      final response = await query; // ✅ Execute the query
+      final queryBuilder = supabase
+          .from('milestones');
 
-      return response.map<MilestoneModel>((json) => MilestoneModel.fromJson(json)).toList();
-    } catch (error) {
-      print("❌ Error fetching milestones: $error");
+      // 🌎 Cosmic Flow: Show public posts
+      if (global) {
+        print("🔵 Loading Cosmic Flow (Public Wall)");
+
+        final response = await queryBuilder
+            .select('''
+            *,
+            profiles (
+              username,
+              avatar
+            )
+          ''')
+            .eq('visibility', 'open')
+            .order('created_at', ascending: false);
+
+        print('✅ Cosmic Flow Milestones fetched: ${response.length}');
+        return response.map((e) => MilestoneModel.fromMap(e)).toList();
+
+      } else {
+        // 🧘 Inner Realm: Show ONLY posts by userId (private & public)
+        print("🟣 Loading Inner Realm (User Wall)");
+
+        final response = await queryBuilder
+            .select('''
+            *,
+            profiles (
+              username,
+              avatar
+            )
+          ''')
+            .eq('user_id', userId ?? user.id)
+            .order('created_at', ascending: false);
+
+        print('✅ Inner Realm Milestones fetched: ${response.length}');
+        return response.map((e) => MilestoneModel.fromMap(e)).toList();
+      }
+
+    } catch (e) {
+      print('❌ Error fetching milestones: $e');
       return [];
     }
   }
@@ -426,6 +629,16 @@ class SupabaseService {
           .eq('user_id', userId)
           .maybeSingle();
 
+      // 👉 Fetch milestone info to get the post owner!
+      final milestone = await supabase
+          .from('milestones')
+          .select('user_id, content')
+          .eq('id', milestoneId)
+          .maybeSingle();
+
+      final postOwnerId = milestone?['user_id'];
+      final milestoneContent = milestone?['content'] ?? '';
+
       if (existingLike != null) {
         // Unlike (Delete the like)
         await supabase
@@ -443,11 +656,22 @@ class SupabaseService {
         });
 
         print("❤️ Liked successfully.");
+
+        // 🚀 Send Notification (Only if NOT your own post!)
+        if (postOwnerId != null && postOwnerId != userId) {
+          await createAndSendNotification(
+            recipientId: postOwnerId,
+            title: "✨ New Like!",
+            body: "Someone liked your post: $milestoneContent",
+            type: "like",
+          );
+        }
       }
     } catch (error) {
       print("❌ Error toggling like: $error");
     }
   }
+
 
   Future<bool> restoreSession() async {
     try {
@@ -507,7 +731,7 @@ class SupabaseService {
   }
 
   // 🔔 Send Push Notification Function
-  Future<void> sendPushNotification(String fcmToken, String title, String body) async {
+  static Future<void> sendPushNotification(String fcmToken, String title, String body) async {
     final String serverKey = dotenv.env['FIREBASE_SERVER_KEY'] ?? '';
 
     if (serverKey.isEmpty) {
@@ -543,6 +767,50 @@ class SupabaseService {
       print('❌ Error sending notification: $error');
     }
   }
+
+  Future<void> createAndSendNotification({
+    required String recipientId,
+    required String title,
+    required String body,
+    required String type, // e.g. 'friend_request', 'friend_accept'
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      // 1️⃣ Save the notification in Supabase DB
+      await Supabase.instance.client.from('notifications').insert({
+        'user_id': recipientId,
+        'notification_type': type,
+        'title': title,
+        'body': body,
+        'has_read': false,
+        'message_data': data ?? {},
+      });
+
+      // 2️⃣ Fetch their FCM token
+      final recipientProfile = await Supabase.instance.client
+          .from('profiles')
+          .select('fcm_token')
+          .eq('id', recipientId)
+          .maybeSingle();
+
+      final fcmToken = recipientProfile?['fcm_token'] ?? '';
+
+
+      if (fcmToken == null || fcmToken.isEmpty) {
+        print("⚠️ No FCM token found for user: $recipientId");
+        return;
+      }
+
+      // 3️⃣ Send Push Notification
+      await sendPushNotification(fcmToken, title, body);
+
+      print("✅ Push notification sent!");
+    } catch (error) {
+      print("❌ Error sending notification: $error");
+    }
+  }
+
+
   // ✅ Update XP & Level
   Future<void> updateSpiritualXP(String userId, int xpEarned) async {
     try {
@@ -657,7 +925,7 @@ class SupabaseService {
     try {
       final response = await supabase
           .from('milestones')
-          .select('id, user_id, content, media_url, visibility, profiles!inner(name, icon)')
+          .select('id, user_id, content, media_url, visibility, profiles!inner(name, avatar)')
           .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(1)
@@ -672,12 +940,27 @@ class SupabaseService {
     return null;
   }
 
+  Future<List<Map<String, dynamic>>> getLatestUsers({int limit = 10}) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('id, name, avatar')
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching latest users: $e');
+      return [];
+    }
+  }
+
   // Fetch Top Users for the Leaderboard
   Future<List<UserModel>> fetchTopUsers() async {
     try {
       final response = await supabase
           .from('profiles')
-          .select('id, name, icon, spiritual_xp, spiritual_level')
+          .select('id, name, avatar, spiritual_xp, spiritual_level')
           .order('spiritual_xp', ascending: false) // Sort by highest XP
           .limit(10); // Only show top 10
 
@@ -689,61 +972,100 @@ class SupabaseService {
     }
   }
 
+  Future<bool> checkIfFriends(String userId, String targetUserId) async {
+    try {
+      final response = await supabase
+          .from('friends')
+          .select('status')
+          .or('and(user_id.eq.$userId, friend_id.eq.$targetUserId), and(user_id.eq.$targetUserId, friend_id.eq.$userId)')
+          .eq('status', 'accepted')
+          .maybeSingle();
+
+      return response != null;
+    } catch (error) {
+      print("❌ Error in checkIfFriends: $error");
+      return false;
+    }
+  }
 
 // ✅ Send a Friend Request
   Future<bool> sendFriendRequest(String senderId, String receiverId) async {
     try {
       // ✅ Check if a request already exists
       final existingRequest = await supabase
-          .from('friends')
-          .select('status')
-          .or('and(user_id.eq.$senderId, friend_id.eq.$receiverId), and(user_id.eq.$receiverId, friend_id.eq.$senderId)')
+          .from('friend_requests')
+          .select('id')
+          .or('and(sender_id.eq.$senderId,receiver_id.eq.$receiverId),and(sender_id.eq.$receiverId,receiver_id.eq.$senderId)')
+          .eq('status', 'pending')
           .maybeSingle();
 
       if (existingRequest != null) {
-        print("⚠️ Friend request already exists.");
+        print("⚠️ Friend request already pending.");
         return false;
       }
-
-      // ✅ Insert a new friend request
-      await supabase.from('friends').insert({
-        'user_id': senderId,
-        'friend_id': receiverId,
+// ✅ Insert new request
+      await supabase.from('friend_requests').insert({
+        'sender_id': senderId,
+        'receiver_id': receiverId,
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
 
-      // ✅ Send a notification to the receiver
-      await supabase.from('notifications').insert({
-        'user_id': receiverId,
-        'type': 'friend_request',
-        'message': 'You have a new friend request!',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      print("✅ Friend request sent!");
+      // ✅ Send notification after sending friend request
+      await createAndSendNotification(
+        recipientId: receiverId,
+        title: '👤 Friend Request',
+        body: 'You have a new friend request!',
+        type: 'friend_request',
+      );
 
+
+      print("✅ Friend request sent!");
       return true;
     } catch (error) {
-      print("Error sending friend request: $error");
+      print("❌ Error sending friend request: $error");
       return false;
     }
   }
-
-
-
   // ✅ Accept a Friend Request
   Future<bool> acceptFriendRequest(String userId, String friendId) async {
     try {
+      // Update the friend request to accepted
       await supabase
-          .from('friends')
+          .from('friend_requests')
           .update({'status': 'accepted'})
-          .match({'user_id': friendId, 'friend_id': userId});
+          .match({'sender_id': friendId, 'receiver_id': userId});
 
+      // Create mutual friendship records
+      await supabase.from('friends').insert([
+        {'user_id': userId, 'friend_id': friendId, 'status': 'accepted'},
+        {'user_id': friendId, 'friend_id': userId, 'status': 'accepted'},
+      ]);
+
+      // Optional: Delete the friend request after acceptance
+      await supabase
+          .from('friend_requests')
+          .delete()
+          .match({'sender_id': friendId, 'receiver_id': userId});
+
+      // Send notification
+      await createAndSendNotification(
+        recipientId: friendId,
+        title: '🎉 Friend Request Accepted!',
+        body: 'You and ${Supabase.instance.client.auth.currentUser?.email ?? 'someone'} are now friends!',
+        type: 'friend_accept',
+      );
+
+      print("✅ Friend request accepted and mutual friendship added.");
       return true;
     } catch (error) {
-      print("Error accepting friend request: $error");
+      print("❌ Error accepting friend request: $error");
       return false;
     }
   }
+
+
 
   // ✅ Remove a Friend
   Future<bool> removeFriend(String userId, String friendId) async {
@@ -763,6 +1085,25 @@ class SupabaseService {
     }
   }
 
+// ✅ Fetch messages between two users
+  Future<List<Map<String, dynamic>>> fetchMessages(String userId, String friendId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('messages')
+          .select('id, sender_id, receiver_id, message_text, created_at')
+          .or('and(sender_id.eq.$userId,receiver_id.eq.$friendId),and(sender_id.eq.$friendId,receiver_id.eq.$userId)')
+          .order('created_at', ascending: true); // Show oldest first
+
+      print("✅ Messages fetched: ${response.length}");
+
+      return response;
+    } catch (error) {
+      print("❌ Error fetching messages: $error");
+      return [];
+    }
+  }
+
+
   Future<bool> addMilestone(String userId, String content, String milestoneType, String? mediaUrl, String visibility) async {
     try {
       final response = await supabase.from('milestones').insert({
@@ -775,15 +1116,17 @@ class SupabaseService {
         'visibility': visibility, // ✅ Store visibility (public or sacred)
       }).select();
 
-      if (response.isNotEmpty) {
+      // ✅ Now you can check if response has something inside
+      if (response != null && response.isNotEmpty) {
         print("✅ Milestone added successfully: $response");
         return true;
       } else {
-        print("❌ Supabase returned empty response.");
+        print("❌ No response returned from milestone insert.");
         return false;
       }
+
     } catch (error) {
-      print("❌ Supabase Error: $error");
+      print("❌ Supabase Error adding milestone: $error");
       return false;
     }
   }
@@ -814,12 +1157,36 @@ class SupabaseService {
 
     return response.length;
   }
+
+  Future<Map<String, dynamic>?> fetchTodaysAffirmation() async {
+    try {
+      final today = DateTime.now().toIso8601String().substring(0, 10); // YYYY-MM-DD
+
+      final response = await Supabase.instance.client
+          .from('affirmations')
+          .select()
+          .eq('show_date', today) // <- This field!
+          .maybeSingle();
+
+      if (response != null) {
+        print("✅ Affirmation for today: ${response['text']}");
+        return response;
+      } else {
+        print("⚠️ No affirmation found for today.");
+        return null;
+      }
+    } catch (error) {
+      print("❌ Error fetching affirmation: $error");
+      return null;
+    }
+  }
+
   // ✅ Fetch Friend List
   Future<List<Map<String, dynamic>>> getFriendsList(String userId) async {
     try {
       final response = await supabase
           .from('friends')
-          .select('friend_id, profiles(name, icon)')
+          .select('friend_id, profiles(name, avatar)')
           .eq('user_id', userId)
           .eq('status', 'accepted');
 
@@ -835,7 +1202,7 @@ class SupabaseService {
 
       final response = await supabase
           .from('profiles')
-          .select('id, name, icon, spiritual_path')
+          .select('id, name, avatar, spiritual_path')
           .order('name', ascending: true);
 
       if (currentUserId != null) {
@@ -849,9 +1216,3 @@ class SupabaseService {
     }
   }
 }
-
-
-
-extension on PostgrestTransformBuilder<PostgrestList> {
-  void eq(String s, String t) {}
-}// Helper function to calculate XP threshold for each level
