@@ -4,21 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:audioplayers/audioplayers.dart';
-
+import 'spiritual_guidance_screen.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
-import '../widgets/custom_nav_bar.dart';
 import 'profile_screen.dart';
 import 'soul_match_page.dart';
 import 'tarot_reading_screen.dart';
 import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
 import 'soul_journey_screen.dart';
-import 'user_discovery_screen.dart';
+import 'soul_connections_screen.dart'; // ✅ New Import!
 import 'friends_page.dart';
 import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
+import '../widgets/banner_ad_widget.dart'; // ✅ BannerAdWidget import
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -41,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _adsLoading = true;
 
   Timer? _inactivityTimer;
-
   Map<String, dynamic>? _affirmation;
   List<Map<String, dynamic>> _ads = [];
 
@@ -154,53 +153,213 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Welcome to Aurana 🌌'),
-        flexibleSpace: Container(
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(60.0),
+        child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.deepPurpleAccent, Colors.indigo],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: [
+                Colors.deepPurpleAccent.withOpacity(0.3),
+                Colors.black.withOpacity(0.3),
+                Colors.transparent,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.notifications),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsPage())),
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(getRotatingBackground()),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _buildGreetingSection(),
-              SizedBox(height: 20),
-              _buildAnimatedButtons(),
-              SizedBox(height: 20),
-              _affirmationSection(),
-              SizedBox(height: 20),
-              _spiritualServicesButton(),
-              SizedBox(height: 20),
-              _buildLatestSoulTribeSection(),
-              SizedBox(height: 40),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              'Welcome to Aurana 🌌',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            centerTitle: false,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.notifications, color: Colors.white),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsPage())),
+              ),
             ],
           ),
         ),
       ),
+
+      // ✅ The ad comes here!
+      body: Column(
+        children: [
+          BannerAdWidget(), // ✅ AD BANNER HERE, NO AD UNIT REQUIRED!
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(getRotatingBackground()),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildGreetingSection(),
+                    SizedBox(height: 20),
+                    _buildAnimatedButtons(),
+                    SizedBox(height: 20),
+                    _affirmationSection(),
+                    SizedBox(height: 20),
+                    _spiritualServicesButton(),
+                    SizedBox(height: 20),
+                    _adCarousel(),
+                    SizedBox(height: 20),
+                    _buildLatestSoulTribeSection(),
+                    SizedBox(height: 20),
+                   ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
+// 🟣 ADD THIS METHOD BELOW _buildLatestSoulTribeSection()
+
+  Widget _buildAchievementsAndQuestTab() {
+    // Dummy achievements for display; in real case, you would fetch from Supabase
+    final List<Map<String, dynamic>> earnedAchievements = [
+      {
+        'title': 'First Quest Complete',
+        'description': 'You completed your first quest!',
+        'icon': Icons.emoji_events,
+      },
+      {
+        'title': 'Aura Boost I',
+        'description': 'Your aura reached level 1!',
+        'icon': Icons.bolt,
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: 20),
+
+        // ⭐ Medals / Achievements Section
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(
+                '🏅 Your Achievements',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              SizedBox(height: 10),
+
+              // Achievements Display
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: earnedAchievements.map((achievement) {
+                    return GestureDetector(
+                      onTap: () {
+                        Share.share('I just earned the "${achievement['title']}" badge on Aurana! 🌟');
+                      },
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: 8),
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.purpleAccent, Colors.blueAccent],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blueAccent.withOpacity(0.6),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              achievement['icon'],
+                              color: Colors.yellowAccent,
+                              size: 40,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              achievement['title'],
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        SizedBox(height: 20),
+
+        // 🟣 Spiritual Quest Button
+        GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(context, '/mystic-quests'); // Or use MaterialPageRoute if not yet in routes
+          },
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.tealAccent.shade400, Colors.teal.shade600],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.tealAccent.withOpacity(0.6),
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+                SizedBox(width: 10),
+                Text(
+                  'Spiritual Quest',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
 
   Widget _buildGreetingSection() {
     return Container(
@@ -243,13 +402,73 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _animatedButton("Discovery", Colors.teal, UserDiscoveryScreen()),
+            _animatedButton("Tribe Finder", Colors.teal, SoulConnectionsScreen()),
             _animatedButton("Tarot", Colors.orange, TarotReadingScreen()),
           ],
         ),
         SizedBox(height: 20),
-        _soulMatchButton(),
+
+        // ✅ Add both orbs in one row, side by side!
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _soulMatchButton(),
+            SizedBox(width: 20), // spacing between the two orbs
+            _spiritualGuidanceButton(), // new guidance orb button
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _spiritualGuidanceButton() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SpiritualGuidanceScreen())),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.blueAccent.withOpacity(0.8),
+                  Colors.cyanAccent.withOpacity(0.6),
+                ],
+                radius: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(0.8),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(Icons.auto_awesome, size: 50, color: Colors.white), // ✅ You can swap this with an image if you like!
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Guidance',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  blurRadius: 10,
+                  color: Colors.cyanAccent.withOpacity(0.8),
+                  offset: Offset(0, 0),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -274,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SoulMatchPage())),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // Keeps things neat!
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 100,
@@ -297,11 +516,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ],
             ),
             child: Center(
-              child: Icon(
-                Icons.favorite,
-                size: 50,
-                color: Colors.white,
-              ),
+              child: Image.asset('assets/images/yinyang.png', width: 70, height: 70), // ✅ Yin Yang Icon
             ),
           ),
           SizedBox(height: 10),
@@ -324,7 +539,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
-
 
   Widget _affirmationSection() {
     if (_isAffirmationLoading) return CircularProgressIndicator();
@@ -353,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AllAdsPage())),
       child: Container(
-        padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16), // reduced horizontal padding
+        padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [Colors.purpleAccent, Colors.deepPurpleAccent],
@@ -381,7 +595,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                  overflow: TextOverflow.ellipsis, // 🛠️ Handles overflow safely!
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -391,6 +605,84 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _adCarousel() {
+    return Container(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _ads.length + 1,
+        itemBuilder: (context, index) {
+          if (index < _ads.length) return _adCard(_ads[index]);
+          return _ctaAdCard();
+        },
+      ),
+    );
+  }
+
+  Widget _adCard(Map<String, dynamic> ad) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => BusinessProfilePage(
+          name: ad['name'],
+          serviceType: ad['service_type'],
+          tagline: ad['tagline'],
+          description: ad['description'],
+          profileImageUrl: ad['profile_image_url'],
+          rating: ad['rating'] ?? 4.5,
+          adCreatedDate: ad['created_at'],
+          userId: ad['user_id'],
+        )),
+      ),
+      child: Container(
+        width: 140,
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              child: ad['profile_image_url'] != null
+                  ? Image.network(ad['profile_image_url'], height: 100, fit: BoxFit.cover)
+                  : Image.asset('assets/images/serv1.png', height: 100, fit: BoxFit.cover),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(ad['service_type'] ?? 'Service', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ctaAdCard() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SubmitYourServicePage())),
+      child: Container(
+        width: 140,
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [Colors.amberAccent, Colors.purpleAccent]),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_outline, size: 40, color: Colors.white),
+              SizedBox(height: 10),
+              Text("Place Your Ad Here!", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildLatestSoulTribeSection() {
     return Column(
@@ -398,7 +690,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       children: [
         Text("⭐ Latest Aurana Tribe Members", style: TextStyle(color: Colors.white, fontSize: 18)),
         SizedBox(height: 10),
-        // You can add your own implementation for showing latest members here.
+        // Future addition: Latest members logic
       ],
     );
   }

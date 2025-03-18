@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ Ensure this is here!
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -15,11 +15,43 @@ class CustomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return BottomNavigationBar(
       items: [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Soul Match'),
-        BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: 'Soul Journey'),
+        // 🌈 Root Chakra - RED (Home)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.home,
+            color: selectedIndex == 0 ? Colors.red : Colors.white,
+          ),
+          label: 'Home',
+        ),
 
-        // ✅ Friends with pending request badge
+        // 🟠 Sacral Chakra - ORANGE (Soul Match)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.favorite,
+            color: selectedIndex == 1 ? Colors.orange : Colors.white,
+          ),
+          label: 'Soul Match',
+        ),
+
+        // 🟡 Solar Plexus Chakra - YELLOW (Aura Catcher with Spiritual Icon)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.auto_awesome, // ✨ Spiritual Feel
+            color: selectedIndex == 2 ? Colors.yellow : Colors.white,
+          ),
+          label: 'Aura',
+        ),
+
+        // 🟢 Heart Chakra - GREEN (Soul Journey Wall)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.explore, // 🛤️ Path-like icon for Soul Journey
+            color: selectedIndex == 3 ? Colors.green : Colors.white,
+          ),
+          label: 'Soul Journey',
+        ),
+
+        // 🔵 Throat Chakra - BLUE (Friends)
         BottomNavigationBarItem(
           icon: FutureBuilder<int>(
             future: _getPendingFriendRequests(),
@@ -27,17 +59,27 @@ class CustomNavBar extends StatelessWidget {
               int count = snapshot.data ?? 0;
               return Stack(
                 children: [
-                  Icon(Icons.people),
+                  Icon(
+                    Icons.people,
+                    color: selectedIndex == 4 ? Colors.blue : Colors.white,
+                  ),
                   if (count > 0)
                     Positioned(
                       right: 0,
                       top: 0,
                       child: Container(
-                        padding: EdgeInsets.all(5),
-                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
                         child: Text(
                           count.toString(),
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -48,18 +90,43 @@ class CustomNavBar extends StatelessWidget {
           label: 'Friends',
         ),
 
-        // ✅ Profile tab (NEW!)
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        // 🟣 Third Eye Chakra - INDIGO (Profile)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.person,
+            color: selectedIndex == 5 ? Colors.indigo : Colors.white,
+          ),
+          label: 'Profile',
+        ),
 
-        // ✅ More menu to hold everything else
-        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+        // 🔮 Crown Chakra - VIOLET (More)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.auto_awesome, // Swapped from more_horiz ➡️ Spiritual glow icon ✨
+            color: selectedIndex == 6 ? Colors.purple : Colors.white,
+          ),
+          label: 'More',
+        ),
+
+        // ⚪️ White Light - SETTINGS (New Tab!)
+        BottomNavigationBarItem(
+          icon: Icon(
+            Icons.settings,
+            color: selectedIndex == 7 ? Colors.white : Colors.grey.shade400,
+          ),
+          label: 'Settings',
+        ),
       ],
+
+      backgroundColor: Colors.black,
       currentIndex: selectedIndex,
-      selectedItemColor: Colors.blue,
-      unselectedItemColor: Colors.grey,
-      backgroundColor: Colors.white,
       onTap: onItemTapped,
+
       type: BottomNavigationBarType.fixed,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedFontSize: 12,
+      unselectedFontSize: 12,
     );
   }
 
@@ -73,7 +140,7 @@ class CustomNavBar extends StatelessWidget {
 
     try {
       final response = await Supabase.instance.client
-          .from('friend_requests') // Change if using a different table!
+          .from('friend_requests')
           .select()
           .eq('receiver_id', userId)
           .eq('status', 'pending');

@@ -16,8 +16,9 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   void initState() {
     super.initState();
 
+    // 📝 Initialize the Banner Ad
     _bannerAd = BannerAd(
-      adUnitId: 'aruanadsca-app-pub-5354629198133392/7465558486', // ✅ Your Ad Unit ID
+      adUnitId: 'ca-app-pub-5354629198133392/8825041495', // ✅ Correct Ad Unit ID format
       size: AdSize.banner,
       request: AdRequest(),
       listener: BannerAdListener(
@@ -25,10 +26,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
           setState(() {
             _isAdLoaded = true;
           });
+          print('✅ Banner Ad Loaded!');
         },
         onAdFailedToLoad: (Ad ad, LoadAdError error) {
           ad.dispose();
-          print('❌ Ad failed to load: $error');
+          print('❌ Banner Ad Failed to Load: $error');
         },
       ),
     );
@@ -45,13 +47,16 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   @override
   Widget build(BuildContext context) {
     if (!_isAdLoaded) {
-      return SizedBox(height: 0); // No space if the ad isn't loaded yet
+      return const SizedBox(height: 0); // No widget space if ad not loaded
     }
 
-    return Container(
-      width: _bannerAd.size.width.toDouble(),
-      height: _bannerAd.size.height.toDouble(),
-      child: AdWidget(ad: _bannerAd),
+    return Align(
+      alignment: Alignment.center, // Center it horizontally
+      child: Container(
+        width: _bannerAd.size.width.toDouble(),
+        height: _bannerAd.size.height.toDouble(),
+        child: AdWidget(ad: _bannerAd),
+      ),
     );
   }
 }

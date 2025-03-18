@@ -5,8 +5,9 @@ import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
 import '../models/user_model.dart';
 import 'profile_screen.dart';
-import 'home_screen.dart';
 import 'friends_page.dart';
+import '../widgets/custom_nav_bar.dart'; // ✅ Bottom nav
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // ✅ For Ads
 
 final SupabaseClient supabase = Supabase.instance.client;
 
@@ -24,10 +25,40 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
   String? selectedSpiritualPath;
   String? currentUserId;
 
+  // ✅ Banner Ad variables
+  late BannerAd _bannerAd;
+  bool _isAdLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _loadUsers();
+    _initBannerAd();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd.dispose(); // ✅ Dispose banner ad when not needed
+    super.dispose();
+  }
+
+  Future<void> _initBannerAd() async {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // ✅ Your real Ad Unit ID
+      size: AdSize.banner,
+      request: AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          print('✅ Banner Ad Loaded');
+          setState(() => _isAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          print('❌ Failed to load a banner ad: $error');
+          ad.dispose();
+        },
+      ),
+    );
+    await _bannerAd.load();
   }
 
   Future<void> _loadUsers() async {
@@ -83,9 +114,7 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
           .limit(1)
           .maybeSingle();
 
-      if (friendsCheck != null) {
-        return "friends";
-      }
+      if (friendsCheck != null) return "friends";
 
       final sentRequests = await Supabase.instance.client
           .from('friend_requests')
@@ -94,9 +123,7 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
           .eq('receiver_id', userId)
           .eq('status', 'pending');
 
-      if (sentRequests.isNotEmpty) {
-        return "request_sent";
-      }
+      if (sentRequests.isNotEmpty) return "request_sent";
 
       final receivedRequests = await Supabase.instance.client
           .from('friend_requests')
@@ -105,36 +132,11 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
           .eq('sender_id', userId)
           .eq('status', 'pending');
 
-      if (receivedRequests.isNotEmpty) {
-        return "request_received";
-      }
+      if (receivedRequests.isNotEmpty) return "request_received";
 
       return "not_friends";
     } catch (error) {
       return "not_friends";
-    }
-  }
-
-  Future<void> _cancelFriendRequest(String userId) async {
-    final senderId = Supabase.instance.client.auth.currentUser?.id;
-    if (senderId == null) return;
-
-    try {
-      await Supabase.instance.client
-          .from('friend_requests')
-          .delete()
-          .eq('sender_id', senderId)
-          .eq('receiver_id', userId);
-
-      setState(() {});
-
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("✅ Friend request cancelled."),
-      ));
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("❌ Error cancelling request."),
-      ));
     }
   }
 
@@ -152,7 +154,7 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
       setState(() {});
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("✅ Friend request accepted."),
+        content: Text("✅ Friend request accepted!"),
       ));
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -175,236 +177,242 @@ class _UserDiscoveryScreenState extends State<UserDiscoveryScreen> {
     final filteredUsers = _filterUsers();
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/bg8.png"),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              SizedBox(height: 50),
-
-              // 🔹 Navigation Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.popUntil(context, (route) => route.isFirst);
-                    },
-                    icon: Icon(Icons.home, color: Colors.white),
-                    label: Text("Home", style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      if (currentUserId != null) {
-                        Navigator.pushReplacement(
-                            context, MaterialPageRoute(builder: (context) => ProfileScreen(userId: currentUserId!)));
-                      }
-                    },
-                    icon: Icon(Icons.person, color: Colors.white),
-                    label: Text("Profile", style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
-                  ),
-                ],
+      body: Column(
+        children: [
+          if (_isAdLoaded)
+            Container(
+              margin: EdgeInsets.only(top: 16, bottom: 8), // ✅ Clean gap
+              width: _bannerAd.size.width.toDouble(),
+              height: _bannerAd.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd),
+            ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage("assets/images/bg8.png"),
+                  fit: BoxFit.cover,
+                ),
               ),
-
-              SizedBox(height: 20),
-
-              // 🔹 Pending Friend Requests Count
-              FutureBuilder<int>(
-                future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data == 0) return SizedBox(); // Hide if no requests
-
-                  return Container(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      "You have ${snapshot.data} friend request(s)!",
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  );
-                },
-              ),
-
-              SizedBox(height: 20),
-
-              // 🔹 Filters
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: SafeArea(
                 child: Column(
                   children: [
-                    DropdownButton<String>(
-                      hint: Text("Filter by Zodiac Sign"),
-                      value: selectedZodiac,
-                      items: ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-                        "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
-                          .map((sign) => DropdownMenuItem(value: sign, child: Text(sign)))
-                          .toList(),
-                      onChanged: (value) => setState(() => selectedZodiac = value),
-                    ),
-                    DropdownButton<String>(
-                      hint: Text("Filter by Element"),
-                      value: selectedElement,
-                      items: ["Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"]
-                          .map((element) => DropdownMenuItem(value: element, child: Text(element)))
-                          .toList(),
-                      onChanged: (value) => setState(() => selectedElement = value),
-                    ),
-                    DropdownButton<String>(
-                      hint: Text("Filter by Spiritual Path"),
-                      value: selectedSpiritualPath,
-                      items: ["Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"]
-                          .map((path) => DropdownMenuItem(value: path, child: Text(path)))
-                          .toList(),
-                      onChanged: (value) => setState(() => selectedSpiritualPath = value),
-                    ),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 10),
-
-              // 🔹 User Grid (4 users per row)
-              _isLoading
-                  ? CircularProgressIndicator()
-                  : Expanded(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: GridView.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.4,
-                    ),
-                    itemCount: filteredUsers.length,
-                    itemBuilder: (context, index) {
-                      final user = filteredUsers[index];
-
-                      return FutureBuilder<String>(
-                        future: _checkFriendshipStatus(user.id),
-                        builder: (context, snapshot) {
-                          final status = snapshot.data ?? 'not_friends';
-
-                          return Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => ProfileScreen(userId: user.id)));
-                                },
-                                child: CircleAvatar(
-                                  backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
-                                      ? NetworkImage(user.avatar!)
-                                      : AssetImage("assets/default_avatar.png") as ImageProvider,
-                                  radius: 35,
-                                  backgroundColor: Colors.grey[300],
+                    SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.popUntil(context, (route) => route.isFirst);
+                          },
+                          icon: Icon(Icons.home, color: Colors.white),
+                          label: Text("Home", style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            if (currentUserId != null) {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ProfileScreen(userId: currentUserId!),
                                 ),
-                              ),
-                              SizedBox(height: 5),
-                              Text(
-                                user.name,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
-                              ),
-                              SizedBox(height: 5),
-                              if (status == "not_friends")
-                                IconButton(
-                                  icon: Icon(FontAwesomeIcons.userPlus, color: Colors.green),
-                                  onPressed: () async {
-                                    await _sendFriendRequest(user.id);
-                                    setState(() {});
-                                  },
-                                ),
+                              );
+                            }
+                          },
+                          icon: Icon(Icons.person, color: Colors.white),
+                          label: Text("Profile", style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
+                        ),
+                      ],
+                    ),
 
-                              if (status == "request_sent")
-                                IconButton(
-                                  icon: Icon(FontAwesomeIcons.userClock, color: Colors.grey),
-                                  onPressed: null, // ✅ This remains disabled for sender
-                                ),
+                    SizedBox(height: 20),
 
-                              if (status == "request_received")
-                                IconButton(
-                                  icon: Icon(FontAwesomeIcons.userCheck, color: Colors.green),
-                                  onPressed: () async {
-                                    await _acceptFriendRequest(user.id); // ✅ Accept request when clicked
-                                    setState(() {}); // ✅ Refresh UI
-                                  },
-                                ),
-
-                              if (status == "friends")
-                                Icon(FontAwesomeIcons.solidCheckCircle, color: Colors.blue),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              SizedBox(height: 10),
-
-              // 🔹 Share Invite Button
-              ElevatedButton.icon(
-                onPressed: _shareInviteLink,
-                icon: Icon(Icons.share, color: Colors.white),
-                label: Text("Invite Friends"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              ),
-
-              SizedBox(height: 10),
-
-              // 🔹 Friends Page
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => FriendsPage()), // ✅ Open Friends Page
-                  );
-                },
-                child: Stack(
-                  children: [
-                    Icon(Icons.people, size: 30, color: Colors.white), // People Icon
                     FutureBuilder<int>(
-                      future: SupabaseService().getPendingFriendRequestsCount(Supabase.instance.client.auth.currentUser?.id ?? ""),
+                      future: SupabaseService().getPendingFriendRequestsCount(
+                        Supabase.instance.client.auth.currentUser?.id ?? "",
+                      ),
                       builder: (context, snapshot) {
-                        int count = snapshot.data ?? 0;
-                        return count > 0
-                            ? Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(5),
-                            decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                            child: Text(
-                              count.toString(),
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
+                        if (!snapshot.hasData || snapshot.data == 0) return SizedBox();
+                        return Container(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        )
-                            : SizedBox();
+                          child: Text(
+                            "You have ${snapshot.data} friend request(s)!",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        );
                       },
                     ),
+
+                    SizedBox(height: 20),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Column(
+                        children: [
+                          DropdownButton<String>(
+                            hint: Text("Filter by Zodiac Sign"),
+                            value: selectedZodiac,
+                            items: [
+                              "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                              "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+                            ].map((sign) => DropdownMenuItem(value: sign, child: Text(sign))).toList(),
+                            onChanged: (value) => setState(() => selectedZodiac = value),
+                          ),
+                          DropdownButton<String>(
+                            hint: Text("Filter by Element"),
+                            value: selectedElement,
+                            items: ["Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"]
+                                .map((element) => DropdownMenuItem(value: element, child: Text(element)))
+                                .toList(),
+                            onChanged: (value) => setState(() => selectedElement = value),
+                          ),
+                          DropdownButton<String>(
+                            hint: Text("Filter by Spiritual Path"),
+                            value: selectedSpiritualPath,
+                            items: ["Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"]
+                                .map((path) => DropdownMenuItem(value: path, child: Text(path)))
+                                .toList(),
+                            onChanged: (value) => setState(() => selectedSpiritualPath = value),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 10),
+
+                    _isLoading
+                        ? CircularProgressIndicator()
+                        : Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10),
+                        child: GridView.builder(
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.4,
+                          ),
+                          itemCount: filteredUsers.length,
+                          itemBuilder: (context, index) {
+                            final user = filteredUsers[index];
+                            return FutureBuilder<String>(
+                              future: _checkFriendshipStatus(user.id),
+                              builder: (context, snapshot) {
+                                final status = snapshot.data ?? 'not_friends';
+                                return Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ProfileScreen(userId: user.id),
+                                          ),
+                                        );
+                                      },
+                                      child: CircleAvatar(
+                                        backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
+                                            ? NetworkImage(user.avatar!)
+                                            : AssetImage("assets/default_avatar.png") as ImageProvider,
+                                        radius: 35,
+                                        backgroundColor: Colors.grey[300],
+                                      ),
+                                    ),
+                                    SizedBox(height: 5),
+                                    Text(
+                                      user.name,
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    SizedBox(height: 5),
+                                    if (status == "not_friends")
+                                      IconButton(
+                                        icon: Icon(FontAwesomeIcons.userPlus, color: Colors.green),
+                                        onPressed: () async {
+                                          await _sendFriendRequest(user.id);
+                                          setState(() {});
+                                        },
+                                      ),
+                                    if (status == "request_sent")
+                                      IconButton(
+                                        icon: Icon(FontAwesomeIcons.userClock, color: Colors.grey),
+                                        onPressed: null,
+                                      ),
+                                    if (status == "request_received")
+                                      IconButton(
+                                        icon: Icon(FontAwesomeIcons.userCheck, color: Colors.green),
+                                        onPressed: () async {
+                                          await _acceptFriendRequest(user.id);
+                                          setState(() {});
+                                        },
+                                      ),
+                                    if (status == "friends")
+                                      Icon(FontAwesomeIcons.solidCheckCircle, color: Colors.blue),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: 10),
+
+                    ElevatedButton.icon(
+                      onPressed: _shareInviteLink,
+                      icon: Icon(Icons.share, color: Colors.white),
+                      label: Text("Invite Friends"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                    ),
+
+                    SizedBox(height: 10),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
+      ),
+      bottomNavigationBar: CustomNavBar(
+        selectedIndex: 5,
+        onItemTapped: (int index) {
+          _handleNavTap(context, index);
+        },
       ),
     );
+  }
+
+  void _handleNavTap(BuildContext context, int index) {
+    switch (index) {
+      case 0:
+        Navigator.pushReplacementNamed(context, '/home');
+        break;
+      case 1:
+        Navigator.pushReplacementNamed(context, '/soulmatch');
+        break;
+      case 2:
+        Navigator.pushReplacementNamed(context, '/aura');
+        break;
+      case 3:
+        Navigator.pushReplacementNamed(context, '/souljourney');
+        break;
+      case 4:
+        Navigator.pushReplacementNamed(context, '/friends');
+        break;
+      case 5:
+        Navigator.pushReplacementNamed(context, '/profile');
+        break;
+      case 6:
+        Navigator.pushReplacementNamed(context, '/more');
+        break;
+    }
   }
 }

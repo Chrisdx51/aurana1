@@ -1,14 +1,10 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:intl/intl.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // ✅ AdMob import
+import 'package:google_ml_kit/google_ml_kit.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../database/aura_database_helper.dart';
 import 'aura_history_screen.dart';
@@ -29,31 +25,37 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
   Color _auraColor = Colors.transparent;
   int _currentCameraIndex = 0;
 
-  BannerAd? _bannerAd; // ✅ AdMob BannerAd
+  BannerAd? _bannerAd;
   bool _isAdLoaded = false;
+
+  final dbHelper = AuraDatabaseHelper();
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
-    _initBannerAd(); // ✅ Initialize the banner ad
+    _initBannerAd();
   }
 
   @override
   void dispose() {
     _cameraController?.dispose();
-    _bannerAd?.dispose(); // ✅ Dispose the ad
+    _bannerAd?.dispose();
     super.dispose();
   }
 
   Future<void> _initializeCamera() async {
-    try {
-      _cameras = await availableCameras();
-      if (_cameras != null && _cameras!.isNotEmpty) {
-        _setCamera(_cameras![_currentCameraIndex]);
-      }
-    } catch (e) {
-      print("Error initializing camera: $e");
+    _cameras = await availableCameras();
+
+    if (_cameras != null && _cameras!.isNotEmpty) {
+      // Look for front camera first
+      final frontCamera = _cameras!.firstWhere(
+            (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => _cameras![0],
+      );
+
+      _currentCameraIndex = _cameras!.indexOf(frontCamera);
+      _setCamera(frontCamera);
     }
   }
 
@@ -61,29 +63,37 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     if (_cameraController != null) {
       await _cameraController!.dispose();
     }
+
     _cameraController = CameraController(
       cameraDescription,
       ResolutionPreset.high,
       enableAudio: false,
     );
+
     await _cameraController!.initialize();
+
     setState(() {
       _isCameraInitialized = true;
     });
   }
 
+  void _switchCamera() {
+    if (_cameras == null || _cameras!.isEmpty) return;
+
+    _currentCameraIndex = (_currentCameraIndex + 1) % _cameras!.length;
+    _setCamera(_cameras![_currentCameraIndex]);
+  }
+
   Future<void> _initBannerAd() async {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // ✅ Replace with your Ad Unit ID!
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          print('✅ Banner Ad Loaded');
           setState(() => _isAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
-          print('❌ Failed to load a banner ad: $error');
           ad.dispose();
         },
       ),
@@ -105,7 +115,17 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
             _auraColor = _generateRandomColor();
           });
 
-          String auraMeaning = await _getAuraMeaning(_auraColor);
+          String auraMeaning = "You radiate positive energy.";
+          List<String> affirmations = _generateAffirmations(_auraColor);
+
+          String timestamp = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
+          await dbHelper.saveAuraDetail(
+            image.path,
+            auraMeaning,
+            _getColorName(_auraColor),
+            timestamp,
+          );
 
           Navigator.push(
             context,
@@ -114,7 +134,7 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
                 imagePath: image.path,
                 auraColor: _auraColor,
                 auraMeaning: auraMeaning,
-                affirmations: _generateAffirmations(_auraColor),
+                affirmations: affirmations,
               ),
             ),
           );
@@ -137,7 +157,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
       await poseDetector.close();
       return poses.isNotEmpty;
     } catch (e) {
-      print("Error detecting person: $e");
       return false;
     }
   }
@@ -152,78 +171,23 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     );
   }
 
-  Future<String> _getAuraMeaning(Color color) async {
-    try {
-      print("🔄 Fetching AI-generated aura meaning...");
-
-      final String? apiKey = dotenv.env['OPENROUTER_API_KEY'];
-
-      if (apiKey == null || apiKey.isEmpty) {
-        throw Exception("❌ Missing OpenRouter API Key!");
-      }
-
-      final response = await http.post(
-        Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
-        headers: {
-          "Authorization": "Bearer $apiKey",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "model": "openai/gpt-3.5-turbo",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are an expert in aura interpretation."
-            },
-            {
-              "role": "user",
-              "content":
-              "Analyze the aura color '${color.toString()}'. Describe its metaphysical meaning, personality traits, and give 2-3 affirmations."
-            }
-          ],
-          "max_tokens": 150,
-        }),
-      );
-
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return responseData["choices"][0]["message"]["content"] ?? "No insight found.";
-      } else {
-        return "Spiritual insight unavailable.";
-      }
-    } catch (e) {
-      print("❌ Error getting aura meaning: $e");
-      return "Spiritual insight unavailable.";
-    }
+  String _getColorName(Color color) {
+    if (color.red > color.green && color.red > color.blue) return "Red";
+    if (color.green > color.red && color.green > color.blue) return "Green";
+    if (color.blue > color.red && color.blue > color.green) return "Blue";
+    return "Purple";
   }
 
   List<String> _generateAffirmations(Color color) {
     List<String> affirmations = [];
     if (color.red > color.green && color.red > color.blue) {
-      affirmations = [
-        "I am bold and full of energy.",
-        "My passion drives me to success.",
-        "I embrace my vibrant energy."
-      ];
+      affirmations = ["I am powerful.", "I radiate energy."];
     } else if (color.green > color.red && color.green > color.blue) {
-      affirmations = [
-        "I am in harmony with myself and nature.",
-        "I feel balanced and whole.",
-        "My heart radiates love and compassion."
-      ];
+      affirmations = ["I am in harmony.", "My heart is open."];
     } else if (color.blue > color.red && color.blue > color.green) {
-      affirmations = [
-        "I am calm, peaceful, and centered.",
-        "I communicate with clarity and confidence.",
-        "My inner voice guides me."
-      ];
+      affirmations = ["I am calm.", "I speak my truth."];
     } else {
-      affirmations = [
-        "I embrace my unique energy.",
-        "I trust the path unfolding before me.",
-        "My spirit shines bright and free."
-      ];
+      affirmations = ["I embrace change.", "I trust my journey."];
     }
 
     affirmations.shuffle();
@@ -237,146 +201,144 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     });
   }
 
-  void _switchCamera() {
-    setState(() {
-      _isCameraInitialized = false;
-      _currentCameraIndex = (_currentCameraIndex + 1) % _cameras!.length;
-      _setCamera(_cameras![_currentCameraIndex]);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Aura Catcher'),
-        backgroundColor: Colors.blue.shade700,
-      ),
-      body: Column(
+      body: Stack(
         children: [
-          if (_isAdLoaded && _bannerAd != null)
-            SizedBox(
-              width: _bannerAd!.size.width.toDouble(),
-              height: _bannerAd!.size.height.toDouble(),
-              child: AdWidget(ad: _bannerAd!),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/guide.png',
+              fit: BoxFit.cover,
             ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade100, Colors.white],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                if (_isAdLoaded && _bannerAd != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: SizedBox(
+                      width: _bannerAd!.size.width.toDouble(),
+                      height: _bannerAd!.size.height.toDouble(),
+                      child: AdWidget(ad: _bannerAd!),
+                    ),
                   ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (_capturedImage != null)
-                        Column(
-                          children: [
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  width: MediaQuery.of(context).size.width * 0.8,
-                                  height: MediaQuery.of(context).size.height * 0.4,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(15),
-                                    border: Border.all(color: Colors.blue.shade700, width: 2),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(15),
-                                    child: Image.file(
-                                      File(_capturedImage!.path),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: MediaQuery.of(context).size.width * 0.8,
-                                  height: MediaQuery.of(context).size.height * 0.4,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(15),
-                                    gradient: RadialGradient(
-                                      colors: [_auraColor, Colors.transparent],
-                                      radius: 1.0,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: _resetForNewPhoto,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey.shade700,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              ),
-                              child: const Text('Retake', style: TextStyle(fontSize: 12, color: Colors.white)),
-                            ),
-                          ],
-                        )
-                      else if (_isCameraInitialized)
-                        Container(
-                          width: MediaQuery.of(context).size.width * 0.8,
-                          height: MediaQuery.of(context).size.height * 0.4,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: Colors.blue.shade700, width: 2),
-                          ),
-                          child: AspectRatio(
-                            aspectRatio: _cameraController!.value.aspectRatio,
-                            child: CameraPreview(_cameraController!),
-                          ),
-                        )
-                      else
-                        const CircularProgressIndicator(),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          ElevatedButton(
-                            onPressed: _captureImage,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            ),
-                            child: const Text('Capture Aura', style: TextStyle(fontSize: 12, color: Colors.white)),
+                          const SizedBox(height: 20),
+                          _capturedImage != null
+                              ? _buildCapturedImageView(context)
+                              : _isCameraInitialized
+                              ? _buildCameraPreview(context)
+                              : const CircularProgressIndicator(),
+
+                          const SizedBox(height: 30),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildButton("Capture Aura", _captureImage),
+                              _buildButton("Switch Camera", _switchCamera),
+                            ],
                           ),
-                          ElevatedButton(
-                            onPressed: _switchCamera,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            ),
-                            child: const Text('Switch Camera', style: TextStyle(fontSize: 12, color: Colors.white)),
-                          ),
+
+                          const SizedBox(height: 20),
+
+                          _buildButton("View Aura History", () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const AuraHistoryScreen()),
+                            );
+                          }),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const AuraHistoryScreen()),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        ),
-                        child: const Text('View Aura History', style: TextStyle(fontSize: 12, color: Colors.white)),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview(BuildContext context) {
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.8,
+      height: MediaQuery.of(context).size.height * 0.4,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.8), width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: CameraPreview(_cameraController!),
+      ),
+    );
+  }
+
+  Widget _buildCapturedImageView(BuildContext context) {
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.8), width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.file(
+                  File(_capturedImage!.path),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: RadialGradient(
+                  colors: [_auraColor.withOpacity(0.5), Colors.transparent],
+                  radius: 1.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _buildButton("Retake", _resetForNewPhoto),
+      ],
+    );
+  }
+
+  Widget _buildButton(String text, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white.withOpacity(0.2),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+          side: BorderSide(color: Colors.white.withOpacity(0.5)),
+        ),
+        elevation: 5,
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
       ),
     );
   }

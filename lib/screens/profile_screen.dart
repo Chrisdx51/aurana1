@@ -3,6 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+// ✅ BannerAdWidget import (assuming you have this ready in your widgets folder)
+import '../widgets/banner_ad_widget.dart';
+import 'help_and_features_screen.dart'; // ✅ NEW: Help & Features page
+
 import '../services/supabase_service.dart';
 import 'chat_screen.dart';
 import 'edit_profile_screen.dart';
@@ -79,19 +83,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .eq('id', widget.userId)
           .maybeSingle();
 
-
       if (response == null) {
         _showMessage('⚠️ Profile not found.');
         return;
       }
 
-
       setState(() {
         userProfile = response;
       });
     } catch (error) {
-      print("📝 Loaded userProfile: $userProfile");
-
       print('❌ Error loading profile: $error');
       _showMessage('❌ Failed to load profile.');
     }
@@ -194,7 +194,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Image.asset('assets/images/misc2.png', fit: BoxFit.cover),
           ),
           SafeArea(
-            child: isLoading ? _buildLoading() : _buildProfileBody(),
+            child: Column(
+              children: [
+                // ✅ Just call BannerAdWidget without any params!
+                BannerAdWidget(),
+
+                Expanded(
+                  child: isLoading ? _buildLoading() : _buildProfileBody(),
+                ),
+              ],
+            ),
           ),
           Align(
             alignment: Alignment.topCenter,
@@ -214,10 +223,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      title: Text('Soul Aura'),
-      centerTitle: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.deepPurple.shade900.withOpacity(0.9),
+              Colors.purple.shade600.withOpacity(0.9),
+              Colors.amber.shade500.withOpacity(0.9),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
+      title: Text('Soul Aura', style: TextStyle(color: Colors.white)),
+      centerTitle: true,
       actions: [
         IconButton(
           icon: Icon(Icons.logout, color: Colors.white),
@@ -268,7 +290,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildFriendsListDisplay(),
         if (!isMyProfile) _buildFriendActions(),
         SizedBox(height: 16),
-      ],
+        _buildHelpButton(context), // ✅ ONLY addition at the bottom
+        SizedBox(height: 24),
+         ],
     );
   }
 
@@ -562,6 +586,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text('Log Out'),
           ),
         ],
+      ),
+    );
+  }
+  Widget _buildHelpButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => HelpAndFeaturesScreen()),
+          );
+        },
+        icon: Icon(Icons.help_outline, color: Colors.white),
+        label: Text('Help & Features', style: TextStyle(color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.teal.shade600,
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
-import 'package:aurana/services/supabase_service.dart';
+import '../services/encryption_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -14,98 +14,64 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-
   final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController(); // Auto-scroll fix
+  final ScrollController _scrollController = ScrollController();
+
   List<Map<String, dynamic>> messages = [];
   bool isTyping = false;
-  bool receiverIsOnline = false; // Add receiver online status
-  Timer? _typingTimer; // Typing Timer
-
-  String lastSeen = "Loading..."; // Default text
-
-  // Format timestamps into readable format
-  String formatTimestamp(String timestamp) {
-    DateTime dateTime = DateTime.parse(timestamp).toLocal(); // Convert UTC to local
-    DateTime now = DateTime.now();
-
-    if (dateTime.year == now.year &&
-        dateTime.month == now.month &&
-        dateTime.day == now.day) {
-      return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}"; // Show only time if today
-    } else if (dateTime.year == now.year &&
-        dateTime.month == now.month &&
-        dateTime.day == now.day - 1) {
-      return "Yesterday ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}"; // Show "Yesterday" if yesterday
-    } else {
-      return "${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}"; // Show full date for older messages
-    }
-  }
+  bool receiverIsOnline = false;
+  String lastSeen = 'Loading...';
+  Timer? _typingTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // ✅ Track app lifecycle
-    updateOnlineStatus(true); // ✅ Mark user as online
+    WidgetsBinding.instance.addObserver(this);
+
+    updateOnlineStatus(true);
     fetchLastSeen();
-    updateLastSeen();
+    listenForUserStatus();
     fetchMessages();
     listenForNewMessages();
-    listenForUserStatus(); // ✅ Listen for user's online status
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // ✅ Prevent memory leaks
-    updateOnlineStatus(false); // ✅ Mark user as offline when leaving chat
-    updateLastSeen(); // ✅ Update last seen timestamp
+    WidgetsBinding.instance.removeObserver(this);
+    updateOnlineStatus(false);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      // ✅ User comes back to the chat → Mark online
       await updateOnlineStatus(true);
-    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      // ✅ User leaves the chat → Mark offline
+    } else {
       await updateOnlineStatus(false);
-      await updateLastSeen();
     }
   }
 
-  // ✅ Update Online Status in Supabase
   Future<void> updateOnlineStatus(bool isOnline) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    try {
-      await supabase.from('profiles').update({'is_online': isOnline}).match({'id': user.id});
-      print("✅ Online status updated: $isOnline");
-    } catch (error) {
-      print("❌ Error updating online status: $error");
-    }
+    await supabase.from('profiles').update({'is_online': isOnline}).eq('id', user.id);
   }
 
   Future<void> updateLastSeen() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    try {
-      await supabase.from('profiles').update({
-        'last_seen': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', user.id);
-      print("✅ Last seen updated!");
-    } catch (error) {
-      print("❌ Error updating last seen: $error");
-    }
+    await supabase.from('profiles').update({
+      'last_seen': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', user.id);
   }
 
   void fetchLastSeen() async {
     Timer.periodic(Duration(seconds: 10), (timer) async {
       if (!mounted) {
-        timer.cancel(); // ✅ Stop the timer if chat is closed
+        timer.cancel();
         return;
       }
 
@@ -144,53 +110,102 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         setState(() {
           receiverIsOnline = isReceiverOnline;
-          isTyping = isReceiverTyping; // ✅ Show typing status in real-time
+          isTyping = isReceiverTyping;
         });
-
-        print("👤 ${widget.receiverName} is now ${isReceiverOnline ? 'Online' : 'Offline'} | Typing: $isReceiverTyping");
       }
     });
   }
-  // Fetch Messages & Ensure Profile Pictures Persist
+
   Future<void> fetchMessages() async {
     final user = supabase.auth.currentUser;
-    if (user == null) {
-      print("⚠️ User not logged in!");
-      return;
-    }
+    if (user == null) return;
 
     try {
-      final response = await supabase
+      final messagesSent = await supabase
           .from('messages')
-          .select('id, sender_id, receiver_id, message, created_at, status, profiles!sender_id(name, icon)')
+          .select('*')
+          .eq('sender_id', user.id)
+          .eq('receiver_id', widget.receiverId)
           .order('created_at', ascending: true);
 
+      final messagesReceived = await supabase
+          .from('messages')
+          .select('*')
+          .eq('sender_id', widget.receiverId)
+          .eq('receiver_id', user.id)
+          .order('created_at', ascending: true);
+
+      final combinedMessages = [...messagesSent, ...messagesReceived];
+
+      combinedMessages.sort((a, b) =>
+          DateTime.parse(a['created_at']).compareTo(DateTime.parse(b['created_at'])));
+
       setState(() {
-        messages = response.map((msg) {
-          return {
-            'id': msg['id'],
-            'sender_id': msg['sender_id'],
-            'receiver_id': msg['receiver_id'],
-            'message': msg['message'],
-            'created_at': msg['created_at'],
-            'status': msg['status'],
-            'profile_pic': msg['profiles']?['icon'] ?? "", // ✅ Ensure profile picture is always included
-          };
-        }).toList();
+        messages = combinedMessages;
       });
 
-      // ✅ Mark messages as "read"
-      for (var message in response) {
-        if (message['receiver_id'] == user.id && message['status'] != 'read') {
-          await supabase
-              .from('messages')
-              .update({'status': 'read'})
-              .eq('id', message['id']);
-          print("✅ Message read!");
-        }
-      }
+      _scrollToBottom();
     } catch (error) {
-      print("❌ Error fetching messages: $error");
+      print('❌ Error fetching messages: $error');
+    }
+  }
+
+  void listenForNewMessages() {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: true)
+        .listen((data) {
+      if (!mounted) return;
+
+      final newMessages = data.where((message) {
+        final senderId = message['sender_id'];
+        final receiverId = message['receiver_id'];
+
+        return (senderId == widget.receiverId && receiverId == user.id) ||
+            (senderId == user.id && receiverId == widget.receiverId);
+      }).toList();
+
+      if (newMessages.isNotEmpty) {
+        setState(() {
+          for (var msg in newMessages) {
+            if (!messages.any((m) => m['id'] == msg['id'])) {
+              messages.add(msg);
+            }
+          }
+
+          messages.sort((a, b) =>
+              DateTime.parse(a['created_at']).compareTo(DateTime.parse(b['created_at'])));
+        });
+
+        _scrollToBottom();
+      }
+    });
+  }
+
+  Future<void> sendMessage() async {
+    final user = supabase.auth.currentUser;
+    if (user == null || _messageController.text.trim().isEmpty) return;
+
+    try {
+      final encryptedMessage =
+      EncryptionService.encryptMessage(_messageController.text.trim());
+
+      await supabase.from('messages').insert({
+        'sender_id': user.id,
+        'receiver_id': widget.receiverId,
+        'message': encryptedMessage,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'sent',
+      });
+
+      _messageController.clear();
+      fetchMessages();
+    } catch (error) {
+      print("❌ Error sending message: $error");
     }
   }
 
@@ -199,99 +214,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300), // Smooth scroll
+          duration: Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  // Listen for new messages in real-time
-  void listenForNewMessages() {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    print("🔄 Listening for real-time messages...");
-
-    supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: true)
-        .listen((data) async {
-      if (data.isNotEmpty) {
-        for (var message in data) {
-          // ✅ Check if message already exists to prevent duplicate entries
-          final existingIndex = messages.indexWhere((m) => m['id'] == message['id']);
-
-          if (existingIndex == -1) {
-            final profileResponse = await supabase
-                .from('profiles')
-                .select('icon')
-                .eq('id', message['sender_id'])
-                .maybeSingle();
-
-            // ✅ Add profile picture manually
-            message['profile_pic'] = profileResponse?['icon'] ?? "";
-
-            setState(() {
-              messages.add(message);
-            });
-          }
-        }
-
-        // ✅ Ensure scrolling happens **after UI is updated**
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToBottom();
-        });
-
-        print("✅ New messages received and profile pics assigned!");
-      }
-    });
+  String formatTimestamp(String timestamp) {
+    DateTime dateTime = DateTime.parse(timestamp).toLocal();
+    return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
   }
-
-  // Send a Message with Timestamp
-  Future<void> sendMessage() async {
-    final user = supabase.auth.currentUser;
-    if (user == null || _messageController.text.trim().isEmpty) return;
-
-    try {
-      // 1️⃣ Insert message into Supabase
-      await supabase.from('messages').insert({
-        'sender_id': user.id,
-        'receiver_id': widget.receiverId,
-        'message': _messageController.text.trim(),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'sent',
-      });
-
-      // 2️⃣ Fetch receiver's FCM token from Supabase
-      final receiverProfile = await supabase
-          .from('profiles')
-          .select('fcm_token')
-          .eq('id', widget.receiverId)
-          .maybeSingle();
-
-      final fcmToken = receiverProfile?['fcm_token'];
-
-      if (fcmToken != null && fcmToken.isNotEmpty) {
-        // 3️⃣ Send push notification using SupabaseService function
-        await SupabaseService.sendPushNotification(
-          fcmToken,
-          '💬 New message from ${user.email ?? "Someone"}',
-          _messageController.text.trim(),
-        );
-        print("✅ Push notification sent to receiver");
-      } else {
-        print("⚠️ No FCM token found for receiver");
-      }
-
-      _messageController.clear();
-      fetchMessages(); // ✅ Reload messages in chat
-    } catch (error) {
-      print("❌ Error sending message: $error");
-    }
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -301,107 +234,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Row(
           children: [
-            Text("Chat with ${widget.receiverName}"),
-            SizedBox(width: 5),
+            Text(widget.receiverName),
+            SizedBox(width: 6),
             Icon(
               receiverIsOnline ? Icons.circle : Icons.circle_outlined,
               color: receiverIsOnline ? Colors.green : Colors.grey,
-              size: 12, // ✅ Small status indicator
+              size: 12,
             ),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: Center(child: Text(lastSeen, style: TextStyle(fontSize: 12))),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          if (messages.isNotEmpty)
-            Container(
-              padding: EdgeInsets.all(8),
-              color: Colors.yellow[100],
-              child: Text(
-                'Last received message: ${messages.last['message']}',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-              ),
-            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
               itemCount: messages.length,
               itemBuilder: (context, index) {
-                final message = messages[index];
-                final bool isMe = message['sender_id'] == user?.id;
-                final String profilePic = message['profile_pic'] ?? "";
+                final msg = messages[index];
+                final isMe = msg['sender_id'] == user?.id;
+                final decryptedMsg = EncryptionService.decryptMessage(msg['message']);
 
-                return Column(
-                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                      children: [
-                        if (!isMe)
-                          CircleAvatar(
-                            backgroundImage: profilePic.isNotEmpty
-                                ? NetworkImage(profilePic)
-                                : AssetImage('assets/default_avatar.png') as ImageProvider,
-                            radius: 16,
-                          ),
-                        SizedBox(width: 8),
-                        Container(
-                          margin: EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                          padding: EdgeInsets.all(8),
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                          decoration: BoxDecoration(
-                            color: isMe ? Colors.blue : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                message['message'],
-                                style: TextStyle(color: isMe ? Colors.white : Colors.black, fontSize: 14),
-                              ),
-                              SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    formatTimestamp(message['created_at']),
-                                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                                  ),
-                                  SizedBox(width: 5),
-                                  if (isMe)
-                                    Icon(
-                                      message['status'] == 'read'
-                                          ? Icons.done_all // ✅✅ Read
-                                          : message['status'] == 'delivered'
-                                          ? Icons.done // ✅ Delivered
-                                          : Icons.access_time, // ⏳ Sent
-                                      size: 16,
-                                      color: message['status'] == 'read'
-                                          ? Colors.green
-                                          : Colors.white70,
-                                    ),
-                                ],
-                              ),
-                            ],
+                return Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(10),
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                        decoration: BoxDecoration(
+                          color: isMe ? Colors.blueAccent : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          decryptedMsg,
+                          style: TextStyle(
+                            color: isMe ? Colors.white : Colors.black,
                           ),
                         ),
-                        if (isMe)
-                          CircleAvatar(
-                            backgroundImage: profilePic.isNotEmpty
-                                ? NetworkImage(profilePic)
-                                : AssetImage('assets/default_avatar.png') as ImageProvider,
-                            radius: 16,
-                          ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        formatTimestamp(msg['created_at']),
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
           ),
-          TypingIndicator(isTyping: isTyping), // Add Typing Indicator here
+          TypingIndicator(isTyping: isTyping),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -414,38 +306,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (text) async {
+                      final userId = supabase.auth.currentUser?.id;
+
                       setState(() {
                         isTyping = text.isNotEmpty;
                       });
 
-                      // ✅ Update Supabase to show sender is typing
-                      final userId = supabase.auth.currentUser?.id;
                       if (userId != null) {
-                        await supabase.from('profiles').update({'is_typing': text.isNotEmpty}).eq('id', userId);
+                        await supabase.from('profiles').update({
+                          'is_typing': text.isNotEmpty
+                        }).eq('id', userId);
                       }
 
-                      // Cancel previous timer if user keeps typing
                       _typingTimer?.cancel();
-
-                      // Start a new timer to stop typing indicator after 2 seconds
                       if (text.isNotEmpty) {
                         _typingTimer = Timer(Duration(seconds: 2), () async {
-                          setState(() {
-                            isTyping = false;
-                          });
-                          // ✅ Stop typing indicator in Supabase
-                          final userId = supabase.auth.currentUser?.id;
+                          setState(() => isTyping = false);
                           if (userId != null) {
-                            await supabase.from('profiles').update({'is_typing': false}).eq('id', userId);
+                            await supabase.from('profiles').update({
+                              'is_typing': false
+                            }).eq('id', userId);
                           }
-
                         });
                       }
                     },
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.send, color: Colors.blue),
+                  icon: Icon(Icons.send, color: Colors.blueAccent),
                   onPressed: sendMessage,
                 ),
               ],
@@ -465,27 +353,22 @@ class TypingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: Duration(milliseconds: 300), // Smooth transition
-      height: isTyping ? 30 : 0, // Keeps space even when not typing
-      child: Visibility(
-        visible: isTyping,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            SizedBox(width: 10), // Keeps padding consistent
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2), // Smaller size
-            ),
-            SizedBox(width: 6), // Keeps spacing even
-            Text(
-              'Typing...',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-      ),
+      duration: Duration(milliseconds: 300),
+      height: isTyping ? 30 : 0,
+      child: isTyping
+          ? Row(
+        children: [
+          SizedBox(width: 12),
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 6),
+          Text('Typing...', style: TextStyle(fontSize: 12)),
+        ],
+      )
+          : SizedBox.shrink(),
     );
   }
 }

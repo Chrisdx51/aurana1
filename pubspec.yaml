@@ -49,7 +49,7 @@ dependencies:
   shimmer: ^3.0.0
   geolocator: ^10.0.0
   geocoding: ^2.0.5
-
+  flutter_tts: ^3.8.4
 
 flutter_icons:
   android: true
@@ -111,6 +111,9 @@ flutter:
     - assets/zodiac/aquarius.png
     - assets/zodiac/pisces.png
     - assets/images/default_avatar.png
+    - assets/images/yinyang.png
+
+
   fonts:
     - family: Fo
       fonts:

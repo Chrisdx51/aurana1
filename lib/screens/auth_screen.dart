@@ -71,15 +71,13 @@ class _AuthScreenState extends State<AuthScreen> {
       final AuthResponse response;
 
       if (_isSignUp) {
-        // ✅ SIGN UP PROCESS
         response = await supabase.auth.signUp(email: email, password: password);
 
         if (response.user != null) {
           final String userId = response.user!.id;
 
-          // ✅ Create profile entry (ID = auth user ID)
           await supabase.from('profiles').insert({
-            'id': userId, // Must match auth.user.id
+            'id': userId,
             'email': email,
             'name': '',
             'bio': '',
@@ -87,11 +85,15 @@ class _AuthScreenState extends State<AuthScreen> {
             'city': '',
             'country': '',
             'gender': '',
-            'privacy_setting': 'public', // ✅ Correct field
+            'privacy_setting': 'public',
             'spiritual_path': '',
             'element': '',
             'soul_match_message': '',
           });
+
+          // ✅ Save FCM token & Subscribe after signup
+          await saveFCMToken();
+          subscribeToTopics();
 
           _showMessage("Welcome! Let's complete your profile...");
           Navigator.pushReplacement(
@@ -105,7 +107,6 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       } else {
-        // ✅ LOGIN PROCESS
         response = await supabase.auth.signInWithPassword(email: email, password: password);
 
         if (response.user != null) {
@@ -113,8 +114,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
           bool profileComplete = await _isProfileComplete(userId);
 
-          // ✅ Save FCM token after login
+          // ✅ Save FCM token & Subscribe after login
           await saveFCMToken();
+          subscribeToTopics();
 
           if (profileComplete) {
             _showMessage("Welcome back!");
@@ -135,6 +137,7 @@ class _AuthScreenState extends State<AuthScreen> {
           _showMessage("Couldn't log you in. Please check your credentials.");
         }
       }
+
     } on AuthException catch (e) {
       if (e.statusCode == 422 && e.message.contains('user_already_exists')) {
         _showMessage("This email is already registered. Try logging in.");

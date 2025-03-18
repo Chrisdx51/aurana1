@@ -3,37 +3,56 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✅ For API key
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_tts/flutter_tts.dart'; // ✅ Voice readout!
+import '../widgets/banner_ad_widget.dart'; // ✅ Ad Widget
 
 class HoroscopeScreen extends StatefulWidget {
-  final String? zodiacSign;
-
-  const HoroscopeScreen({Key? key, this.zodiacSign}) : super(key: key);
+  const HoroscopeScreen({Key? key}) : super(key: key);
 
   @override
   _HoroscopeScreenState createState() => _HoroscopeScreenState();
 }
 
-class _HoroscopeScreenState extends State<HoroscopeScreen> {
-  Map<String, String> horoscopes = {}; // Holds horoscope results
+class _HoroscopeScreenState extends State<HoroscopeScreen> with TickerProviderStateMixin {
+  String userZodiacSign = 'aquarius';
+  String horoscopeText = '';
   bool isLoading = true;
 
-  final List<String> zodiacSigns = [
-    'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo',
-    'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'
-  ];
-
-  String userZodiacSign = 'aquarius'; // Default until fetched
+  late FlutterTts flutterTts;
+  late AnimationController _starsController;
 
   @override
   void initState() {
     super.initState();
-    fetchUserZodiacSign().then((_) {
-      fetchHoroscopes(); // Once zodiac loaded, fetch horoscope!
-    });
+    _initVoice();
+    _starsController = AnimationController(vsync: this, duration: Duration(seconds: 3))..repeat(reverse: true);
+    _loadZodiacAndHoroscope();
   }
 
-  /// ✅ Fetch user's zodiac sign from Supabase
+  @override
+  void dispose() {
+    flutterTts.stop();
+    _starsController.dispose();
+    super.dispose();
+  }
+
+  void _initVoice() {
+    flutterTts = FlutterTts();
+    flutterTts.setLanguage("en-US");
+    flutterTts.setPitch(1);
+    flutterTts.setSpeechRate(0.5);
+  }
+
+  Future<void> _speakHoroscope() async {
+    await flutterTts.speak(horoscopeText);
+  }
+
+  Future<void> _loadZodiacAndHoroscope() async {
+    await fetchUserZodiacSign();
+    await fetchHoroscopeForToday();
+  }
+
   Future<void> fetchUserZodiacSign() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
 
@@ -49,7 +68,7 @@ class _HoroscopeScreenState extends State<HoroscopeScreen> {
           .eq('id', userId)
           .single();
 
-      if (response['zodiac_sign'] != null) {
+      if (response['zodiac_sign'] != null && response['zodiac_sign'].toString().isNotEmpty) {
         setState(() {
           userZodiacSign = response['zodiac_sign'].toLowerCase();
         });
@@ -66,130 +85,196 @@ class _HoroscopeScreenState extends State<HoroscopeScreen> {
     }
   }
 
-  /// ✅ Fetch horoscope from Gemini AI
-  Future<void> fetchHoroscopes() async {
+  Future<void> fetchHoroscopeForToday() async {
     setState(() => isLoading = true);
-    Map<String, String> results = {};
 
-    final String apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    final String apiKey = dotenv.env['OPENROUTER_API_KEY'] ?? '';
 
     if (apiKey.isEmpty) {
-      print('❌ Gemini API key not found.');
+      print('❌ OpenRouter API key not found.');
       setState(() => isLoading = false);
       return;
     }
 
     try {
-      final uri = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$apiKey');
+      String today = DateTime.now().toIso8601String().substring(0, 10);
 
       final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
         body: jsonEncode({
-          'contents': [
+          "model": "mistralai/mistral-7b-instruct",
+          "messages": [
             {
-              'parts': [
-                {'text': 'Write a positive, inspiring daily horoscope for the zodiac sign "$userZodiacSign". Keep it spiritual and hopeful.'}
-              ]
+              "role": "user",
+              "content":
+              "Generate a unique, positive, spiritual, inspiring daily horoscope for \"$userZodiacSign\" on \"$today\". Short, hopeful, mobile-friendly."
             }
-          ]
+          ],
+          "max_tokens": 300
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final content = data['candidates'][0]['content']['parts'][0]['text'];
+        final content = data['choices'][0]['message']['content'];
 
-        print("✅ Horoscope fetched: $content");
+        setState(() {
+          horoscopeText = content;
+        });
 
-        results[userZodiacSign] = content;
+        _speakHoroscope(); // ✅ Speak the horoscope automatically
       } else {
-        print('❌ Failed to fetch horoscope: ${response.body}');
-        results[userZodiacSign] = 'No horoscope available.';
+        setState(() {
+          horoscopeText = 'No horoscope available.';
+        });
       }
     } catch (e) {
-      print('❌ Error fetching horoscope: $e');
-      results[userZodiacSign] = 'Error getting horoscope.';
+      setState(() {
+        horoscopeText = 'Error getting horoscope.';
+      });
     }
 
-    setState(() {
-      horoscopes = results;
-      isLoading = false;
-    });
+    setState(() => isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> reorderedSigns = [
-      userZodiacSign,
-      ...zodiacSigns.where((sign) => sign != userZodiacSign),
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Daily Horoscopes'),
+        title: Text('Your Daily Horoscope'),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blue, Colors.purple, Colors.black],
+              colors: [Colors.blueGrey.shade900, Colors.black87],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
       ),
+      body: Stack(
+        children: [
+          _twinklingStarsBackground(),
 
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/bg8.png'),
-            fit: BoxFit.cover,
+          Column(
+            children: [
+              const BannerAdWidget(),
+
+              Expanded(
+                child: isLoading
+                    ? Center(child: CircularProgressIndicator(color: Colors.white))
+                    : _buildHoroscopeCard(),
+              ),
+            ],
           ),
-        ),
-        child: isLoading
-            ? Center(child: CircularProgressIndicator())
-            : ListView.builder(
-          itemCount: reorderedSigns.length,
-          itemBuilder: (context, index) {
-            final sign = reorderedSigns[index];
-            final description = horoscopes[sign] ?? 'No data yet';
-            return _buildHoroscopeCard(sign, description, index == 0);
-          },
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHoroscopeCard(String sign, String description, bool isUserSign) {
-    return Card(
-      color: isUserSign ? Colors.amber.withOpacity(0.9) : Colors.white70,
-      elevation: isUserSign ? 10 : 3,
-      margin: EdgeInsets.all(10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundImage: AssetImage('assets/zodiac/$sign.png'),
-        ),
-        title: Text(
-          sign.toUpperCase(),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isUserSign ? Colors.black : Colors.black87,
-            fontSize: 18,
+  Widget _twinklingStarsBackground() {
+    return AnimatedBuilder(
+      animation: _starsController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: 0.4 + (_starsController.value * 0.6),
+          child: Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/bg8.png'),
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
-        ),
-        subtitle: Text(
-          description,
-          style: TextStyle(color: Colors.black54),
-        ),
-        trailing: IconButton(
-          icon: Icon(Icons.share, color: Colors.deepPurple),
-          onPressed: () {
-            _shareHoroscope(sign, description);
-          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHoroscopeCard() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Card(
+        color: Colors.black.withOpacity(0.7),
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            children: [
+              // ✅ Icon Centered
+              Center(
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundImage: AssetImage('assets/zodiac/$userZodiacSign.png'),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      userZodiacSign.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.share, color: Colors.white),
+                      onPressed: () {
+                        _shareHoroscope(userZodiacSign, horoscopeText);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 20),
+
+              // ✅ Horoscope Text Box
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      child: Text(
+                        horoscopeText,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 10),
+
+              // ✅ Read Out Button (Optional)
+              ElevatedButton.icon(
+                onPressed: _speakHoroscope,
+                icon: Icon(Icons.volume_up, color: Colors.white),
+                label: Text("Listen", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurpleAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

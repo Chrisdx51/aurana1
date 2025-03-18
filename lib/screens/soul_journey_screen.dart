@@ -7,6 +7,9 @@ import 'profile_screen.dart';
 import 'add_milestone_screen.dart';
 import '../widgets/video_widget.dart';
 
+// ✅ BannerAdWidget import here
+import '../widgets/banner_ad_widget.dart';
+
 class SoulJourneyScreen extends StatefulWidget {
   final String userId;
 
@@ -41,10 +44,8 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
       List<MilestoneModel> milestones;
 
       if (_isGlobal) {
-        // 🌌 Cosmic Flow = Public Posts Only
         milestones = await _supabaseService.fetchMilestones(global: true);
       } else {
-        // 🧘 Inner Realm = Your Own Private Posts
         milestones = await _supabaseService.fetchMilestones(userId: widget.userId);
       }
 
@@ -122,6 +123,15 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
           Column(
             children: [
               _buildAppBar(),
+
+              // ✅ Banner Ad with spacing below it
+              SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: BannerAdWidget(),
+              ),
+              SizedBox(height: 10),
+
               Expanded(
                 child: _isLoading
                     ? Center(child: CircularProgressIndicator())
