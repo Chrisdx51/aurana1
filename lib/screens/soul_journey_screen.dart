@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/supabase_service.dart';
 import '../models/milestone_model.dart';
 import 'profile_screen.dart';
 import 'add_milestone_screen.dart';
 import '../widgets/video_widget.dart';
-
-// ✅ BannerAdWidget import here
 import '../widgets/banner_ad_widget.dart';
 
 class SoulJourneyScreen extends StatefulWidget {
@@ -25,9 +24,7 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
 
   List<MilestoneModel> _milestones = [];
   bool _isLoading = true;
-
-  // 🌕 False = Inner Realm | True = Cosmic Flow
-  bool _isGlobal = false;
+  bool _isGlobal = false; // 🌕 False = Inner Realm | True = Cosmic Flow
 
   @override
   void initState() {
@@ -37,10 +34,8 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
 
   Future<void> _loadMilestones() async {
     setState(() => _isLoading = true);
-
     try {
       final currentUserId = supabase.auth.currentUser!.id;
-
       List<MilestoneModel> milestones;
 
       if (_isGlobal) {
@@ -48,8 +43,6 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
       } else {
         milestones = await _supabaseService.fetchMilestones(userId: widget.userId);
       }
-
-      print("✅ Loaded ${milestones.length} milestones.");
 
       setState(() {
         _milestones = milestones;
@@ -111,6 +104,71 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
     }
   }
 
+  void _showReportDialog(String milestoneId) async {
+    String? selectedReason;
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text('Report Post', style: TextStyle(color: Colors.white)),
+        content: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                dropdownColor: Colors.grey[800],
+                value: selectedReason,
+                hint: Text('Select Reason', style: TextStyle(color: Colors.white70)),
+                onChanged: (value) => setState(() => selectedReason = value),
+                items: [
+                  'Spam',
+                  'Harassment',
+                  'Inappropriate Content',
+                  'Misinformation',
+                  'Other'
+                ].map((reason) => DropdownMenuItem(
+                  value: reason,
+                  child: Text(reason, style: TextStyle(color: Colors.white)),
+                )).toList(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Report'),
+            onPressed: () async {
+              if (selectedReason == null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❗ Please select a reason.")));
+                return;
+              }
+
+              try {
+                await supabase.from('reports').insert({
+                  'reported_by': supabase.auth.currentUser!.id,
+                  'milestone_id': milestoneId,
+                  'reason': selectedReason,
+                });
+
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Report submitted.")));
+              } catch (error) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Failed to submit report.")));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = supabase.auth.currentUser!.id;
@@ -124,7 +182,6 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
             children: [
               _buildAppBar(),
 
-              // ✅ Banner Ad with spacing below it
               SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -208,77 +265,146 @@ class _SoulJourneyScreenState extends State<SoulJourneyScreen> {
   }
 
   Widget _buildMilestoneItem(MilestoneModel milestone, String currentUserId) {
+    // Debug print to confirm media URL (optional)
+    print('🔗 Media URL for milestone ${milestone.id}: ${milestone.mediaUrl}');
+
     return Stack(
       children: [
         Positioned.fill(
-          child: milestone.mediaUrl != null && milestone.mediaUrl!.isNotEmpty
-              ? milestone.mediaUrl!.endsWith('.mp4')
-              ? VideoWidget(videoUrl: milestone.mediaUrl!)
-              : Image.network(milestone.mediaUrl!, fit: BoxFit.cover)
-              : Container(color: Colors.black),
+          child: _buildMedia(milestone),
         ),
 
         Positioned(
-          top: 50,
-          left: 10,
           right: 10,
-          child: Row(
+          bottom: 150,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               GestureDetector(
+                onTap: () => _toggleLike(milestone),
+                child: Column(
+                  children: [
+                    Icon(Icons.auto_awesome, size: 32, color: milestone.likedByMe ? Colors.amber : Colors.white),
+                    SizedBox(height: 4),
+                    Text('${milestone.likeCount}', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              SizedBox(height: 20),
+
+              GestureDetector(
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: milestone.userId)));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🗨️ Comment tapped!")));
                 },
-                child: CircleAvatar(
-                  radius: 25,
-                  backgroundImage: milestone.avatar != null && milestone.avatar!.isNotEmpty
-                      ? NetworkImage(milestone.avatar!)
-                      : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                child: Column(
+                  children: [
+                    Icon(Icons.chat_bubble_outline, size: 32, color: Colors.white),
+                    SizedBox(height: 4),
+                    Text('Comment', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
                 ),
               ),
-              SizedBox(width: 10),
-              Text(
-                milestone.username ?? "Unknown Seeker",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              Spacer(),
-              if (milestone.userId == currentUserId)
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _deleteMilestone(milestone.id),
-                )
-              else
-                IconButton(
-                  icon: Icon(Icons.report, color: Colors.white),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🚨 Report submitted!")));
-                  },
+              SizedBox(height: 20),
+
+              GestureDetector(
+                onTap: () {
+                  Share.share("🌟 Check out this Soul Journey on Aurana!\n\n${milestone.content ?? ''}");
+                },
+                child: Column(
+                  children: [
+                    Icon(Icons.share, size: 32, color: Colors.white),
+                    SizedBox(height: 4),
+                    Text('Share', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
                 ),
+              ),
+              SizedBox(height: 20),
+
+              GestureDetector(
+                onTap: () => _showReportDialog(milestone.id),
+                child: Column(
+                  children: [
+                    Icon(Icons.flag_outlined, size: 32, color: Colors.redAccent),
+                    SizedBox(height: 4),
+                    Text('Report', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
 
         Positioned(
           bottom: 80,
-          left: 10,
-          right: 10,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(milestone.content ?? '', style: TextStyle(color: Colors.white, fontSize: 16)),
-              SizedBox(height: 10),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.auto_awesome, color: milestone.likedByMe ? Colors.amber : Colors.white),
-                    onPressed: () => _toggleLike(milestone),
-                  ),
-                  Text('${milestone.likeCount}', style: TextStyle(color: Colors.white)),
-                ],
-              ),
-            ],
+          left: 16,
+          right: 80,
+          child: Text(
+            milestone.content ?? '',
+            style: TextStyle(color: Colors.white, fontSize: 16, shadows: [
+              Shadow(blurRadius: 6, color: Colors.black87, offset: Offset(1, 1))
+            ]),
           ),
         ),
+
+        Positioned(
+          bottom: 20,
+          left: 16,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: milestone.userId)));
+            },
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundImage: milestone.avatar != null && milestone.avatar!.isNotEmpty
+                      ? NetworkImage(milestone.avatar!)
+                      : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  milestone.username ?? "Unknown Seeker",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, shadows: [
+                    Shadow(blurRadius: 4, color: Colors.black87, offset: Offset(1, 1))
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (milestone.userId == currentUserId)
+          Positioned(
+            top: 60,
+            left: 10,
+            child: IconButton(
+              icon: Icon(Icons.delete, color: Colors.red, size: 30),
+              onPressed: () => _deleteMilestone(milestone.id),
+            ),
+          ),
       ],
+    );
+  }
+
+  Widget _buildMedia(MilestoneModel milestone) {
+    if (milestone.mediaUrl == null || milestone.mediaUrl!.isEmpty) {
+      return Container(color: Colors.black);
+    }
+
+    if (milestone.mediaUrl!.toLowerCase().endsWith('.mp4')) {
+      return VideoWidget(videoUrl: milestone.mediaUrl!);
+    }
+
+    return Image.network(
+      milestone.mediaUrl!,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(child: CircularProgressIndicator());
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Center(child: Icon(Icons.error, color: Colors.red));
+      },
     );
   }
 }

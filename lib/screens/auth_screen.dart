@@ -120,7 +120,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
           if (profileComplete) {
             _showMessage("Welcome back!");
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MainScreen(userId: userId),
+              ),
+            );
           } else {
             _showMessage("Please finish your profile setup.");
             Navigator.pushReplacement(
@@ -164,7 +169,7 @@ class _AuthScreenState extends State<AuthScreen> {
           .update({'fcm_token': token})
           .eq('id', user.id);
 
-      print("FCM Token saved: $token");
+      print("✅ FCM Token saved: $token");
     }
   }
 

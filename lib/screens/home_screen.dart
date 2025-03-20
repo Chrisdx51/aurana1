@@ -19,6 +19,7 @@ import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
 import '../widgets/banner_ad_widget.dart'; // ✅ BannerAdWidget import
+import 'feedback_screen.dart'; // 👈 Add this with the other imports
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -43,6 +44,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _inactivityTimer;
   Map<String, dynamic>? _affirmation;
   List<Map<String, dynamic>> _ads = [];
+// Add this to store your tribe members
+  List<Map<String, dynamic>> _latestUsers = [];
 
   final List<String> backgroundImages = [
     'assets/images/home.png',
@@ -70,6 +73,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadUserProfile();
     _fetchTodaysAffirmation();
     _loadAds();
+    _fetchLatestUsers();
+    _startInactivityTimer();
+    _updateOnlineStatus(true);
   }
 
   @override
@@ -77,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pulseController.dispose();
     _inactivityTimer?.cancel();
     super.dispose();
+    _updateOnlineStatus(false);
   }
 
   Future<void> _loadUserProfile() async {
@@ -99,6 +106,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     }
   }
+  void _startInactivityTimer() {
+    // Cancel any previous timer to avoid duplicates
+    _inactivityTimer?.cancel();
+
+    // Start a new periodic timer
+    _inactivityTimer = Timer.periodic(Duration(minutes: 2), (timer) {
+      _updateLastActive();
+    });
+  }
+
+  void _updateLastActive() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase.from('profiles').update({
+      'last_seen': DateTime.now().toIso8601String(),
+    }).eq('id', userId);
+
+    print("🕒 Last active updated at ${DateTime.now()}");
+  }
+
+  void _updateOnlineStatus(bool isOnline) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase.from('profiles').update({
+      'is_online': isOnline,
+      'last_seen': isOnline ? null : DateTime.now().toIso8601String(),
+    }).eq('id', userId);
+
+    print(isOnline ? "✅ User marked ONLINE" : "❌ User marked OFFLINE");
+  }
 
   Future<void> _fetchTodaysAffirmation() async {
     setState(() => _isAffirmationLoading = true);
@@ -117,9 +156,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         print("🔇 Sound error: $e");
       }
     } else {
-      setState(() => _isAffirmationLoading = false);
+      print("⚠️ No affirmation found for today.");
+
+      // ✅ Automatically trigger weekly generation if none found
+      await supabaseService.generateAndInsertWeeklyAffirmations();
+
+      // ✅ Retry fetching after generating
+      final retryResult = await supabaseService.fetchTodaysAffirmation();
+      setState(() {
+        _affirmation = retryResult;
+        _isAffirmationLoading = false;
+      });
     }
   }
+
 
   Future<void> _loadAds() async {
     setState(() => _adsLoading = true);
@@ -149,6 +199,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
   }
+  Future<void> _fetchLatestUsers() async {
+    try {
+      final latestUsers = await supabaseService.getLatestUsers(limit: 10);
+
+      print("👀 Latest Users Returned: $latestUsers");
+
+      setState(() {
+        _latestUsers = latestUsers;
+      });
+    } catch (error) {
+      print('❌ Error fetching latest users: $error');
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +282,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     SizedBox(height: 20),
                     _buildLatestSoulTribeSection(),
                     SizedBox(height: 20),
-                   ],
+                    _buildFeedbackFooter(context),
+
+                  ],
                 ),
               ),
             ),
@@ -394,32 +460,77 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _animatedButton("Soul Journey", Colors.deepPurple, SoulJourneyScreen(userId: user!.id)),
-            _animatedButton("Aura Catcher", Colors.blueAccent, AuraCatcherScreen()),
+            _animatedButton(
+              "Soul Journey",
+              LinearGradient(
+                colors: [
+                  Color(0xFFE53935), // Red (Root Chakra)
+                  Color(0xFFFF8A65), // Orange (Sacral Chakra)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              SoulJourneyScreen(userId: user!.id),
+            ),
+            _animatedButton(
+              "Aura Catcher",
+              LinearGradient(
+                colors: [
+                  Color(0xFFFFEB3B), // Yellow (Solar Plexus)
+                  Color(0xFF4CAF50), // Green (Heart Chakra)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              AuraCatcherScreen(),
+            ),
           ],
         ),
         SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _animatedButton("Tribe Finder", Colors.teal, SoulConnectionsScreen()),
-            _animatedButton("Tarot", Colors.orange, TarotReadingScreen()),
+            _animatedButton(
+              "Tribe Finder",
+              LinearGradient(
+                colors: [
+                  Color(0xFF2196F3), // Blue (Throat Chakra)
+                  Color(0xFF3F51B5), // Indigo (Third Eye Chakra)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              SoulConnectionsScreen(),
+            ),
+            _animatedButton(
+              "Tarot",
+              LinearGradient(
+                colors: [
+                  Color(0xFF9C27B0), // Violet (Crown Chakra)
+                  Color(0xFFFFFFFF), // White (Spirit)
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              TarotReadingScreen(),
+            ),
           ],
         ),
         SizedBox(height: 20),
 
-        // ✅ Add both orbs in one row, side by side!
+        // Keep your orbs as they are.
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _soulMatchButton(),
-            SizedBox(width: 20), // spacing between the two orbs
-            _spiritualGuidanceButton(), // new guidance orb button
+            SizedBox(width: 20),
+            _spiritualGuidanceButton(),
           ],
         ),
       ],
     );
   }
+
 
   Widget _spiritualGuidanceButton() {
     return GestureDetector(
@@ -472,22 +583,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _animatedButton(String text, Color color, Widget page) {
+  Widget _animatedButton(String text, LinearGradient gradient, Widget page) {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
       child: Container(
         width: 150,
         height: 80,
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [color.withOpacity(0.9), color.withOpacity(0.5)]),
+          gradient: gradient,
           borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.colors.first.withOpacity(0.4),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
         ),
         child: Center(
-          child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );
   }
+
 
   Widget _soulMatchButton() {
     return GestureDetector(
@@ -548,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
-          Text("✨ Today's Affirmation ✨", style: TextStyle(fontSize: 18, color: Colors.amberAccent)),
+          Text("✨ Today's Affirmation ✨", style: TextStyle(fontSize: 14, color: Colors.amberAccent)),
           SizedBox(height: 12),
           Text(_affirmation?['text'] ?? "No affirmation today.", style: TextStyle(color: Colors.white70)),
           Row(
@@ -586,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+            Icon(Icons.auto_awesome, color: Colors.white, size: 18),
             SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -594,7 +720,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 12,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -688,10 +814,92 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("⭐ Latest Aurana Tribe Members", style: TextStyle(color: Colors.white, fontSize: 18)),
+        Text("⭐ Latest Aurana Tribe Members", style: TextStyle(color: Colors.white, fontSize: 12)),
         SizedBox(height: 10),
-        // Future addition: Latest members logic
+        _latestUsers.isEmpty
+            ? Center(child: Text("No new tribe members yet!", style: TextStyle(color: Colors.white70)))
+            : Container(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _latestUsers.length,
+            itemBuilder: (context, index) {
+              final user = _latestUsers[index];
+              return GestureDetector(
+                onTap: () {
+                  // Navigate to their profile or show details
+                },
+                child: Container(
+                  width: 100,
+                  margin: EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundImage: user['avatar'] != null
+                            ? NetworkImage(user['avatar'])
+                            : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                      ),
+                      SizedBox(height: 8),
+                      Text(user['name'] ?? "No Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
+  Widget _buildFeedbackFooter(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Divider(color: Colors.white54, thickness: 1, indent: 40, endIndent: 40),
+          SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => FeedbackScreen()),
+              );
+            },
+            icon: Icon(Icons.bug_report, color: Colors.white, size: 16), // made icon smaller if you want
+            label: Text(
+              'If you sense a glitch in the matrix of Aurana, whisper it to us.',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,  // 👈 THIS IS WHERE WE ADD FONT SIZE
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), // optional, smaller padding
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Aurana © 2025 🌙',
+            style: TextStyle(color: Colors.white38, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+
 }
+
+
+
+

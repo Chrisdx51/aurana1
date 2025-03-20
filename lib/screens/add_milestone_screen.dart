@@ -72,8 +72,8 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
     return Scaffold(
       backgroundColor: Colors.blueGrey[50],
       appBar: AppBar(
-        title: Text("Soul Share", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.indigo,
+        title: Text("Aurana Share", style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.lightBlueAccent,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -191,7 +191,7 @@ class _AddMilestoneScreenState extends State<AddMilestoneScreen> {
       height: 50,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.indigo,
+          backgroundColor: Colors.white54,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: _isSubmitting

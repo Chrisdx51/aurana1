@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:swipable_stack/swipable_stack.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../widgets/banner_ad_widget.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'matches_screen.dart'; // Make sure the path is correct!
 
 class SoulMatchPage extends StatefulWidget {
   @override
@@ -12,273 +13,208 @@ class SoulMatchPage extends StatefulWidget {
 class _SoulMatchPageState extends State<SoulMatchPage> {
   final SwipableStackController _controller = SwipableStackController();
   final ConfettiController _confettiController = ConfettiController(duration: Duration(seconds: 2));
+  final supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> potentialMatches = [];
+  List<Map<String, dynamic>> matchedSouls = [];
   bool isLoading = true;
+  bool showMatchesTab = false;
   String selectedGender = 'All';
+  String swipeMessage = '';
+
+  late BannerAd _bannerAd;
+  bool _isAdLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    fetchPotentialMatches();
+    _fetchPotentialMatches();
+    _fetchMatches();
+    _initBannerAd();
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _confettiController.dispose();
+    _bannerAd.dispose();
     super.dispose();
   }
 
-  Future<void> fetchPotentialMatches() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
+  Future<void> _initBannerAd() async {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() => _isAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    );
+    _bannerAd.load();
+  }
 
-    if (userId.isEmpty) {
-      setState(() => isLoading = false);
-      return;
-    }
+  Future<void> _fetchPotentialMatches() async {
+    final userId = supabase.auth.currentUser?.id ?? '';
+    if (userId.isEmpty) return;
 
     setState(() => isLoading = true);
 
     try {
-      final response = await Supabase.instance.client
+      // Get ALL interactions you've made (liked, disliked, matched)
+      final interactions = await supabase
+          .from('soul_matches')
+          .select('matched_user_id')
+          .eq('user_id', userId);
+
+      final interactedUserIds = interactions.map<String>((e) => e['matched_user_id'] as String).toList();
+
+      // Add yourself to the list of exclusions (so you never see yourself)
+      interactedUserIds.add(userId);
+
+      var query = supabase
           .from('profiles')
           .select()
-          .neq('id', userId)
-          .limit(20);
+          .not('id', 'in', interactedUserIds); // exclude yourself & everyone you’ve swiped on
+
+      // Optional: Apply gender filter if not "All"
+      if (selectedGender != 'All') {
+        query = query.eq('gender', selectedGender);
+      }
+
+      final response = await query.limit(20);
 
       setState(() {
         potentialMatches = List<Map<String, dynamic>>.from(response);
         isLoading = false;
+
+        if (potentialMatches.isEmpty) {
+          swipeMessage = "No souls found... ✨";
+        } else {
+          swipeMessage = ""; // Clear message if we found people
+        }
       });
     } catch (e) {
+      print('❌ Error fetching matches: $e');
       setState(() => isLoading = false);
     }
   }
 
-  void swipeYes(Map<String, dynamic> user) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    final matchedUserId = user['id'];
+
+  Future<void> _fetchMatches() async {
+    final userId = supabase.auth.currentUser?.id ?? '';
+    if (userId.isEmpty) return;
 
     try {
-      await Supabase.instance.client.from('soul_matches').insert({
-        'user_id': userId,
-        'matched_user_id': matchedUserId,
-        'status': 'liked',
-      });
-
-      final mutual = await Supabase.instance.client
+      final response = await supabase
           .from('soul_matches')
-          .select()
-          .eq('user_id', matchedUserId)
-          .eq('matched_user_id', userId)
-          .eq('status', 'liked')
-          .maybeSingle();
+          .select('matched_user_id, profiles!matched_user_id(name, avatar, dob, soul_match_message)')
+          .eq('user_id', userId)
+          .eq('status', 'matched');
 
-      if (mutual != null) {
-        _confettiController.play();
-        _showMatchDialog(user);
-      } else {
-        _showLikedOnlyDialog(user);
-      }
-    } catch (e) {}
+      setState(() {
+        matchedSouls = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      print('❌ Error fetching soul matches: $e');
+    }
   }
 
-  void swipeNo(Map<String, dynamic> user) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
+  Future<void> swipeYes(Map<String, dynamic> user) async {
+    final userId = supabase.auth.currentUser!.id;
     final matchedUserId = user['id'];
 
-    try {
-      await Supabase.instance.client.from('soul_matches').insert({
-        'user_id': userId,
-        'matched_user_id': matchedUserId,
-        'status': 'disliked',
+    await supabase.from('soul_matches').insert({
+      'user_id': userId,
+      'matched_user_id': matchedUserId,
+      'status': 'liked',
+    });
+
+    final mutual = await supabase
+        .from('soul_matches')
+        .select()
+        .eq('user_id', matchedUserId)
+        .eq('matched_user_id', userId)
+        .eq('status', 'liked')
+        .maybeSingle();
+
+    if (mutual != null) {
+      await supabase.from('soul_matches')
+          .update({'status': 'matched'})
+          .match({'user_id': userId, 'matched_user_id': matchedUserId});
+      await supabase.from('soul_matches')
+          .update({'status': 'matched'})
+          .match({'user_id': matchedUserId, 'matched_user_id': userId});
+
+      _confettiController.play();
+      setState(() {
+        swipeMessage = "🌟 It's a soul match! 🌟";
       });
-
-      final theyLikedYou = await Supabase.instance.client
-          .from('soul_matches')
-          .select()
-          .eq('user_id', matchedUserId)
-          .eq('matched_user_id', userId)
-          .eq('status', 'liked')
-          .maybeSingle();
-
-      if (theyLikedYou != null) {
-        _showMissedSoulDialog(user);
-      } else {
-        _showNoMatchDialog(user);
-      }
-    } catch (e) {}
+      _fetchMatches();
+    } else {
+      setState(() {
+        swipeMessage = "✨ You feel a cosmic pull... ✨";
+      });
+    }
   }
 
-  // ✅ DIALOGS ✅
+  Future<void> swipeNo(Map<String, dynamic> user) async {
+    final userId = supabase.auth.currentUser!.id;
+    final matchedUserId = user['id'];
 
-  void _showMatchDialog(Map<String, dynamic> user) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black87,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('✨ Soul Match!', style: TextStyle(color: Colors.white, fontSize: 24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(radius: 40, backgroundImage: NetworkImage(user['avatar'] ?? '')),
-            SizedBox(height: 10),
-            Text('You and ${user['name']} are connected!', style: TextStyle(color: Colors.white70)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Later', style: TextStyle(color: Colors.white))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent),
-            child: Text('Message Now'),
-          ),
-        ],
-      ),
+    await supabase.from('soul_matches').insert({
+      'user_id': userId,
+      'matched_user_id': matchedUserId,
+      'status': 'disliked',
+    });
+
+    setState(() {
+      swipeMessage = "🌙 The journey continues... 🌙";
+    });
+  }
+
+  void _reportUser(String reportedUserId) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    await supabase.from('reports').insert({
+      'reporter_id': currentUserId,
+      'target_id': reportedUserId,
+      'target_type': 'profile',
+      'reason': 'Inappropriate profile content',
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('✅ Report submitted successfully!')),
     );
   }
-
-  void _showLikedOnlyDialog(Map<String, dynamic> user) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: Text('Awaiting Connection...', style: TextStyle(color: Colors.white)),
-        content: Text('You liked ${user['name']}. Let’s see if they like you back.', style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('OK', style: TextStyle(color: Colors.white))),
-        ],
-      ),
-    );
-  }
-
-  void _showMissedSoulDialog(Map<String, dynamic> user) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: Text('Missed Soul Journey', style: TextStyle(color: Colors.white)),
-        content: Text('You missed a connection with ${user['name']}. Trust the journey.', style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('OK', style: TextStyle(color: Colors.white))),
-        ],
-      ),
-    );
-  }
-
-  void _showNoMatchDialog(Map<String, dynamic> user) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: Text('Moved On', style: TextStyle(color: Colors.white)),
-        content: Text('You passed on ${user['name']}. Onward on your journey.', style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('OK', style: TextStyle(color: Colors.white))),
-        ],
-      ),
-    );
-  }
-
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black.withOpacity(0.9),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.4,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              colors: [Colors.deepPurple.withOpacity(0.6), Colors.black.withOpacity(0.9)],
-              center: Alignment.topLeft,
-              radius: 1.2,
-            ),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'About Soul Match',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              Divider(color: Colors.white.withOpacity(0.3)),
-              SizedBox(height: 10),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      Text(
-                        "Swipe right to connect with a kindred spirit.\n\n"
-                            "This is a sacred space to find your journey companion, a wise guide, or a new friend. Not just dating—connect with those who walk the same path.",
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        "✨ Your soul tribe is waiting ✨",
-                        style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontStyle: FontStyle.italic),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurpleAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () => Navigator.pop(context),
-                child: Text('Begin Journey', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ✅ UI BUILDERS ✅
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(60.0),
-        child: Container(
+      appBar: AppBar(
+        title: Text('Soul Match'),
+        flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Colors.deepPurple.withOpacity(0.8),
-                Colors.black.withOpacity(0.8),
-                Colors.white.withOpacity(0.1)
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              colors: [Colors.deepPurple.withOpacity(0.8), Colors.black.withOpacity(0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ),
-          child: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: Text('Soul Match', style: TextStyle(color: Colors.white)),
-            centerTitle: true,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(Icons.info_outline, color: Colors.white),
-                onPressed: _showInfoDialog,
-              ),
-            ],
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(showMatchesTab ? Icons.favorite : Icons.people, color: Colors.white),
+            onPressed: () {
+              setState(() => showMatchesTab = !showMatchesTab);
+              if (showMatchesTab) _fetchMatches();
+            },
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -291,38 +227,51 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
             ),
             child: Column(
               children: [
+                if (_isAdLoaded)
+                  Container(
+                    width: _bannerAd.size.width.toDouble(),
+                    height: _bannerAd.size.height.toDouble(),
+                    child: AdWidget(ad: _bannerAd),
+                  ),
                 SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                  child: BannerAdWidget(),
-                ),
-                SizedBox(height: 10),
+                if (!showMatchesTab) _genderDropdown(),
 
-                DropdownButton<String>(
-                  dropdownColor: Colors.black87,
-                  value: selectedGender,
-                  items: ['All', 'Male', 'Female']
-                      .map((gender) => DropdownMenuItem(
-                    value: gender,
-                    child: Text(gender, style: TextStyle(color: Colors.white)),
-                  ))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedGender = value!;
-                      fetchPotentialMatches();
-                    });
+                if (swipeMessage.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      swipeMessage,
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+
+                ElevatedButton.icon(
+                  icon: Icon(Icons.favorite),
+                  label: Text('View Soul Matches'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple, // ✅ Updated from primary
+                    foregroundColor: Colors.white,       // ✅ Updated from onPrimary
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => MatchesScreen()),
+                    );
                   },
                 ),
 
                 Expanded(
                   child: isLoading
                       ? Center(child: CircularProgressIndicator(color: Colors.white))
+                      : showMatchesTab
+                      ? _buildMatchesList()
                       : potentialMatches.isEmpty
-                      ? Center(child: Text('No souls to match today...', style: TextStyle(color: Colors.white70)))
+                      ? Center(child: Text('No souls found...', style: TextStyle(color: Colors.white70)))
                       : _buildSwipableCards(),
                 ),
-                _buildActionButtons(),
+                if (!showMatchesTab) _buildActionButtons(),
                 SizedBox(height: 10),
               ],
             ),
@@ -338,6 +287,25 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _genderDropdown() {
+    return DropdownButton<String>(
+      dropdownColor: Colors.black87,
+      value: selectedGender,
+      items: ['All', 'Male', 'Female', 'Non-binary', 'Rather not say']
+          .map((gender) => DropdownMenuItem(
+        value: gender,
+        child: Text(gender, style: TextStyle(color: Colors.white)),
+      ))
+          .toList(),
+      onChanged: (value) {
+        setState(() {
+          selectedGender = value!;
+          _fetchPotentialMatches();
+        });
+      },
     );
   }
 
@@ -366,41 +334,110 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
   }
 
   Widget _buildProfileCard(Map<String, dynamic> user) {
+    final avatarUrl = user['avatar'];
+
     return Container(
       margin: EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.7), blurRadius: 20, spreadRadius: 5)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withOpacity(0.7),
+            blurRadius: 20,
+            spreadRadius: 5,
+          )
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(30),
         child: Stack(
           children: [
-            FadeInImage.assetNetwork(
-              placeholder: 'assets/default_avatar.png',
-              image: user['avatar'] ?? 'https://i.pravatar.cc/300',
+            avatarUrl != null && avatarUrl.isNotEmpty
+                ? Image.network(
+              avatarUrl,
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
+            )
+                : Container(
+              color: Colors.grey.withOpacity(0.2),
+              alignment: Alignment.center,
+              child: Icon(Icons.person_outline, size: 60, color: Colors.white54),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: Icon(Icons.flag_outlined, color: Colors.redAccent.shade100),
+                onPressed: () => _reportUser(user['id']),
+              ),
             ),
             Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [Colors.black.withOpacity(0.3), Colors.transparent, Colors.black.withOpacity(0.5)]),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                ),
               ),
               padding: EdgeInsets.all(20),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user['name'] ?? 'Unknown Soul', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(
+                    user['name'] ?? 'Unknown Soul',
+                    style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.cake, color: Colors.amberAccent, size: 16),
+                      SizedBox(width: 4),
+                      Text('${calculateAge(user['dob'] ?? '2000-01-01')} years',
+                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      SizedBox(width: 16),
+                      Icon(Icons.star, color: Colors.amberAccent, size: 16),
+                      SizedBox(width: 4),
+                      Text('${getStarSign(user['dob'] ?? '2000-01-01')}',
+                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    ],
+                  ),
                   SizedBox(height: 10),
-                  Text(user['soul_match_message'] ?? 'Seeking a cosmic connection...', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text(
+                    user['soul_match_message'] ?? 'Seeking a cosmic connection...',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMatchesList() {
+    if (matchedSouls.isEmpty) {
+      return Center(child: Text('No soul matches yet...', style: TextStyle(color: Colors.white70)));
+    }
+
+    return ListView.builder(
+      itemCount: matchedSouls.length,
+      itemBuilder: (context, index) {
+        final match = matchedSouls[index]['profiles'];
+        final avatarUrl = match['avatar'];
+
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl == null ? Icon(Icons.person) : null,
+          ),
+          title: Text(match['name'] ?? 'Unknown Soul', style: TextStyle(color: Colors.white)),
+          subtitle: Text(match['soul_match_message'] ?? 'No message', style: TextStyle(color: Colors.white54)),
+        );
+      },
     );
   }
 
@@ -433,5 +470,44 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
       ),
       child: Icon(icon, color: Colors.white, size: 36),
     );
+  }
+
+  int calculateAge(String dobString) {
+    try {
+      final dob = DateTime.parse(dobString);
+      final today = DateTime.now();
+      int age = today.year - dob.year;
+
+      if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+        age--;
+      }
+
+      return age;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  String getStarSign(String dobString) {
+    try {
+      final dob = DateTime.parse(dobString);
+      final month = dob.month;
+      final day = dob.day;
+
+      if ((month == 1 && day >= 20) || (month == 2 && day <= 18)) return "Aquarius";
+      if ((month == 2 && day >= 19) || (month == 3 && day <= 20)) return "Pisces";
+      if ((month == 3 && day >= 21) || (month == 4 && day <= 19)) return "Aries";
+      if ((month == 4 && day >= 20) || (month == 5 && day <= 20)) return "Taurus";
+      if ((month == 5 && day >= 21) || (month == 6 && day <= 20)) return "Gemini";
+      if ((month == 6 && day >= 21) || (month == 7 && day <= 22)) return "Cancer";
+      if ((month == 7 && day >= 23) || (month == 8 && day <= 22)) return "Leo";
+      if ((month == 8 && day >= 23) || (month == 9 && day <= 22)) return "Virgo";
+      if ((month == 9 && day >= 23) || (month == 10 && day <= 22)) return "Libra";
+      if ((month == 10 && day >= 23) || (month == 11 && day <= 21)) return "Scorpio";
+      if ((month == 11 && day >= 22) || (month == 12 && day <= 21)) return "Sagittarius";
+      return "Capricorn";
+    } catch (e) {
+      return "Unknown";
+    }
   }
 }

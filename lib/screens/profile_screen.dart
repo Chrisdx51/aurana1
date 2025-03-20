@@ -3,13 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 
-// ✅ BannerAdWidget import (assuming you have this ready in your widgets folder)
 import '../widgets/banner_ad_widget.dart';
-import 'help_and_features_screen.dart'; // ✅ NEW: Help & Features page
-
+import 'help_and_features_screen.dart';
+import 'blocked_users_screen.dart';
 import '../services/supabase_service.dart';
 import 'chat_screen.dart';
 import 'edit_profile_screen.dart';
+import 'soul_messages_screen.dart';
+import 'message_screen.dart';
+import 'admin_panel_screen.dart';
+import 'about_us_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -23,7 +27,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
   final SupabaseService supabaseService = SupabaseService();
-  final ConfettiController _confettiController = ConfettiController(duration: Duration(seconds: 3));
+  final ConfettiController _confettiController =
+  ConfettiController(duration: Duration(seconds: 3));
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   Map<String, dynamic>? userProfile;
@@ -31,12 +36,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String currentUserId = "";
   String friendStatus = "not_friends";
   bool isLoading = true;
+  bool isBlocked = false;
 
   @override
   void initState() {
     super.initState();
     _initializeProfile();
-  }
+    }
 
   @override
   void dispose() {
@@ -52,36 +58,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _checkFriendStatus();
     await _loadAchievements();
     await _loadFriendsList();
+    await _checkIfBlocked();
     setState(() => isLoading = false);
+  }
+
+  Future<bool> _checkIfAdmin(String? userId) async {
+    if (userId == null) return false;
+
+    final response = await Supabase.instance.client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+    final role = response['role'] ?? 'user';
+    return role == 'admin' || role == 'superadmin';
   }
 
   Future<void> _loadUserProfile() async {
     try {
-      final response = await supabase
-          .from('profiles')
-          .select('''
-            id,
-            name,
-            username,
-            display_name_choice,
-            bio,
-            city,
-            country,
-            gender,
-            dob,
-            is_online,
-            last_seen,
-            spiritual_path,
-            spiritual_level,
-            spiritual_xp,
-            element,
-            soul_match_message,
-            privacy_setting,
-            avatar,
-            journey_visibility
-          ''')
-          .eq('id', widget.userId)
-          .maybeSingle();
+      final profileId = widget.userId.isNotEmpty ? widget.userId : currentUserId;
+
+      final response = await supabase.from('profiles').select('''
+            id, name, username, display_name_choice, bio, city, country, gender, dob,
+            is_online, last_seen, spiritual_path, spiritual_level, spiritual_xp,
+            element, soul_match_message, privacy_setting, avatar, journey_visibility, role
+          ''').eq('id', profileId).maybeSingle();
 
       if (response == null) {
         _showMessage('⚠️ Profile not found.');
@@ -91,37 +93,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         userProfile = response;
       });
+
+      print("✅ Loaded userProfile: $userProfile");
     } catch (error) {
       print('❌ Error loading profile: $error');
       _showMessage('❌ Failed to load profile.');
     }
   }
 
+  Future<void> _deleteMyProfile() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Delete Your Profile?'),
+        content: Text(
+            'This will permanently delete your profile and all your data. Are you sure?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await supabaseService.deleteUserAndRelatedData(currentUserId);
+      if (success) {
+        await supabase.auth.signOut();
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      } else {
+        _showMessage('❌ Failed to delete your profile.');
+      }
+    }
+  }
+
   Future<void> _checkFriendStatus() async {
     try {
-      final sentRequest = await supabaseService.checkSentFriendRequest(currentUserId, widget.userId);
-      final receivedRequest = await supabaseService.checkReceivedFriendRequest(currentUserId, widget.userId);
-      final isFriend = await supabaseService.checkIfFriends(currentUserId, widget.userId);
+      final sentRequest = await supabaseService
+          .checkSentFriendRequest(currentUserId, widget.userId);
+      final receivedRequest = await supabaseService
+          .checkReceivedFriendRequest(currentUserId, widget.userId);
+      final isFriend =
+      await supabaseService.checkIfFriends(currentUserId, widget.userId);
 
       setState(() {
-        if (isFriend) {
-          friendStatus = 'friends';
-        } else if (sentRequest) {
-          friendStatus = 'sent';
-        } else if (receivedRequest) {
-          friendStatus = 'received';
-        } else {
-          friendStatus = 'not_friends';
-        }
+        if (isFriend) friendStatus = 'friends';
+        else if (sentRequest) friendStatus = 'sent';
+        else if (receivedRequest) friendStatus = 'received';
+        else friendStatus = 'not_friends';
       });
     } catch (error) {
       print('⚠️ Error checking friend status: $error');
     }
   }
 
+  Future<void> _checkIfBlocked() async {
+    isBlocked =
+    await supabaseService.isUserBlocked(currentUserId, widget.userId);
+    print("✅ Is user blocked? $isBlocked");
+  }
+
   Future<void> _loadAchievements() async {
     try {
-      final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+      final achievements =
+      await supabaseService.fetchUserAchievements(widget.userId);
       userProfile ??= {};
       userProfile!['achievements'] = achievements;
     } catch (error) {
@@ -143,47 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
-
-  Future<void> sendFriendRequest() async {
-    try {
-      await supabaseService.sendFriendRequest(currentUserId, widget.userId);
-      setState(() => friendStatus = 'sent');
-      _showMessage("✅ Friend request sent!");
-    } catch (error) {
-      _showMessage("❌ Failed to send friend request.");
-    }
-  }
-
-  Future<void> cancelFriendRequest() async {
-    try {
-      await supabaseService.cancelFriendRequest(currentUserId, widget.userId);
-      setState(() => friendStatus = 'not_friends');
-      _showMessage("✅ Friend request cancelled!");
-    } catch (error) {
-      _showMessage("❌ Failed to cancel friend request.");
-    }
-  }
-
-  Future<void> acceptFriendRequest() async {
-    try {
-      await supabaseService.acceptFriendRequest(currentUserId, widget.userId);
-      setState(() => friendStatus = 'friends');
-      _showMessage("✅ Friend request accepted!");
-    } catch (error) {
-      _showMessage("❌ Failed to accept friend request.");
-    }
-  }
-
-  Future<void> removeFriend() async {
-    try {
-      await supabaseService.removeFriend(currentUserId, widget.userId);
-      setState(() => friendStatus = 'not_friends');
-      _showMessage("✅ Friend removed.");
-    } catch (error) {
-      _showMessage("❌ Failed to remove friend.");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -196,15 +195,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SafeArea(
             child: Column(
               children: [
-                // ✅ Just call BannerAdWidget without any params!
                 BannerAdWidget(),
-
                 Expanded(
                   child: isLoading ? _buildLoading() : _buildProfileBody(),
                 ),
               ],
             ),
           ),
+          if (userProfile != null &&
+              (userProfile!['role'] == 'admin' || userProfile!['role'] == 'superadmin'))
+
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                heroTag: 'adminBtn',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AdminPanelScreen()),
+                  );
+                },
+                backgroundColor: Colors.deepPurple,
+                child: Icon(Icons.admin_panel_settings, color: Colors.white),
+              ),
+            ),
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -220,6 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
 
   AppBar _buildAppBar() {
     return AppBar(
@@ -256,101 +272,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileBody() {
     if (userProfile == null) return _buildLoading();
 
-    // Privacy Logic
     String privacy = userProfile?['privacy_setting'] ?? 'public';
-
-    if (privacy == 'private' && widget.userId != currentUserId) {
+    if (privacy == 'private' && widget.userId != currentUserId)
       return _buildPrivacyLocked('🔒 This profile is private.');
-    }
-
-    if (privacy == 'friends_only' && friendStatus != 'friends' && widget.userId != currentUserId) {
-      return _buildPrivacyLocked('🔒 Only friends can view this profile.');
-    }
+    if (privacy == 'friends_only' &&
+        friendStatus != 'friends' &&
+        widget.userId != currentUserId)
+      return _buildPrivacyLocked('🔒 Friends only.');
 
     final bool isOnline = userProfile?['is_online'] ?? false;
     final bool isMyProfile = widget.userId == currentUserId;
 
-    DateTime? dob = userProfile?['dob'] != null ? DateTime.tryParse(userProfile!['dob']) : null;
+    DateTime? dob = userProfile?['dob'] != null
+        ? DateTime.tryParse(userProfile!['dob'])
+        : null;
     int age = dob != null ? calculateAge(dob) : 0;
     String zodiac = dob != null ? getZodiacSign(dob) : "Not set";
-    String zodiacIcon = 'assets/zodiac/${zodiac.toLowerCase()}.png';
 
-    String displayName = (userProfile!['display_name_choice'] == 'username')
+    String displayName =
+    (userProfile!['display_name_choice'] == 'username')
         ? userProfile!['username'] ?? 'Unknown'
         : userProfile!['name'] ?? 'Unknown';
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 80),
       children: [
-        _buildHeader(isOnline, isMyProfile, displayName, zodiac, age, zodiacIcon),
-        SizedBox(height: 16),
+        _buildHeader(isOnline, isMyProfile, displayName, zodiac, age),
+        SizedBox(height: 14),
         _buildXPBar(),
         _buildAchievements(),
-        _buildProfileDetails(zodiac, age, zodiacIcon),
+        _buildProfileDetails(zodiac, age),
         _buildFriendsListDisplay(),
         if (!isMyProfile) _buildFriendActions(),
-        SizedBox(height: 16),
-        _buildHelpButton(context), // ✅ ONLY addition at the bottom
-        SizedBox(height: 24),
-         ],
+        _buildHelpButton(context),
+        if (isMyProfile) _buildBlockedUsersButton(),
+        _buildProfileFooter(context), // 👈 Add this line
+        if (isMyProfile) _buildDeleteProfileButton(),
+
+        SizedBox(height: 20),
+
+
+      ],
     );
   }
 
   Widget _buildPrivacyLocked(String message) {
     return Center(
-      child: Text(
-        message,
-        style: TextStyle(color: Colors.white, fontSize: 18),
-      ),
+      child: Text(message, style: TextStyle(color: Colors.white, fontSize: 18)),
     );
   }
 
-  Widget _buildHeader(bool isOnline, bool isMyProfile, String displayName, String zodiac, int age, String zodiacIcon) {
-    final lastSeen = userProfile?['last_seen'];
-    String lastSeenText = lastSeen != null ? 'Last seen: ${DateTime.tryParse(lastSeen)?.toLocal().toString() ?? ""}' : '';
-
+  Widget _buildHeader(bool isOnline, bool isMyProfile, String displayName,
+      String zodiac, int age) {
     return Padding(
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              CircleAvatar(
-                radius: 60,
-                backgroundImage: userProfile?['avatar'] != null
-                    ? NetworkImage(userProfile!['avatar'])
-                    : AssetImage('assets/images/default_avatar.png') as ImageProvider,
-              ),
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: Icon(
-                  isOnline ? Icons.star : Icons.star_border,
-                  color: isOnline ? Colors.yellow : Colors.grey,
-                  size: 20,
-                ),
-              ),
-            ],
+          CircleAvatar(
+            radius: 60,
+            backgroundImage: userProfile?['avatar'] != null
+                ? NetworkImage(userProfile!['avatar'])
+                : AssetImage('assets/images/default_avatar.png')
+            as ImageProvider,
           ),
           SizedBox(height: 8),
-          Text(
-            displayName,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
+          Text(displayName,
+              style: TextStyle(fontSize: 24, color: Colors.white)),
           SizedBox(height: 4),
-          Text('$zodiac, $age years old', style: TextStyle(color: Colors.white70)),
-          if (userProfile?['bio'] != null && userProfile!['bio'].toString().isNotEmpty)
+          Text('$zodiac, $age years old',
+              style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 4),
+          Text(isOnline ? '🟢 Online' : '🔴 Offline',
+              style: TextStyle(color: Colors.white60)),
+          if (userProfile?['bio'] != null &&
+              userProfile!['bio'].toString().isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 4.0),
+              padding: const EdgeInsets.only(top: 8.0),
               child: Text(
                 userProfile!['bio'],
                 style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
                 textAlign: TextAlign.center,
               ),
             ),
-          if (!isOnline && lastSeenText.isNotEmpty)
-            Text(lastSeenText, style: TextStyle(color: Colors.white60, fontSize: 12)),
           if (isMyProfile)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -391,7 +394,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
-          Text("Level $level - XP: $xp / $xpForNext", style: TextStyle(color: Colors.white)),
+          Text("Level $level - XP: $xp / $xpForNext",
+              style: TextStyle(color: Colors.white)),
           SizedBox(height: 8),
           LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
@@ -415,7 +419,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(16),
           child: Text(
             'Achievements',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            style:
+            TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
           ),
         ),
         achievementsLoaded && achievements.isNotEmpty
@@ -442,7 +447,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 60,
                       height: 60,
                     )
-                        : Icon(Icons.star, color: Colors.yellowAccent, size: 40),
+                        : Icon(Icons.star,
+                        color: Colors.yellowAccent, size: 40),
                     SizedBox(height: 8),
                     Text(
                       achievement['title'] ?? '',
@@ -457,13 +463,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         )
             : Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('No Achievements Yet!', style: TextStyle(color: Colors.white70)),
+          child: Text('No Achievements Yet!',
+              style: TextStyle(color: Colors.white70)),
         ),
       ],
     );
   }
 
-  Widget _buildProfileDetails(String zodiac, int age, String zodiacIcon) {
+  Widget _buildProfileDetails(String zodiac, int age) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -474,12 +481,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildDetailRow('Country', userProfile?['country']),
           _buildDetailRow('Spiritual Path', userProfile?['spiritual_path']),
           _buildDetailRow('Element', userProfile?['element']),
-          _buildDetailRow('Soul Match Message', userProfile?['soul_match_message']),
-          _buildDetailRow('Privacy', _privacyDescription(userProfile?['privacy_setting'] ?? 'Not set')),
+          SizedBox(height: 16),
+          _buildGlowingBox(),
+          ],
+      ),
+    );
+  }
+  Widget _buildGlowingBox() {
+    final isMyProfile = widget.userId == currentUserId;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.deepPurple.withOpacity(0.8),
+            Colors.purple.withOpacity(0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withOpacity(0.6),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Soul Match Message Section
+          Text(
+            'Soul Match Message',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            userProfile?['soul_match_message'] ?? 'No message set.',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
+
+          SizedBox(height: 24),
+
+          // Privacy Section with logic
+          Text(
+            'Privacy',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            isMyProfile
+                ? _privacyDescription(userProfile?['privacy_setting'] ?? 'Not set')
+                : 'This information is private.',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
         ],
       ),
     );
   }
+
 
   Widget _buildFriendsListDisplay() {
     return Padding(
@@ -488,7 +566,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Icon(Icons.group, color: Colors.white70),
           SizedBox(width: 8),
-          Text('${friendsList.length} Friends', style: TextStyle(color: Colors.white)),
+          Text('${friendsList.length} Friends',
+              style: TextStyle(color: Colors.white)),
         ],
       ),
     );
@@ -512,8 +591,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text('$label: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          Expanded(child: Text(value ?? 'Not set', style: TextStyle(color: Colors.white))),
+          Text('$label: ',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          Expanded(
+              child: Text(value ?? 'Not set', style: TextStyle(color: Colors.white))),
         ],
       ),
     );
@@ -524,35 +605,146 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     switch (friendStatus) {
       case 'not_friends':
-        buttons.add(_buildActionButton('Add Friend', Icons.person_add, Colors.deepPurple, sendFriendRequest));
+        buttons.add(_buildActionButton(
+          'Add Friend',
+          Icons.person_add,
+          Colors.deepPurple,
+              () async {
+            await supabaseService.sendFriendRequest(currentUserId, widget.userId);
+            await _checkFriendStatus(); // Refresh status!
+            setState(() {});
+            _showMessage("✅ Friend request sent!");
+          },
+        ));
         break;
+
       case 'sent':
-        buttons.add(_buildActionButton('Cancel Request', Icons.cancel, Colors.grey, cancelFriendRequest));
+        buttons.add(_buildActionButton(
+          'Cancel Request',
+          Icons.cancel,
+          Colors.grey,
+              () async {
+            await supabaseService.cancelFriendRequest(currentUserId, widget.userId);
+            await _checkFriendStatus(); // Refresh status!
+            setState(() {});
+            _showMessage("✅ Friend request cancelled!");
+          },
+        ));
         break;
+
       case 'received':
-        buttons.add(_buildActionButton('Accept Request', Icons.check_circle, Colors.green, acceptFriendRequest));
+        buttons.add(_buildActionButton(
+          'Accept Request',
+          Icons.check_circle,
+          Colors.green,
+              () async {
+            await supabaseService.acceptFriendRequest(currentUserId, widget.userId);
+            await _checkFriendStatus(); // Refresh status!
+            setState(() {});
+            _showMessage("✅ Friend request accepted!");
+          },
+        ));
         break;
+
       case 'friends':
-        buttons.add(_buildActionButton('Message', Icons.message, Colors.indigo, () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                receiverId: widget.userId,
-                receiverName: userProfile?['name'] ?? 'User',
+        buttons.add(_buildActionButton(
+          'Message',
+          Icons.message,
+          Colors.indigo,
+              () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  receiverId: widget.userId,
+                  receiverName: userProfile?['name'] ?? 'User',
+                ),
               ),
-            ),
-          );
-        }));
-        buttons.add(_buildActionButton('Remove Friend', Icons.person_remove, Colors.redAccent, removeFriend));
+            );
+          },
+        ));
+        buttons.add(_buildActionButton(
+          'Remove Friend',
+          Icons.person_remove,
+          Colors.redAccent,
+              () async {
+            await supabaseService.removeFriend(currentUserId, widget.userId);
+            await _checkFriendStatus(); // Refresh status!
+            setState(() {});
+            _showMessage("✅ Friend removed.");
+          },
+        ));
         break;
     }
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
-        children: buttons.map((btn) => Padding(padding: EdgeInsets.symmetric(vertical: 4), child: btn)).toList(),
+        children: buttons
+            .map((btn) => Padding(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: btn,
+        ))
+            .toList(),
       ),
+    );
+  }
+
+  Widget _buildProfileFooter(BuildContext context) {
+    return Column(
+      children: [
+        Divider(color: Colors.white24, thickness: 1, indent: 16, endIndent: 16),
+        SizedBox(height: 8),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AboutUsScreen()),
+              );
+            },
+            icon: Icon(Icons.info_outline, color: Colors.white),
+            label: Text('About Aurana', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal.shade700,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+
+        SizedBox(height: 8),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PrivacyPolicyScreen()),
+              );
+            },
+            icon: Icon(Icons.privacy_tip_outlined, color: Colors.white),
+            label: Text('Privacy Policy & Terms', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueGrey.shade800,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+
+        SizedBox(height: 16),
+
+        Text(
+          'Aurana © 2025',
+          style: TextStyle(color: Colors.white24, fontSize: 12),
+        ),
+
+        SizedBox(height: 16),
+      ],
     );
   }
 
@@ -577,7 +769,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text('Log out?'),
         content: Text('Are you sure you want to log out?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               await supabase.auth.signOut();
@@ -589,15 +782,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
   Widget _buildHelpButton(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: ElevatedButton.icon(
         onPressed: () {
           Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => HelpAndFeaturesScreen()),
-          );
+              context,
+              MaterialPageRoute(builder: (_) => HelpAndFeaturesScreen()));
         },
         icon: Icon(Icons.help_outline, color: Colors.white),
         label: Text('Help & Features', style: TextStyle(color: Colors.white)),
@@ -610,17 +803,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildBlockedUsersButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (_) => BlockedUsersScreen()));
+        },
+        icon: Icon(Icons.block, color: Colors.white),
+        label: Text('Blocked Users'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.redAccent,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteProfileButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ElevatedButton.icon(
+        onPressed: _deleteMyProfile,
+        icon: Icon(Icons.delete_forever, color: Colors.white),
+        label: Text('Delete My Profile'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.black12,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
   int calculateAge(DateTime dob) {
     final today = DateTime.now();
     int age = today.year - dob.year;
-    if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) age--;
+    if (today.month < dob.month ||
+        (today.month == dob.month && today.day < dob.day)) age--;
     return age;
   }
 
   String getZodiacSign(DateTime dob) {
     int day = dob.day;
     int month = dob.month;
-
     if ((month == 3 && day >= 21) || (month == 4 && day <= 19)) return "Aries";
     if ((month == 4 && day >= 20) || (month == 5 && day <= 20)) return "Taurus";
     if ((month == 5 && day >= 21) || (month == 6 && day <= 20)) return "Gemini";

@@ -47,13 +47,12 @@ class _AllAdsPageState extends State<AllAdsPage> {
 
     final now = DateTime.now();
 
-    // ✅ Filter out expired ads (safe check in case Supabase doesn't do it)
     final activeAds = ads.where((ad) {
       final expiry = DateTime.tryParse(ad['expiry_date'] ?? '');
       return expiry == null || expiry.isAfter(now);
     }).toList();
 
-    activeAds.shuffle(); // ✅ Randomize ads display for fairness
+    activeAds.shuffle();
 
     setState(() {
       _ads = activeAds;
@@ -64,6 +63,65 @@ class _AllAdsPageState extends State<AllAdsPage> {
   List<Map<String, dynamic>> get _filteredAds {
     if (_selectedFilter == 'All') return _ads;
     return _ads.where((ad) => ad['service_type'] == _selectedFilter).toList();
+  }
+
+  Future<void> _showReportDialog(String adId) async {
+    final TextEditingController _reasonController = TextEditingController();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Report This Ad'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Why are you reporting this ad?'),
+              SizedBox(height: 10),
+              TextField(
+                controller: _reasonController,
+                decoration: InputDecoration(
+                  hintText: 'Enter reason...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: Text('Submit Report'),
+              onPressed: () async {
+                final reason = _reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Please provide a reason.')),
+                  );
+                  return;
+                }
+
+                await SupabaseService().submitReport(
+                  reporterId: SupabaseService().supabase.auth.currentUser?.id ?? '',
+                  targetId: adId,
+                  targetType: 'ad',
+                  reason: reason,
+                );
+
+                Navigator.of(context).pop();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('✅ Report submitted successfully!')),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -154,101 +212,113 @@ class _AllAdsPageState extends State<AllAdsPage> {
                   ),
                   itemBuilder: (context, index) {
                     final ad = _filteredAds[index];
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => BusinessProfilePage(
-                              name: ad['name'] ?? '',
-                              serviceType: ad['service_type'] ?? '',
-                              tagline: ad['tagline'] ?? '',
-                              description: ad['description'] ?? '',
-                              profileImageUrl: ad['profile_image_url'] ?? '',
-                              rating: ad['rating'] != null ? double.tryParse(ad['rating'].toString()) ?? 0.0 : 0.0,
-                              adCreatedDate: ad['created_at'] ?? 'Unknown Date',
-                              userId: ad['user_id'] ?? '', // ✅ correct reference!
+                    final adId = ad['id'];
+
+                    return Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => BusinessProfilePage(
+                                  name: ad['name'] ?? '',
+                                  serviceType: ad['service_type'] ?? '',
+                                  tagline: ad['tagline'] ?? '',
+                                  description: ad['description'] ?? '',
+                                  profileImageUrl: ad['profile_image_url'] ?? '',
+                                  rating: ad['rating'] != null
+                                      ? double.tryParse(ad['rating'].toString()) ?? 0.0
+                                      : 0.0,
+                                  adCreatedDate: ad['created_at'] ?? 'Unknown Date',
+                                  userId: ad['user_id'] ?? '',
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 6,
+                                  offset: Offset(2, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: ad['profile_image_url'] != null &&
+                                      ad['profile_image_url'].isNotEmpty
+                                      ? Image.network(
+                                    ad['profile_image_url'],
+                                    height: 120,
+                                    fit: BoxFit.cover,
+                                  )
+                                      : Image.asset(
+                                    'assets/images/serv1.png',
+                                    height: 120,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        ad['name'] ?? 'No Name',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        ad['service_type'] ?? 'Unknown',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        ad['tagline'] ?? '',
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 6,
-                              offset: Offset(2, 4),
-                            ),
-                          ],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Image Section
-                            ClipRRect(
-                              borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(16)),
-                              child: ad['profile_image_url'] != null &&
-                                  ad['profile_image_url'].isNotEmpty
-                                  ? Image.network(
-                                ad['profile_image_url'],
-                                height: 120,
-                                fit: BoxFit.cover,
-                              )
-                                  : Image.asset(
-                                'assets/images/serv1.png',
-                                height: 120,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-
-                            // Info Section
-                            SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    ad['name'] ?? 'No Name',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    ad['service_type'] ?? 'Unknown',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    ad['tagline'] ?? '',
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white60,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: IconButton(
+                            icon: Icon(Icons.flag, color: Colors.redAccent),
+                            onPressed: () => _showReportDialog(adId),
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   },
                 ),

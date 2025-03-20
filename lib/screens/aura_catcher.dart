@@ -48,7 +48,6 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
     _cameras = await availableCameras();
 
     if (_cameras != null && _cameras!.isNotEmpty) {
-      // Look for front camera first
       final frontCamera = _cameras!.firstWhere(
             (camera) => camera.lensDirection == CameraLensDirection.front,
         orElse: () => _cameras![0],
@@ -204,68 +203,153 @@ class _AuraCatcherScreenState extends State<AuraCatcherScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: Column(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/guide.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          SafeArea(
-            child: Column(
+          // 🔹 EXPANDED FOR MAIN CONTENT 🔹
+          Expanded(
+            child: Stack(
               children: [
-                if (_isAdLoaded && _bannerAd != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: SizedBox(
-                      width: _bannerAd!.size.width.toDouble(),
-                      height: _bannerAd!.size.height.toDouble(),
-                      child: AdWidget(ad: _bannerAd!),
-                    ),
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/guide.png',
+                    fit: BoxFit.cover,
                   ),
-                Expanded(
+                ),
+                SafeArea(
                   child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(height: 20),
-                          _capturedImage != null
-                              ? _buildCapturedImageView(context)
-                              : _isCameraInitialized
-                              ? _buildCameraPreview(context)
-                              : const CircularProgressIndicator(),
-
-                          const SizedBox(height: 30),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    child: Column(
+                      children: [
+                        // BACK BUTTON + HEADLINE
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                          child: Row(
                             children: [
-                              _buildButton("Capture Aura", _captureImage),
-                              _buildButton("Switch Camera", _switchCamera),
+                              IconButton(
+                                icon: Icon(Icons.arrow_back, color: Colors.white),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                              Expanded(
+                                child: Center(
+                                  child: Text(
+                                    "Aura Catcher",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 48), // For symmetry
                             ],
                           ),
+                        ),
 
-                          const SizedBox(height: 20),
+                        // INSTRUCTION CARD (now scrolls fine)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Card(
+                            color: Colors.white.withOpacity(0.15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 4,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildStep(1, "Hold the camera steady and face it."),
+                                  const SizedBox(height: 8),
+                                  _buildStep(2, "Tap 'Capture Aura' to scan."),
+                                  const SizedBox(height: 8),
+                                  _buildStep(3, "View your aura analysis!"),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
 
-                          _buildButton("View Aura History", () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const AuraHistoryScreen()),
-                            );
-                          }),
-                        ],
-                      ),
+                        // CAMERA PREVIEW + BUTTONS
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 20),
+
+                              _capturedImage != null
+                                  ? _buildCapturedImageView(context)
+                                  : _isCameraInitialized
+                                  ? _buildCameraPreview(context)
+                                  : const CircularProgressIndicator(),
+
+                              const SizedBox(height: 30),
+
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 10,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  _buildButton("Capture Aura", _captureImage),
+                                  _buildButton("Switch Camera", _switchCamera),
+                                ],
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              _buildButton("View Aura History", () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const AuraHistoryScreen()),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ],
             ),
           ),
+
+          // 🔹 BOTTOM BANNER AD 🔹
+          if (_isAdLoaded && _bannerAd != null)
+            Container(
+              color: Colors.transparent,
+              width: _bannerAd!.size.width.toDouble(),
+              height: _bannerAd!.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd!),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStep(int number, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "$number.",
+          style: TextStyle(
+            color: Colors.amberAccent,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

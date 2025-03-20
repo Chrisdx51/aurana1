@@ -284,69 +284,102 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         body: Stack(
           children: [
+            // ✨ Background Image
             Positioned.fill(
               child: Image.asset('assets/images/misc2.png', fit: BoxFit.cover),
             ),
+
             _isLoading
                 ? Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
               padding: EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Avatar Picker with Glow
                   GestureDetector(
                     onTap: _pickImage,
-                    child: Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        CircleAvatar(
+                    child: Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.purpleAccent.withOpacity(0.6),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
                           radius: 60,
                           backgroundImage: _imageFile != null
                               ? FileImage(_imageFile!)
                               : (_existingAvatarUrl != null
                               ? NetworkImage(_existingAvatarUrl!)
-                              : AssetImage('assets/images/default_avatar.png'))
-                          as ImageProvider,
+                              : AssetImage('assets/images/default_avatar.png')) as ImageProvider,
                         ),
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.camera_alt, color: Colors.black),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   SizedBox(height: 20),
+
+                  // Username Field
                   _buildTextField('Username*', _usernameController),
                   _buildTextField('Name*', _nameController),
                   _buildTextField('Bio', _bioController, maxLines: 3),
+
                   _buildDropdownField('Gender*', _gender, genders, (val) => setState(() => _gender = val)),
                   _buildDropdownField('Spiritual Path', _spiritualPath, spiritualPaths, (val) => setState(() => _spiritualPath = val)),
                   _buildDropdownField('Element', _element, elements, (val) => setState(() => _element = val)),
+
                   _buildDatePickerField(),
+
                   _buildTextField('City*', _cityController),
                   _buildTextField('Country*', _countryController),
                   _buildTextField('Soul Match Message', _soulMatchMessageController),
+
                   _buildDropdownField('Privacy', _privacySetting, privacyOptions, (val) => setState(() => _privacySetting = val!)),
                   _buildDropdownField('Journey Visibility', _journeyVisibility, privacyOptions, (val) => setState(() => _journeyVisibility = val!)),
                   _buildDropdownField('Display Name', _displayNameChoice, displayNameOptions, (val) => setState(() => _displayNameChoice = val!)),
+
                   SizedBox(height: 20),
+
+                  // Detect Location Button
                   ElevatedButton.icon(
                     onPressed: _detectLocation,
                     icon: Icon(Icons.location_on),
                     label: Text('Auto-detect Location'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
-                  SizedBox(height: 20),
+                  SizedBox(height: 16),
+
+                  // Save Button with Glow
                   ElevatedButton(
                     onPressed: _saveProfile,
-                    child: Text('Save Changes'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                    child: Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 6,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shadowColor: Colors.tealAccent,
+                    ),
                   ),
+                  SizedBox(height: 30),
                 ],
               ),
             ),
           ],
         ),
+
       ),
     );
   }

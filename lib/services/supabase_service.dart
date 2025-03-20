@@ -103,6 +103,31 @@ class SupabaseService {
       return null;
     }
   }
+
+  // ✅ SUBMIT REPORT FUNCTION
+  Future<bool> submitReport({
+    required String reporterId,
+    required String targetId,
+    required String targetType, // e.g. 'post', 'profile', 'ad'
+    required String reason,
+  }) async {
+    try {
+      await supabase.from('reports').insert({
+        'reporter_id': reporterId,
+        'target_id': targetId,
+        'target_type': targetType, // Now this matches your AllAdsPage call
+        'reason': reason,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      print('✅ Report submitted: $targetType reported by $reporterId');
+      return true;
+    } catch (error) {
+      print('❌ Error submitting report: $error');
+      return false;
+    }
+  }
+
   // ✅ Check if you sent a friend request
   Future<bool> checkSentFriendRequest(String currentUserId, String targetUserId) async {
     try {
@@ -322,9 +347,6 @@ class SupabaseService {
       return false;
     }
   }
-
-
-
   // Upload Profile Picture to Supabase Storage
   Future<String?> uploadProfilePicture(String userId, File imageFile) async {
     try {
@@ -361,25 +383,35 @@ class SupabaseService {
     }
   }
   // Upload Media to Supabase Storage
-  Future<String?> uploadMedia(File file) async {
+  Future<String?> uploadMedia(File mediaFile) async {
+    final fileExt = mediaFile.path.split('.').last;
+    final fileName = 'milestone_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
     try {
-      final String fileName = basename(file.path);
-      final String filePath = "milestone_media/$fileName";
+      // Upload the file
+      final storageResponse = await Supabase.instance.client.storage
+          .from('milestone_media') // ✅ Fixed bucket name
+          .upload(fileName, mediaFile);
 
-      await supabase.storage.from('milestone_media').upload(
-        filePath,
-        file,
-        fileOptions: FileOptions(upsert: true),
-      );
+      if (storageResponse.isEmpty) {
+        print('❌ Upload failed: empty response');
+        return null;
+      }
 
-      final String publicUrl = supabase.storage.from('milestone_media')
-          .getPublicUrl(filePath);
+      // Get the public URL
+      final publicUrl = Supabase.instance.client.storage
+          .from('milestone_media') // ✅ Fixed bucket name
+          .getPublicUrl(fileName);
+
+      print('✅ Uploaded! Public URL: $publicUrl');
       return publicUrl;
     } catch (error) {
-      print("Error uploading media: $error");
+      print('❌ Error uploading media: $error');
       return null;
     }
   }
+
+
 // ✅ Fetch Recent Users (Last X Users Logged In)
   // ✅ Fetch Recent Users (Returns List<UserModel>)
   Future<List<UserModel>> getRecentUsers(int limit) async {
@@ -512,6 +544,72 @@ class SupabaseService {
       return [];
     }
   }
+
+  // ✅ BLOCK A USER
+  Future<bool> blockUser(String blockerId, String blockedId) async {
+    try {
+      // 1️⃣ Check if user is already blocked
+      final existingBlock = await supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', blockerId)
+          .eq('blocked_id', blockedId)
+          .maybeSingle();
+
+      if (existingBlock != null) {
+        print("⚠️ User already blocked.");
+        return false;
+      }
+
+      // 2️⃣ Insert new block record
+      await supabase.from('blocked_users').insert({
+        'blocker_id': blockerId,
+        'blocked_id': blockedId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      print("🚫 User $blockedId has been blocked by $blockerId");
+      return true;
+    } catch (error) {
+      print("❌ Error blocking user: $error");
+      return false;
+    }
+  }
+
+// ✅ UNBLOCK A USER
+  Future<bool> unblockUser(String blockerId, String blockedId) async {
+    try {
+      final response = await supabase
+          .from('blocked_users')
+          .delete()
+          .eq('blocker_id', blockerId)
+          .eq('blocked_id', blockedId);
+
+      print("✅ Unblocked user $blockedId for $blockerId");
+      return true;
+    } catch (error) {
+      print("❌ Error unblocking user: $error");
+      return false;
+    }
+  }
+
+  // ✅ CHECK IF BLOCKED
+  Future<bool> isUserBlocked(String blockerId, String blockedId) async {
+    try {
+      final existingBlock = await supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', blockerId)
+          .eq('blocked_id', blockedId)
+          .maybeSingle();
+
+      return existingBlock != null;
+    } catch (error) {
+      print("❌ Error checking block status: $error");
+      return false;
+    }
+  }
+
   // Energy Boost Function
   Future<bool> addEnergyBoost(String milestoneId) async {
     final userId = supabase.auth.currentUser?.id;
@@ -546,24 +644,19 @@ class SupabaseService {
   // Delete Milestone Post
   Future<bool> deleteMilestone(String milestoneId) async {
     try {
-      final response = await supabase
+      await supabase
           .from('milestones')
           .delete()
-          .eq('id', milestoneId)
-          .select();
+          .eq('id', milestoneId);
 
-      if (response is List && response.isNotEmpty) {
-        print("Milestone deleted successfully from Supabase.");
-        return true;
-      } else {
-        print("Supabase returned an empty response.");
-        return false;
-      }
+      print("✅ Milestone deleted successfully!");
+      return true;
     } catch (error) {
-      print("Error deleting milestone: $error");
+      print("❌ Error deleting milestone: $error");
       return false;
     }
   }
+
   // ✅ XP Scaling: Increases at a steady rate per level
   int _getXPThreshold(int level) {
     return 100 * level; // Keeps XP progression balanced
@@ -598,6 +691,107 @@ class SupabaseService {
       print("🏆 Achievement Unlocked: $achievementTitle");
     } catch (error) {
       print("❌ Error unlocking achievement: $error");
+    }
+  }
+
+  Future<void> generateAndInsertWeeklyAffirmations() async {
+    final openRouterApiKey = dotenv.env['OPENROUTER_API_KEY'];
+
+    if (openRouterApiKey == null || openRouterApiKey.isEmpty) {
+      print("❌ OpenRouter API key not found in .env");
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $openRouterApiKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          "model": "gpt-3.5-turbo", // You can upgrade this model if needed
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an AI generating positive daily affirmations."
+            },
+            {
+              "role": "user",
+              "content": "Create 7 unique short daily affirmations for the week. Keep them uplifting and spiritual."
+            }
+          ],
+          "max_tokens": 500,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final choices = data['choices'];
+
+        if (choices == null || choices.isEmpty) {
+          print("⚠️ No affirmations returned.");
+          return;
+        }
+
+        final affirmationsText = choices[0]['message']['content'] as String;
+
+        // Split affirmations into a list
+        final List<String> affirmationsList = affirmationsText
+            .split(RegExp(r'\d+\.\s')) // split by number + dot + space
+            .where((text) => text.trim().isNotEmpty)
+            .toList();
+
+        // Insert affirmations into Supabase
+        final today = DateTime.now();
+        for (int i = 0; i < affirmationsList.length; i++) {
+          final date = today.add(Duration(days: i));
+          await Supabase.instance.client.from('affirmations').insert({
+            'text': affirmationsList[i].trim(),
+            'show_date': date.toIso8601String().substring(0, 10),
+            'created_at': DateTime.now().toIso8601String(),
+          });
+          print("✅ Inserted affirmation for ${date.toIso8601String().substring(0, 10)}");
+        }
+
+        print("🎉 Weekly affirmations inserted successfully!");
+      } else {
+        print("❌ Failed to fetch affirmations: ${response.body}");
+      }
+    } catch (error) {
+      print("❌ Error generating affirmations: $error");
+    }
+  }
+
+
+  Future<void> markFirstMessagePopupShown(String userId, String receiverId) async {
+    try {
+      await supabase.from('messages_first_popup').insert({
+        'sender_id': userId,
+        'receiver_id': receiverId,
+        'shown': true,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      print("✅ First message popup recorded.");
+    } catch (error) {
+      print("❌ Error marking first message popup: $error");
+    }
+  }
+
+  Future<bool> hasSeenFirstMessagePopup(String userId, String receiverId) async {
+    try {
+      final response = await supabase
+          .from('messages_first_popup')
+          .select('id')
+          .eq('sender_id', userId)
+          .eq('receiver_id', receiverId)
+          .maybeSingle();
+
+      return response != null;
+    } catch (error) {
+      print("❌ Error checking first message popup: $error");
+      return false;
     }
   }
 
@@ -672,6 +866,88 @@ class SupabaseService {
     }
   }
 
+  Future<bool> deleteUserAndRelatedData(String userId) async {
+    try {
+      // 1️⃣ Delete from soul_matches where user is involved
+      await supabase
+          .from('soul_matches')
+          .delete()
+          .or('user_id.eq.$userId,matched_user_id.eq.$userId');
+
+      // 2️⃣ Delete friend connections
+      await supabase
+          .from('friends')
+          .delete()
+          .or('user_id.eq.$userId,friend_id.eq.$userId');
+
+      // 3️⃣ Delete friend requests
+      await supabase
+          .from('friend_requests')
+          .delete()
+          .or('sender_id.eq.$userId,receiver_id.eq.$userId');
+
+      // 4️⃣ Delete messages
+      await supabase
+          .from('messages')
+          .delete()
+          .or('sender_id.eq.$userId,receiver_id.eq.$userId');
+
+      // 5️⃣ Delete milestones
+      await supabase
+          .from('milestones')
+          .delete()
+          .eq('user_id', userId);
+
+      // 6️⃣ Delete blocked users records
+      await supabase
+          .from('blocked_users')
+          .delete()
+          .or('blocker_id.eq.$userId,blocked_id.eq.$userId');
+
+      // 7️⃣ Delete notifications
+      await supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', userId);
+
+      // 8️⃣ Finally delete profile
+      final response = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId)
+          .select();
+
+      if (response != null && response.isNotEmpty) {
+        print('✅ User $userId and related data deleted successfully.');
+        return true;
+      } else {
+        print('❌ Failed to delete user profile.');
+        return false;
+      }
+    } catch (error) {
+      print('❌ Error deleting user and related data: $error');
+      return false;
+    }
+  }
+
+  Future<bool> deleteUser(String userId) async {
+    try {
+      await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+
+      print("✅ User profile deleted: $userId");
+
+      // Optional: Delete milestones or other user data here
+      // await supabase.from('milestones').delete().eq('user_id', userId);
+
+      return true;
+    } catch (error) {
+      print("❌ Error deleting user: $error");
+      return false;
+    }
+  }
 
   Future<bool> restoreSession() async {
     try {
@@ -896,6 +1172,42 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getMessagedUsers(String userId, {bool friendsOnly = false}) async {
+    final response = await supabase
+        .from('messages')
+        .select('receiver_id, sender_id')
+        .or('sender_id.eq.$userId,receiver_id.eq.$userId');
+
+    if (response == null || response.isEmpty) return [];
+
+    // Extract user IDs
+    final Set<String> userIds = {};
+
+    for (var msg in response) {
+      if (msg['sender_id'] != userId) {
+        userIds.add(msg['sender_id']);
+      }
+      if (msg['receiver_id'] != userId) {
+        userIds.add(msg['receiver_id']);
+      }
+    }
+
+    if (userIds.isEmpty) return [];
+
+    final profiles = await supabase
+        .from('profiles')
+        .select('*')
+        .inFilter('id', userIds.toList());
+
+    if (friendsOnly) {
+      // Add your friend filter logic here
+      profiles.removeWhere((profile) => !profile['is_friend']);
+    }
+
+    return profiles;
+  }
+
+
   // ✅ Fetch Achievements for a User
   Future<List<Map<String, dynamic>>> fetchUserAchievements(String userId) async {
     try {
@@ -940,6 +1252,68 @@ class SupabaseService {
     return null;
   }
 
+  // ✅ Fetch all users, excluding superadmins
+  Future<List<Map<String, dynamic>>> getLimitedUsers() async {
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('role', 'superadmin') // Exclude superadmins
+          .neq('role', 'admin') // Exclude admins
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Error fetching limited users: $e");
+      return [];
+    }
+  }
+
+// ✅ Fetch limited posts (Excluding posts made by Admins or Superadmins)
+  Future<List<MilestoneModel>> fetchLimitedMilestones() async {
+    try {
+      final response = await supabase.from('milestones')
+          .select('*')
+          .neq('created_by', 'admin') // Exclude admin posts
+          .neq('created_by', 'superadmin') // Exclude superadmin posts
+          .order('created_at', ascending: false);
+      return List<MilestoneModel>.from(response.map((x) => MilestoneModel.fromJson(x)));
+    } catch (e) {
+      print("❌ Error fetching limited milestones: $e");
+      return [];
+    }
+  }
+
+// ✅ Fetch limited reports (Excluding Superadmin-related reports)
+  Future<List<Map<String, dynamic>>> _fetchLimitedReports() async {
+    try {
+      final response = await supabase
+          .from('reports')
+          .select('*')
+          .neq('reporter_id', 'superadmin') // Exclude reports by superadmins
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Error fetching limited reports: $e");
+      return [];
+    }
+  }
+
+// ✅ Fetch limited notifications (Exclude notifications related to admins or superadmins)
+  Future<List<Map<String, dynamic>>> _fetchLimitedNotifications() async {
+    try {
+      final response = await supabase
+          .from('notifications')
+          .select('*')
+          .neq('user_id', 'admin') // Exclude admin notifications
+          .neq('user_id', 'superadmin') // Exclude superadmin notifications
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Error fetching limited notifications: $e");
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getLatestUsers({int limit = 10}) async {
     try {
       final response = await Supabase.instance.client
@@ -948,13 +1322,14 @@ class SupabaseService {
           .order('created_at', ascending: false)
           .limit(limit);
 
+      print("✅ Latest users fetched: $response");
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('❌ Error fetching latest users: $e');
       return [];
     }
   }
-
   // Fetch Top Users for the Leaderboard
   Future<List<UserModel>> fetchTopUsers() async {
     try {
@@ -971,6 +1346,7 @@ class SupabaseService {
       return [];
     }
   }
+
 
   Future<bool> checkIfFriends(String userId, String targetUserId) async {
     try {
@@ -1031,39 +1407,52 @@ class SupabaseService {
   // ✅ Accept a Friend Request
   Future<bool> acceptFriendRequest(String userId, String friendId) async {
     try {
-      // Update the friend request to accepted
+      // ✅ Update friend request status to accepted
       await supabase
           .from('friend_requests')
           .update({'status': 'accepted'})
           .match({'sender_id': friendId, 'receiver_id': userId});
 
-      // Create mutual friendship records
+      // ✅ Insert friendship ONLY if it doesn't exist
+      final existingFriendship = await supabase
+          .from('friends')
+          .select('id')
+          .or('and(user_id.eq.$userId, friend_id.eq.$friendId), and(user_id.eq.$friendId, friend_id.eq.$userId)')
+          .maybeSingle();
+
+      if (existingFriendship != null) {
+        print("⚠️ Friendship already exists!");
+        return false;
+      }
+
+      // ✅ Insert both records for each user
       await supabase.from('friends').insert([
         {'user_id': userId, 'friend_id': friendId, 'status': 'accepted'},
         {'user_id': friendId, 'friend_id': userId, 'status': 'accepted'},
       ]);
 
-      // Optional: Delete the friend request after acceptance
+      // ✅ Delete the friend request (optional cleanup)
       await supabase
           .from('friend_requests')
           .delete()
           .match({'sender_id': friendId, 'receiver_id': userId});
 
-      // Send notification
+      // ✅ Notify friend
       await createAndSendNotification(
         recipientId: friendId,
         title: '🎉 Friend Request Accepted!',
-        body: 'You and ${Supabase.instance.client.auth.currentUser?.email ?? 'someone'} are now friends!',
+        body: 'You are now friends!',
         type: 'friend_accept',
       );
 
-      print("✅ Friend request accepted and mutual friendship added.");
+      print("✅ Friend request accepted, friendship established.");
       return true;
     } catch (error) {
       print("❌ Error accepting friend request: $error");
       return false;
     }
   }
+
 
 
 
@@ -1084,14 +1473,31 @@ class SupabaseService {
       return false;
     }
   }
+  Future<bool> hasReceiverReplied(String userId, String receiverId) async {
+    try {
+      final response = await supabase
+          .from('messages')
+          .select('id')
+          .eq('sender_id', receiverId)
+          .eq('receiver_id', userId)
+          .limit(1)
+          .maybeSingle();
+
+      final replied = response != null;
+      print('🔍 Has receiver replied? $replied');
+      return replied;
+    } catch (error) {
+      print('❌ Error checking reply status: $error');
+      return false;
+    }
+  }
 
 // ✅ Fetch messages between two users
   Future<List<Map<String, dynamic>>> fetchMessages(String userId, String friendId) async {
     try {
       final response = await Supabase.instance.client
           .from('messages')
-          .select('id, sender_id, receiver_id, message_text, created_at')
-          .or('and(sender_id.eq.$userId,receiver_id.eq.$friendId),and(sender_id.eq.$friendId,receiver_id.eq.$userId)')
+          .select('id, sender_id, receiver_id, message, created_at') // ✅ fixed field name          .or('and(sender_id.eq.$userId,receiver_id.eq.$friendId),and(sender_id.eq.$friendId,receiver_id.eq.$userId)')
           .order('created_at', ascending: true); // Show oldest first
 
       print("✅ Messages fetched: ${response.length}");
@@ -1102,6 +1508,22 @@ class SupabaseService {
       return [];
     }
   }
+  Future<List<Map<String, dynamic>>> fetchMessageThread(String userId, String receiverId) async {
+    try {
+      final response = await supabase
+          .from('messages')
+          .select('id, sender_id, receiver_id, message, created_at')
+          .or('and(sender_id.eq.$userId, receiver_id.eq.$receiverId), and(sender_id.eq.$receiverId, receiver_id.eq.$userId)')
+          .order('created_at', ascending: true);
+
+      print('✅ Fetched message thread. Count: ${response.length}');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (error) {
+      print('❌ Error fetching message thread: $error');
+      return [];
+    }
+  }
+
 
 
   Future<bool> addMilestone(String userId, String content, String milestoneType, String? mediaUrl, String visibility) async {
@@ -1157,6 +1579,63 @@ class SupabaseService {
 
     return response.length;
   }
+  Future<bool> sendMessage({
+    required String senderId,
+    required String receiverId,
+    required String message,
+  }) async {
+    try {
+      // 1️⃣ Check friendship status
+      bool isFriend = await checkIfFriends(senderId, receiverId);
+
+      // 2️⃣ If NOT friends, check limits
+      if (!isFriend) {
+        final receiverReplied = await hasReceiverReplied(senderId, receiverId);
+        final messagesToday = await nonFriendMessageCountToday(senderId, receiverId);
+
+        if (!receiverReplied && messagesToday >= 10) {
+          print('🚫 Message limit reached.');
+          return false; // Block the message!
+        }
+      }
+
+      // 3️⃣ Insert the message
+      final response = await supabase.from('messages').insert({
+        'sender_id': senderId,
+        'receiver_id': receiverId,
+        'message': message,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'sent',
+        'seen': false,
+      }).select();
+
+      if (response == null || response.isEmpty) {
+        print('❌ Message insertion failed.');
+        return false;
+      }
+
+      print('✅ Message sent successfully!');
+      return true;
+    } catch (error) {
+      print('❌ Error sending message: $error');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMessage(String messageId) async {
+    try {
+      await supabase
+          .from('messages')
+          .delete()
+          .eq('id', messageId);
+
+      print('✅ Message deleted: $messageId');
+      return true;
+    } catch (error) {
+      print('❌ Error deleting message: $error');
+      return false;
+    }
+  }
 
   Future<Map<String, dynamic>?> fetchTodaysAffirmation() async {
     try {
@@ -1180,6 +1659,29 @@ class SupabaseService {
       return null;
     }
   }
+  Future<int> nonFriendMessageCountToday(String userId, String receiverId) async {
+    try {
+      final today = DateTime.now().toUtc().toIso8601String().substring(0, 10); // 'YYYY-MM-DD'
+
+      final response = await supabase
+          .from('messages')
+          .select('id')
+          .eq('sender_id', userId)
+          .eq('receiver_id', receiverId)
+          .gte('created_at', '${today}T00:00:00Z') // ✅ Correct now!
+          .lte('created_at', '${today}T23:59:59Z') // ✅ Correct now!
+          .neq('status', 'deleted');               // ✅ Don't count deleted messages!
+
+      final count = response.length;
+      print('📅 Messages sent today to $receiverId: $count');
+      return count;
+    } catch (error) {
+      print('❌ Error counting today messages: $error');
+      return 0;
+    }
+  }
+
+
 
   // ✅ Fetch Friend List
   Future<List<Map<String, dynamic>>> getFriendsList(String userId) async {
@@ -1196,6 +1698,24 @@ class SupabaseService {
       return [];
     }
   }
+  // ✅ Fetch Blocked Users
+  Future<List<Map<String, dynamic>>> getBlockedUsers(String userId) async {
+    try {
+      final response = await supabase
+          .from('blocked_users')
+          .select('blocked_id, profiles!blocked_id(name, avatar)')
+          .eq('blocker_id', userId);
+
+      // Debug output
+      print('✅ Blocked users fetched: ${response.length} users.');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (error) {
+      print('❌ Error fetching blocked users: $error');
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     try {
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;

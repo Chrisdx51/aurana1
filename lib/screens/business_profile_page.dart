@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart'; // ✅ AdMob import
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'profile_screen.dart';
 import 'submit_service_page.dart';
+import '../services/supabase_service.dart';
 
 class BusinessProfilePage extends StatefulWidget {
   final String name;
@@ -10,7 +11,7 @@ class BusinessProfilePage extends StatefulWidget {
   final String tagline;
   final String description;
   final String profileImageUrl;
-  final double rating; // Optional for dynamic rating.
+  final double rating;
   final String adCreatedDate;
   final String userId;
 
@@ -32,21 +33,21 @@ class BusinessProfilePage extends StatefulWidget {
 
 class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final supabase = Supabase.instance.client;
+  final supabaseService = SupabaseService();
 
   int selectedRating = 0;
   double averageRating = 0;
   String currentUserId = '';
 
-  // ✅ AdMob Banner
   late BannerAd _bannerAd;
-  bool _isBannerAdReady = false;
+  bool _isAdLoaded = false;
 
   @override
   void initState() {
     super.initState();
     currentUserId = supabase.auth.currentUser?.id ?? '';
     _loadAverageRating();
-    _loadBannerAd(); // ✅ Load Ad
+    _initBannerAd();
   }
 
   @override
@@ -55,24 +56,21 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     super.dispose();
   }
 
-  // ✅ Initialize Banner Ad
-  void _loadBannerAd() {
+  Future<void> _initBannerAd() async {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx', // <-- Replace with your Ad Unit ID
-      request: AdRequest(),
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111', // ✅ Your test banner ad
       size: AdSize.banner,
+      request: const AdRequest(),
       listener: BannerAdListener(
-        onAdLoaded: (_) {
-          setState(() {
-            _isBannerAdReady = true;
-          });
+        onAdLoaded: (ad) {
+          setState(() => _isAdLoaded = true);
         },
         onAdFailedToLoad: (ad, error) {
           ad.dispose();
-          print('Ad failed to load: $error');
         },
       ),
-    )..load();
+    );
+    _bannerAd.load();
   }
 
   @override
@@ -94,8 +92,8 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       ),
       body: Column(
         children: [
-          // ✅ Banner Ad Widget (only shows when ready)
-          if (_isBannerAdReady)
+          // ✅ Banner Ad on Top
+          if (_isAdLoaded)
             Container(
               width: _bannerAd.size.width.toDouble(),
               height: _bannerAd.size.height.toDouble(),
@@ -117,7 +115,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ✅ Profile Image
                     CircleAvatar(
                       radius: 60,
                       backgroundImage: widget.profileImageUrl.isNotEmpty
@@ -126,26 +123,21 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                     ),
                     SizedBox(height: 16),
 
-                    // ✅ Name & Service
                     Text(widget.name, style: TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold)),
                     Text(widget.serviceType, style: TextStyle(fontSize: 18, color: Colors.white70)),
                     SizedBox(height: 10),
 
-                    // ✅ Average Rating Display
                     _buildAverageRatingDisplay(),
                     SizedBox(height: 10),
 
-                    // ✅ Tagline
                     Text(widget.tagline,
                         style: TextStyle(fontSize: 16, color: Colors.amberAccent, fontStyle: FontStyle.italic),
                         textAlign: TextAlign.center),
                     SizedBox(height: 10),
 
-                    // ✅ Date Posted
                     Text("Posted on: ${widget.adCreatedDate}", style: TextStyle(fontSize: 12, color: Colors.white54)),
                     SizedBox(height: 20),
 
-                    // ✅ Description
                     Container(
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -157,11 +149,9 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                     ),
                     SizedBox(height: 30),
 
-                    // ✅ Contact/Profile button
                     _buildContactOrProfileButton(isOwner),
                     SizedBox(height: 10),
 
-                    // ✅ Edit/Delete if Owner
                     if (isOwner) ...[
                       _buildEditButton(),
                       SizedBox(height: 10),
@@ -170,12 +160,90 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 
                     SizedBox(height: 20),
 
-                    // ✅ Star Rating (for Visitors)
                     if (!isOwner) _buildStarRatingSection(),
+
+                    SizedBox(height: 40), // ✅ Adds spacing before the report button
+
+                    // ✅ Report Button at the VERY BOTTOM!
+                    _buildReportButton(),
+
+                    SizedBox(height: 20), // Add a little space below
                   ],
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportButton() {
+    return ElevatedButton.icon(
+      onPressed: _showReportDialog,
+      style: ElevatedButton.styleFrom(
+        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+        backgroundColor: Colors.black.withOpacity(0.7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        shadowColor: Colors.redAccent.withOpacity(0.4),
+        elevation: 8,
+      ).copyWith(
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+      ),
+      icon: Icon(Icons.flag_outlined, color: Colors.redAccent.shade100),
+      label: Text('Report Ad', style: TextStyle(color: Colors.redAccent.shade100, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  void _showReportDialog() {
+    TextEditingController reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.blueGrey.shade800,
+        title: Text('Report Ad', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: reasonController,
+          style: TextStyle(color: Colors.white),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Enter the reason for reporting...',
+            hintStyle: TextStyle(color: Colors.white60),
+            filled: true,
+            fillColor: Colors.blueGrey.shade700,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () async {
+              String reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please provide a reason.')));
+                return;
+              }
+
+              Navigator.pop(context);
+
+              final success = await supabaseService.submitReport(
+                reporterId: currentUserId,
+                targetId: widget.userId,
+                targetType: 'ad',
+                reason: reason,
+              );
+
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Report submitted successfully!')));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Failed to submit report.')));
+              }
+            },
+            child: Text('Submit', style: TextStyle(color: Colors.redAccent.shade100)),
           ),
         ],
       ),
@@ -361,7 +429,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                     .eq('user_id', widget.userId);
 
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ad deleted successfully!")));
-                Navigator.of(context).pop(); // Go back after delete
+                Navigator.of(context).pop();
               } catch (error) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to delete ad!")));
               }

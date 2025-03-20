@@ -18,8 +18,8 @@ class CustomNavBar extends StatelessWidget {
         // 🌈 Root Chakra - RED (Home)
         BottomNavigationBarItem(
           icon: Icon(
-            Icons.home,
-            color: selectedIndex == 0 ? Colors.red : Colors.white,
+            Icons.diamond,
+            color: selectedIndex == 0 ? Colors.lightBlueAccent : Colors.white,
           ),
           label: 'Home',
         ),
@@ -36,7 +36,7 @@ class CustomNavBar extends StatelessWidget {
         // 🟡 Solar Plexus Chakra - YELLOW (Aura Catcher with Spiritual Icon)
         BottomNavigationBarItem(
           icon: Icon(
-            Icons.auto_awesome, // ✨ Spiritual Feel
+            Icons.star, // ✨ Spiritual Feel
             color: selectedIndex == 2 ? Colors.yellow : Colors.white,
           ),
           label: 'Aura',
@@ -45,7 +45,7 @@ class CustomNavBar extends StatelessWidget {
         // 🟢 Heart Chakra - GREEN (Soul Journey Wall)
         BottomNavigationBarItem(
           icon: Icon(
-            Icons.explore, // 🛤️ Path-like icon for Soul Journey
+            Icons.visibility, // 🛤️ Path-like icon for Soul Journey
             color: selectedIndex == 3 ? Colors.green : Colors.white,
           ),
           label: 'Soul Journey',
@@ -102,7 +102,7 @@ class CustomNavBar extends StatelessWidget {
         // 🔮 Crown Chakra - VIOLET (More)
         BottomNavigationBarItem(
           icon: Icon(
-            Icons.auto_awesome, // Swapped from more_horiz ➡️ Spiritual glow icon ✨
+            Icons.self_improvement, // Swapped from more_horiz ➡️ Spiritual glow icon ✨
             color: selectedIndex == 6 ? Colors.purple : Colors.white,
           ),
           label: 'More',

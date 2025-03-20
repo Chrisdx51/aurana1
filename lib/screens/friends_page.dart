@@ -447,7 +447,7 @@ class _FriendsPageState extends State<FriendsPage> {
 
   Widget _buildSuggestedFriendsHorizontal(List<Map<String, dynamic>> list) {
     return Container(
-      height: 140,
+      height: 160,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: list.length,
@@ -462,6 +462,7 @@ class _FriendsPageState extends State<FriendsPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min, // 🔥 Critical to avoid overflow
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 GestureDetector(

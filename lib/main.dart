@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -171,7 +172,6 @@ class AuranaApp extends StatelessWidget {
       routes: {
         '/': (context) => AuthGate(),
         '/login': (context) => AuthScreen(),
-        '/home': (context) => MainScreen(userId: 'TEMP'),
       },
     );
   }
@@ -279,7 +279,22 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _initializeScreens();
+
+    // ✅ Start periodic updates to last_active
+    Timer.periodic(Duration(minutes: 1), (timer) {
+      if (!mounted) {
+        timer.cancel(); // Stops the timer when screen is disposed
+        return;
+      }
+
+      Supabase.instance.client.from('profiles').update({
+        'last_active': DateTime.now().toIso8601String(),
+      }).eq('id', widget.userId);
+
+      print("🔄 Updated last_active timestamp");
+    });
   }
+
 
   void _initializeScreens() {
     _screens = [
