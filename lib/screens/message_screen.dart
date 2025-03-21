@@ -147,50 +147,64 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   // ✅ Spiritual popup (clean and small)
+  // ✅ Sleek & minimal first message popup
   void _showFirstMessagePopup() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.deepPurple.shade900.withOpacity(0.9),
+      builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 20),
-            SizedBox(width: 8),
-            Text('New Soul Connection', style: TextStyle(color: Colors.white, fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'You are reaching out to a new soul ✨',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Speak with kindness & purpose.\nThis is a sacred space 💜',
-              style: TextStyle(color: Colors.amberAccent, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: Text('Send with Light 🌟', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.black.withOpacity(0.85),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.auto_awesome, color: Colors.tealAccent, size: 32),
+              SizedBox(height: 16),
+              Text(
+                'New Soul Connection',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'You are reaching out to a new soul.\nSend a message filled with light ✨',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.tealAccent,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'Send with Light 🌟',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

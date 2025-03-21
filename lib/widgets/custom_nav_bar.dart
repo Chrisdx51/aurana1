@@ -60,7 +60,7 @@ class CustomNavBar extends StatelessWidget {
               return Stack(
                 children: [
                   Icon(
-                    Icons.people,
+                    Icons.notifications,
                     color: selectedIndex == 4 ? Colors.blue : Colors.white,
                   ),
                   if (count > 0)
@@ -87,7 +87,7 @@ class CustomNavBar extends StatelessWidget {
               );
             },
           ),
-          label: 'Friends',
+          label: 'Notifications',
         ),
 
         // 🟣 Third Eye Chakra - INDIGO (Profile)

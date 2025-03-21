@@ -4,6 +4,7 @@ import 'package:swipable_stack/swipable_stack.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'matches_screen.dart'; // Make sure the path is correct!
+import '../services/push_notification_service.dart';
 
 class SoulMatchPage extends StatefulWidget {
   @override
@@ -104,7 +105,6 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
     }
   }
 
-
   Future<void> _fetchMatches() async {
     final userId = supabase.auth.currentUser?.id ?? '';
     if (userId.isEmpty) return;
@@ -155,6 +155,21 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
         swipeMessage = "🌟 It's a soul match! 🌟";
       });
       _fetchMatches();
+
+      // Fetch matched user's FCM token
+      final matchedUserProfile = await supabase
+          .from('profiles')
+          .select('fcm_token, name')
+          .eq('id', matchedUserId)
+          .maybeSingle();
+
+      if (matchedUserProfile != null && matchedUserProfile['fcm_token'] != null) {
+        await PushNotificationService.sendPushNotification(
+          fcmToken: matchedUserProfile['fcm_token'],
+          title: "✨ It's a Soul Match! ✨",
+          body: "You and ${matchedUserProfile['name']} are now matched! Start chatting!",
+        );
+      }
     } else {
       setState(() {
         swipeMessage = "✨ You feel a cosmic pull... ✨";
@@ -235,7 +250,6 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
                   ),
                 SizedBox(height: 10),
                 if (!showMatchesTab) _genderDropdown(),
-
                 if (swipeMessage.isNotEmpty)
                   Padding(
                     padding: EdgeInsets.symmetric(vertical: 10),
@@ -244,7 +258,6 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
                       style: TextStyle(color: Colors.white, fontSize: 16, fontStyle: FontStyle.italic),
                     ),
                   ),
-
                 ElevatedButton.icon(
                   icon: Icon(Icons.favorite),
                   label: Text('View Soul Matches'),
@@ -261,7 +274,6 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
                     );
                   },
                 ),
-
                 Expanded(
                   child: isLoading
                       ? Center(child: CircularProgressIndicator(color: Colors.white))

@@ -12,7 +12,6 @@ import 'soul_match_page.dart';
 import 'tarot_reading_screen.dart';
 import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
-import 'soul_journey_screen.dart';
 import 'soul_connections_screen.dart'; // ✅ New Import!
 import 'friends_page.dart';
 import 'business_profile_page.dart';
@@ -460,18 +459,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _animatedButton(
-              "Soul Journey",
-              LinearGradient(
-                colors: [
-                  Color(0xFFE53935), // Red (Root Chakra)
-                  Color(0xFFFF8A65), // Orange (Sacral Chakra)
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              SoulJourneyScreen(userId: user!.id),
-            ),
             _animatedButton(
               "Aura Catcher",
               LinearGradient(

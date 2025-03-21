@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
-import '../models/milestone_model.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   @override
@@ -17,7 +16,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   int _currentIndex = 0;
 
   List<Map<String, dynamic>> users = [];
-  List<MilestoneModel> posts = [];
   List<Map<String, dynamic>> reports = [];
   List<Map<String, dynamic>> notifications = [];
   List<Map<String, dynamic>> logs = [];
@@ -59,7 +57,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
       if (userRole == 'superadmin') {
         users = await supabaseService.getAllUsers();
-        posts = await supabaseService.fetchMilestones(global: true);
         reports = await _fetchReports();
         notifications = await _fetchNotifications();
         logs = await _fetchLogs();
@@ -73,7 +70,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         );
       } else {
         users = await supabaseService.getLimitedUsers();
-        posts = await supabaseService.fetchLimitedMilestones();
         reports = await _fetchLimitedReports();
         notifications = await _fetchLimitedNotifications();
         logs = [];
@@ -86,8 +82,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     setState(() => isLoading = false);
   }
 
-  // --- DELETE FUNCTIONS ---
-
   Future<void> _deleteUser(String userId) async {
     try {
       await supabase.from('profiles').delete().eq('id', userId);
@@ -95,16 +89,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ User deleted!')));
     } catch (e) {
       print("❌ Failed to delete user: $e");
-    }
-  }
-
-  Future<void> _deletePost(String postId) async {
-    try {
-      await supabase.from('milestones').delete().eq('id', postId);
-      _loadAdminData();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Post deleted!')));
-    } catch (e) {
-      print("❌ Failed to delete post: $e");
     }
   }
 
@@ -137,8 +121,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       print("❌ Failed to delete log: $e");
     }
   }
-
-  // --- FETCH DATA FUNCTIONS ---
 
   Future<List<Map<String, dynamic>>> _fetchLimitedReports() async {
     try {
@@ -208,7 +190,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Widget build(BuildContext context) {
     final pages = [
       _buildUsersTab(),
-      _buildPostsTab(),
       _buildReportsTab(),
       _buildNotificationsTab(),
       _buildLogsTab(),
@@ -241,19 +222,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         },
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Users'),
-          BottomNavigationBarItem(icon: Icon(Icons.post_add), label: 'Posts'),
           BottomNavigationBarItem(icon: Icon(Icons.report), label: 'Reports'),
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Notifications'),
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Logs'),
           BottomNavigationBarItem(icon: Icon(Icons.campaign), label: 'Ads'),
           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Matches'),
-          BottomNavigationBarItem(icon: Icon(Icons.bug_report), label: 'Feedback'),
+          BottomNavigationBarItem(icon: Icon(Icons.feedback), label: 'Feedback'),
         ],
       ),
     );
   }
-
-  // --- TABS ---
 
   Widget _buildUsersTab() {
     return ListView.builder(
@@ -289,27 +267,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ],
             )
                 : null,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPostsTab() {
-    return ListView.builder(
-      itemCount: posts.length,
-      itemBuilder: (context, index) {
-        final post = posts[index];
-        return Card(
-          color: Colors.white.withOpacity(0.9),
-          margin: EdgeInsets.all(8),
-          child: ListTile(
-            title: Text(post.content ?? 'No content'),
-            subtitle: Text('By User: ${post.userId}'),
-            trailing: IconButton(
-              icon: Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deletePost(post.id),
-            ),
           ),
         );
       },
@@ -382,97 +339,96 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-Widget _buildAdsLogsTab() {
-  return FutureBuilder(
-    future: supabase.from('service_ads').select('*').order('created_at', ascending: false),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-      final ads = List<Map<String, dynamic>>.from(snapshot.data as List);
-      return ListView.builder(
-        itemCount: ads.length,
-        itemBuilder: (context, index) {
-          final ad = ads[index];
-          return Card(
-            color: Colors.white.withOpacity(0.9),
-            margin: EdgeInsets.all(8),
-            child: ListTile(
-              title: Text(ad['business_name'] ?? 'Unknown Business'),
-              subtitle: Text('Service: ${ad['service_type'] ?? ''}\nOwner: ${ad['user_id']}\nCreated: ${ad['created_at']}'),
-              trailing: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  await supabase.from('service_ads').delete().eq('id', ad['id']);
-                  setState(() {});
-                },
+  Widget _buildAdsLogsTab() {
+    return FutureBuilder(
+      future: supabase.from('service_ads').select('*').order('created_at', ascending: false),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        final ads = List<Map<String, dynamic>>.from(snapshot.data as List);
+        return ListView.builder(
+          itemCount: ads.length,
+          itemBuilder: (context, index) {
+            final ad = ads[index];
+            return Card(
+              color: Colors.white.withOpacity(0.9),
+              margin: EdgeInsets.all(8),
+              child: ListTile(
+                title: Text(ad['business_name'] ?? 'Unknown Business'),
+                subtitle: Text('Service: ${ad['service_type'] ?? ''}\nOwner: ${ad['user_id']}\nCreated: ${ad['created_at']}'),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () async {
+                    await supabase.from('service_ads').delete().eq('id', ad['id']);
+                    setState(() {});
+                  },
+                ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+            );
+          },
+        );
+      },
+    );
+  }
 
-Widget _buildSoulMatchesLogsTab() {
-  return FutureBuilder(
-    future: supabase.from('soul_matches').select('*').order('created_at', ascending: false),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-      final matches = List<Map<String, dynamic>>.from(snapshot.data as List);
-      return ListView.builder(
-        itemCount: matches.length,
-        itemBuilder: (context, index) {
-          final match = matches[index];
-          return Card(
-            color: Colors.white.withOpacity(0.9),
-            margin: EdgeInsets.all(8),
-            child: ListTile(
-              title: Text('User: ${match['user_id']}'),
-              subtitle: Text('Matched With: ${match['matched_user_id']}\nStatus: ${match['status']}\nCreated: ${match['created_at']}'),
-              trailing: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  await supabase.from('soul_matches').delete().eq('id', match['id']);
-                  setState(() {});
-                },
+  Widget _buildSoulMatchesLogsTab() {
+    return FutureBuilder(
+      future: supabase.from('soul_matches').select('*').order('created_at', ascending: false),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        final matches = List<Map<String, dynamic>>.from(snapshot.data as List);
+        return ListView.builder(
+          itemCount: matches.length,
+          itemBuilder: (context, index) {
+            final match = matches[index];
+            return Card(
+              color: Colors.white.withOpacity(0.9),
+              margin: EdgeInsets.all(8),
+              child: ListTile(
+                title: Text('User: ${match['user_id']}'),
+                subtitle: Text('Matched With: ${match['matched_user_id']}\nStatus: ${match['status']}\nCreated: ${match['created_at']}'),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () async {
+                    await supabase.from('soul_matches').delete().eq('id', match['id']);
+                    setState(() {});
+                  },
+                ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+            );
+          },
+        );
+      },
+    );
+  }
 
-Widget _buildFeedbackTab() {
-  return FutureBuilder(
-    future: supabase.from('feedback').select('*').order('created_at', ascending: false),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-      final feedbackList = List<Map<String, dynamic>>.from(snapshot.data as List);
-      return ListView.builder(
-        itemCount: feedbackList.length,
-        itemBuilder: (context, index) {
-          final feedback = feedbackList[index];
-          return Card(
-            color: Colors.white.withOpacity(0.9),
-            margin: EdgeInsets.all(8),
-            child: ListTile(
-              title: Text('User: ${feedback['user_id']}'),
-              subtitle: Text('Message: ${feedback['message']}\nDate: ${feedback['created_at']}'),
-              trailing: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  await supabase.from('feedback').delete().eq('id', feedback['id']);
-                  setState(() {});
-                },
+  Widget _buildFeedbackTab() {
+    return FutureBuilder(
+      future: supabase.from('feedback').select('*').order('created_at', ascending: false),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        final feedbackList = List<Map<String, dynamic>>.from(snapshot.data as List);
+        return ListView.builder(
+          itemCount: feedbackList.length,
+          itemBuilder: (context, index) {
+            final feedback = feedbackList[index];
+            return Card(
+              color: Colors.white.withOpacity(0.9),
+              margin: EdgeInsets.all(8),
+              child: ListTile(
+                title: Text('User: ${feedback['user_id']}'),
+                subtitle: Text('Message: ${feedback['message']}\nDate: ${feedback['created_at']}'),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () async {
+                    await supabase.from('feedback').delete().eq('id', feedback['id']);
+                    setState(() {});
+                  },
+                ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
+            );
+          },
+        );
+      },
+    );
+  }
 }
-}
-

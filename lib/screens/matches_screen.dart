@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
 
-// If you have ChatScreen, import it here (skip if not ready)
-// import 'chat_screen.dart';
+// ✅ Your screens
+import 'profile_screen.dart';       // Already have this!
+import 'message_screen.dart';       // Your existing MessageScreen
 
 class MatchesScreen extends StatefulWidget {
   @override
@@ -29,6 +30,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
     super.dispose();
   }
 
+  // ✅ Fetch soul matches from Supabase
   Future<void> _fetchSoulMatches() async {
     final userId = supabase.auth.currentUser?.id ?? '';
     if (userId.isEmpty) return;
@@ -56,15 +58,27 @@ class _MatchesScreenState extends State<MatchesScreen> {
     }
   }
 
+  // ✅ Navigate to ChatScreen (message screen)
   void _goToChat(String userId, String name) {
-    // 🔥 Placeholder - Replace when you have ChatScreen
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("🚀 Open chat with $name")),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MessageScreen(
+          receiverId: userId,
+          receiverName: name,
+        ),
+      ),
     );
+  }
 
-    // Navigator.push(context, MaterialPageRoute(
-    //   builder: (_) => ChatScreen(receiverId: userId, receiverName: name),
-    // ));
+  // ✅ Navigate to ProfileScreen
+  void _goToProfile(String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(userId: userId),
+      ),
+    );
   }
 
   @override
@@ -72,6 +86,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Soul Matches'),
+        centerTitle: true,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -104,60 +119,70 @@ class _MatchesScreenState extends State<MatchesScreen> {
     );
   }
 
+  // ✅ Build the background image
   Widget _buildBackground() {
     return Container(
       decoration: BoxDecoration(
         image: DecorationImage(
-          image: AssetImage('assets/images/home.png'),
+          image: AssetImage('assets/images/home.png'), // ✅ Make sure this exists
           fit: BoxFit.cover,
         ),
       ),
     );
   }
 
+  // ✅ Build the matches list
   Widget _buildMatchesList() {
     return ListView.builder(
       itemCount: matchedSouls.length,
       itemBuilder: (context, index) {
-        final match = matchedSouls[index]['profiles'];
+        final matchData = matchedSouls[index];
+        final match = matchData['profiles'];
         final avatarUrl = match['avatar'];
         final name = match['name'] ?? 'Unknown Soul';
         final message = match['soul_match_message'] ?? 'Ready for a connection!';
         final isOnline = match['is_online'] ?? false;
+        final matchId = matchData['matched_user_id'];
 
-        return Card(
-          color: Colors.black.withOpacity(0.5),
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: ListTile(
-            contentPadding: EdgeInsets.all(16),
-            leading: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-                      ? NetworkImage(avatarUrl)
-                      : AssetImage('assets/images/default_avatar.png') as ImageProvider,
-                ),
-                if (isOnline)
-                  Positioned(
-                    bottom: 4,
-                    right: 4,
-                    child: Icon(Icons.star, color: Colors.yellowAccent, size: 16),
+        return GestureDetector(
+          onTap: () => _goToProfile(matchId), // ✅ Tap the whole card to go to profile
+          child: Card(
+            color: Colors.black.withOpacity(0.5),
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: ListTile(
+              contentPadding: EdgeInsets.all(16),
+              leading: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 35,
+                    backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : AssetImage('assets/images/default_avatar.png') as ImageProvider,
                   ),
-              ],
-            ),
-            title: Text(
-              name,
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              message,
-              style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
-            ),
-            trailing: IconButton(
-              icon: Icon(Icons.chat_bubble_outline, color: Colors.greenAccent),
-              onPressed: () => _goToChat(matchedSouls[index]['matched_user_id'], name),
+                  if (isOnline)
+                    Positioned(
+                      bottom: 4,
+                      right: 4,
+                      child: Icon(Icons.star, color: Colors.yellowAccent, size: 16),
+                    ),
+                ],
+              ),
+              title: Text(
+                name,
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                message,
+                style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic),
+              ),
+              trailing: IconButton(
+                icon: Icon(Icons.chat_bubble_outline, color: Colors.greenAccent),
+                onPressed: () {
+                  // ✅ Stops the profile tap and opens chat directly
+                  _goToChat(matchId, name);
+                },
+              ),
             ),
           ),
         );

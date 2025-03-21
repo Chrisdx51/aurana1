@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:supabase/supabase.dart'; // ✅ for PostgresChangeEvent (optional, depends on version)
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
-import '../models/milestone_model.dart';
 
 class SupabaseService {
   final SupabaseClient supabase = Supabase.instance.client;
@@ -382,38 +381,7 @@ class SupabaseService {
       return null;
     }
   }
-  // Upload Media to Supabase Storage
-  Future<String?> uploadMedia(File mediaFile) async {
-    final fileExt = mediaFile.path.split('.').last;
-    final fileName = 'milestone_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
-    try {
-      // Upload the file
-      final storageResponse = await Supabase.instance.client.storage
-          .from('milestone_media') // ✅ Fixed bucket name
-          .upload(fileName, mediaFile);
-
-      if (storageResponse.isEmpty) {
-        print('❌ Upload failed: empty response');
-        return null;
-      }
-
-      // Get the public URL
-      final publicUrl = Supabase.instance.client.storage
-          .from('milestone_media') // ✅ Fixed bucket name
-          .getPublicUrl(fileName);
-
-      print('✅ Uploaded! Public URL: $publicUrl');
-      return publicUrl;
-    } catch (error) {
-      print('❌ Error uploading media: $error');
-      return null;
-    }
-  }
-
-
-// ✅ Fetch Recent Users (Last X Users Logged In)
-  // ✅ Fetch Recent Users (Returns List<UserModel>)
   Future<List<UserModel>> getRecentUsers(int limit) async {
     try {
       final response = await supabase
@@ -487,63 +455,7 @@ class SupabaseService {
   }
 
   // Add Milestone to Supabase Database
-  Future<List<MilestoneModel>> fetchMilestones({
-    String? userId,
-    bool global = false,
-  }) async {
-    try {
-      final user = supabase.auth.currentUser;
 
-      if (user == null) {
-        print("❌ No user logged in!");
-        return [];
-      }
-
-      final queryBuilder = supabase
-          .from('milestones');
-
-      // 🌎 Cosmic Flow: Show public posts
-      if (global) {
-        print("🔵 Loading Cosmic Flow (Public Wall)");
-
-        final response = await queryBuilder
-            .select('''
-            *,
-            profiles (
-              username,
-              avatar
-            )
-          ''')
-            .eq('visibility', 'open')
-            .order('created_at', ascending: false);
-
-        print('✅ Cosmic Flow Milestones fetched: ${response.length}');
-        return response.map((e) => MilestoneModel.fromMap(e)).toList();
-
-      } else {
-        // 🧘 Inner Realm: Show ONLY posts by userId (private & public)
-        print("🟣 Loading Inner Realm (User Wall)");
-
-        final response = await queryBuilder
-            .select('''
-            *,
-            profiles (
-              username,
-              avatar
-            )
-          ''')
-            .eq('user_id', userId ?? user.id)
-            .order('created_at', ascending: false);
-
-        print('✅ Inner Realm Milestones fetched: ${response.length}');
-        return response.map((e) => MilestoneModel.fromMap(e)).toList();
-      }
-
-    } catch (e) {
-      print('❌ Error fetching milestones: $e');
-      return [];
-    }
-  }
 
   // ✅ BLOCK A USER
   Future<bool> blockUser(String blockerId, String blockedId) async {
@@ -609,54 +521,6 @@ class SupabaseService {
       return false;
     }
   }
-
-  // Energy Boost Function
-  Future<bool> addEnergyBoost(String milestoneId) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) {
-      print("Error: User not logged in.");
-      return false;
-    }
-
-    try {
-      final response = await supabase.rpc(
-        'increment_energy_boost',
-        params: {'milestone_id': milestoneId},
-      );
-
-      if (response == null) {
-        print("Error: Supabase RPC returned null.");
-        return false;
-      }
-
-      await supabase.from('milestone_boosts').insert({
-        'user_id': userId,
-        'milestone_id': milestoneId,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      return true;
-    } catch (error) {
-      print("Error boosting milestone: $error");
-      return false;
-    }
-  }
-  // Delete Milestone Post
-  Future<bool> deleteMilestone(String milestoneId) async {
-    try {
-      await supabase
-          .from('milestones')
-          .delete()
-          .eq('id', milestoneId);
-
-      print("✅ Milestone deleted successfully!");
-      return true;
-    } catch (error) {
-      print("❌ Error deleting milestone: $error");
-      return false;
-    }
-  }
-
   // ✅ XP Scaling: Increases at a steady rate per level
   int _getXPThreshold(int level) {
     return 100 * level; // Keeps XP progression balanced
@@ -803,66 +667,6 @@ class SupabaseService {
           .match({'sender_id': senderId, 'receiver_id': receiverId});
     } catch (error) {
       print("❌ Error declining friend request: $error");
-    }
-  }
-
-
-  Future<void> toggleLike(String milestoneId) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) {
-      print("❌ Error: User not logged in.");
-      return;
-    }
-
-    try {
-      // Check if the user already liked the post
-      final existingLike = await supabase
-          .from('milestone_likes')
-          .select('id')
-          .eq('milestone_id', milestoneId)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      // 👉 Fetch milestone info to get the post owner!
-      final milestone = await supabase
-          .from('milestones')
-          .select('user_id, content')
-          .eq('id', milestoneId)
-          .maybeSingle();
-
-      final postOwnerId = milestone?['user_id'];
-      final milestoneContent = milestone?['content'] ?? '';
-
-      if (existingLike != null) {
-        // Unlike (Delete the like)
-        await supabase
-            .from('milestone_likes')
-            .delete()
-            .eq('milestone_id', milestoneId)
-            .eq('user_id', userId);
-
-        print("👍 Like removed successfully.");
-      } else {
-        // Like (Insert a new like)
-        await supabase.from('milestone_likes').insert({
-          'milestone_id': milestoneId,
-          'user_id': userId,
-        });
-
-        print("❤️ Liked successfully.");
-
-        // 🚀 Send Notification (Only if NOT your own post!)
-        if (postOwnerId != null && postOwnerId != userId) {
-          await createAndSendNotification(
-            recipientId: postOwnerId,
-            title: "✨ New Like!",
-            body: "Someone liked your post: $milestoneContent",
-            type: "like",
-          );
-        }
-      }
-    } catch (error) {
-      print("❌ Error toggling like: $error");
     }
   }
 
@@ -1058,7 +862,7 @@ class SupabaseService {
         'notification_type': type,
         'title': title,
         'body': body,
-        'has_read': false,
+        'is_read': false,
         'message_data': data ?? {},
       });
 
@@ -1232,25 +1036,7 @@ class SupabaseService {
       return [];
     }
   }
-  // ✅ Get Last Milestone ID for a User
-  Future<String?> getLastMilestoneId(String userId) async {
-    try {
-      final response = await supabase
-          .from('milestones')
-          .select('id, user_id, content, media_url, visibility, profiles!inner(name, avatar)')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
 
-      if (response != null && response.containsKey('id')) {
-        return response['id'] as String;
-      }
-    } catch (error) {
-      print("❌ Error fetching last milestone ID: $error");
-    }
-    return null;
-  }
 
   // ✅ Fetch all users, excluding superadmins
   Future<List<Map<String, dynamic>>> getLimitedUsers() async {
@@ -1268,20 +1054,6 @@ class SupabaseService {
     }
   }
 
-// ✅ Fetch limited posts (Excluding posts made by Admins or Superadmins)
-  Future<List<MilestoneModel>> fetchLimitedMilestones() async {
-    try {
-      final response = await supabase.from('milestones')
-          .select('*')
-          .neq('created_by', 'admin') // Exclude admin posts
-          .neq('created_by', 'superadmin') // Exclude superadmin posts
-          .order('created_at', ascending: false);
-      return List<MilestoneModel>.from(response.map((x) => MilestoneModel.fromJson(x)));
-    } catch (e) {
-      print("❌ Error fetching limited milestones: $e");
-      return [];
-    }
-  }
 
 // ✅ Fetch limited reports (Excluding Superadmin-related reports)
   Future<List<Map<String, dynamic>>> _fetchLimitedReports() async {
@@ -1473,6 +1245,7 @@ class SupabaseService {
       return false;
     }
   }
+
   Future<bool> hasReceiverReplied(String userId, String receiverId) async {
     try {
       final response = await supabase
@@ -1526,32 +1299,7 @@ class SupabaseService {
 
 
 
-  Future<bool> addMilestone(String userId, String content, String milestoneType, String? mediaUrl, String visibility) async {
-    try {
-      final response = await supabase.from('milestones').insert({
-        'user_id': userId,
-        'content': content,
-        'milestone_type': milestoneType,
-        'created_at': DateTime.now().toIso8601String(),
-        'energy_boosts': 0, // Default boost count
-        'media_url': mediaUrl, // If media exists
-        'visibility': visibility, // ✅ Store visibility (public or sacred)
-      }).select();
 
-      // ✅ Now you can check if response has something inside
-      if (response != null && response.isNotEmpty) {
-        print("✅ Milestone added successfully: $response");
-        return true;
-      } else {
-        print("❌ No response returned from milestone insert.");
-        return false;
-      }
-
-    } catch (error) {
-      print("❌ Supabase Error adding milestone: $error");
-      return false;
-    }
-  }
 
   // ✅ Check Friendship Status
   Future<String> checkFriendshipStatus(String userId, String friendId) async {
@@ -1680,6 +1428,7 @@ class SupabaseService {
       return 0;
     }
   }
+
 
 
 

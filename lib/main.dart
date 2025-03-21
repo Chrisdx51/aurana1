@@ -16,17 +16,16 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/edit_profile_screen.dart';
-import 'screens/friends_page.dart';
 import 'screens/aura_catcher.dart';
 import 'screens/tarot_reading_screen.dart';
 import 'screens/spiritual_guidance_screen.dart';
-import 'screens/soul_journey_screen.dart';
 import 'screens/more_menu_screen.dart';
 import 'screens/moon_cycle_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/soul_match_page.dart';
 import 'screens/horoscope_screen.dart';
 import '../widgets/custom_nav_bar.dart';
+import 'screens/connections_and_notifications_screen.dart'; // ✅ Your new notifications page
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -301,8 +300,7 @@ class _MainScreenState extends State<MainScreen> {
       HomeScreen(userName: Supabase.instance.client.auth.currentUser?.email ?? "User"),
       SoulMatchPage(),
       AuraCatcherScreen(),
-      SoulJourneyScreen(userId: widget.userId),
-      FriendsPage(),
+      ConnectionsAndNotificationsScreen(userId: widget.userId), //
       ProfileScreen(userId: widget.userId),
       MoreMenuScreen(),
       SettingsScreen(),
