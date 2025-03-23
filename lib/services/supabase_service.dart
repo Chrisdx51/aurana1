@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:supabase/supabase.dart'; // ✅ for PostgresChangeEvent (optional, depends on version)
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/user_model.dart';
+import 'push_notification_service.dart';
 
 class SupabaseService {
   final SupabaseClient supabase = Supabase.instance.client;
@@ -809,64 +810,29 @@ class SupabaseService {
       print("❌ Error updating online status: $error");
     }
   }
-
   // 🔔 Send Push Notification Function
-  static Future<void> sendPushNotification(String fcmToken, String title, String body) async {
-    final String serverKey = dotenv.env['FIREBASE_SERVER_KEY'] ?? '';
-
-    if (serverKey.isEmpty) {
-      print("❌ Firebase Server Key not found in .env!");
-      return;
-    }
-
-    try {
-      final response = await http.post(
-        Uri.parse('https://fcm.googleapis.com/fcm/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=$serverKey',
-        },
-        body: jsonEncode({
-          'to': fcmToken,
-          'notification': {
-            'title': title,
-            'body': body,
-          },
-          'data': {
-            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-          },
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        print('✅ Push notification sent successfully!');
-      } else {
-        print('❌ Failed to send notification: ${response.body}');
-      }
-    } catch (error) {
-      print('❌ Error sending notification: $error');
-    }
-  }
-
   Future<void> createAndSendNotification({
     required String recipientId,
     required String title,
     required String body,
-    required String type, // e.g. 'friend_request', 'friend_accept'
+    required String type,
     Map<String, dynamic>? data,
   }) async {
     try {
-      // 1️⃣ Save the notification in Supabase DB
+      print('📢 Trying to insert notification into Supabase...');
+
       await Supabase.instance.client.from('notifications').insert({
         'user_id': recipientId,
-        'notification_type': type,
+        'type': type,
         'title': title,
         'body': body,
-        'is_read': false,
+        'read': false,
         'message_data': data ?? {},
       });
 
-      // 2️⃣ Fetch their FCM token
+      print('✅ Notification inserted into Supabase');
+
+      // Fetch their FCM token
       final recipientProfile = await Supabase.instance.client
           .from('profiles')
           .select('fcm_token')
@@ -875,20 +841,26 @@ class SupabaseService {
 
       final fcmToken = recipientProfile?['fcm_token'] ?? '';
 
-
       if (fcmToken == null || fcmToken.isEmpty) {
         print("⚠️ No FCM token found for user: $recipientId");
         return;
       }
 
-      // 3️⃣ Send Push Notification
-      await sendPushNotification(fcmToken, title, body);
+      print('📢 Now sending push notification via FCM...');
 
-      print("✅ Push notification sent!");
+      await PushNotificationService.sendPushNotification(
+        fcmToken: fcmToken,
+        title: title,
+        body: body,
+      );
+
+      print("✅ Push notification sent via FCM successfully!");
+
     } catch (error) {
-      print("❌ Error sending notification: $error");
+      print("❌ Error in createAndSendNotification: $error");
     }
   }
+
 
 
   // ✅ Update XP & Level
@@ -1299,6 +1271,48 @@ class SupabaseService {
 
 
 
+  Future<String> getMysticBirthReading(String dob) async {
+    final apiKey = dotenv.env['OPENROUTER_API_KEY'] ?? '';
+
+    if (apiKey.isEmpty) {
+      print("❌ No API key found!");
+      return 'AI service unavailable. Please try again later.';
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          "model": "mistralai/mistral-7b-instruct",
+          "messages": [
+            {
+              "role": "user",
+              "content":
+              "Give me a deep, spiritual, and mystical explanation of the date of birth \"$dob\". Include spiritual birthstones, zodiac influences, and life path insights in a positive, mobile-friendly way."
+            }
+          ],
+          "max_tokens": 300
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices'][0]['message']['content'];
+        print("✅ Mystic Birth Chart received!");
+        return content;
+      } else {
+        print("❌ Failed to fetch Mystic Birth Chart: ${response.statusCode}");
+        return 'No reading available. Please try again later.';
+      }
+    } catch (e) {
+      print("❌ Mystic Birth Chart error: $e");
+      return 'Error generating birth chart.';
+    }
+  }
 
 
   // ✅ Check Friendship Status

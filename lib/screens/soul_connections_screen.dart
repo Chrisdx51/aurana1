@@ -25,7 +25,6 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
   String? selectedElement = "All";
   String? selectedSpiritualPath = "All";
   String? currentUserId;
-  Map<String, String> friendshipStatuses = {};
 
   @override
   void initState() {
@@ -33,78 +32,17 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
     _loadUsers();
   }
 
-  // ✅ NEW: Refresh statuses after returning from another screen
-  Future<void> refreshFriendshipStatuses() async {
-    if (users.isEmpty) return;
-
-    for (var user in users) {
-      String status = await _checkFriendshipStatus(user.id);
-      friendshipStatuses[user.id] = status;
-    }
-
-    setState(() {});
-  }
-
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
     currentUserId = supabase.auth.currentUser?.id;
 
     final fetchedUsers = await supabaseService.getAllUsers();
-    List<UserModel> loadedUsers =
-    fetchedUsers.map((data) => UserModel.fromJson(data)).toList();
-
-    // Get statuses
-    for (var user in loadedUsers) {
-      String status = await _checkFriendshipStatus(user.id);
-      friendshipStatuses[user.id] = status;
-    }
+    List<UserModel> loadedUsers = fetchedUsers.map((data) => UserModel.fromJson(data)).toList();
 
     setState(() {
       users = loadedUsers;
       _isLoading = false;
     });
-  }
-
-  Future<void> _handleFriendButton(String userId) async {
-    final senderId = supabase.auth.currentUser?.id;
-    if (senderId == null) return;
-
-    String currentStatus = friendshipStatuses[userId] ?? "not_friends";
-
-    try {
-      if (currentStatus == "not_friends") {
-        await supabaseService.sendFriendRequest(senderId, userId);
-        friendshipStatuses[userId] = "request_sent";
-        _showMessage("✅ Friend request sent!");
-      } else if (currentStatus == "request_sent") {
-        await supabaseService.cancelFriendRequest(senderId, userId);
-        friendshipStatuses[userId] = "not_friends";
-        _showMessage("❌ Friend request canceled.");
-      } else if (currentStatus == "request_received") {
-        await supabaseService.acceptFriendRequest(senderId, userId);
-        friendshipStatuses[userId] = "friends";
-        _showMessage("🤝 Friend request accepted!");
-      }
-    } catch (error) {
-      _showMessage("❌ Error. Try again.");
-    }
-
-    setState(() {});
-  }
-
-  void _showMessage(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
-  Future<String> _checkFriendshipStatus(String userId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return "not_friends";
-
-    try {
-      return await supabaseService.checkFriendshipStatus(user.id, userId);
-    } catch (error) {
-      return "not_friends";
-    }
   }
 
   List<UserModel> _filterUsers() {
@@ -125,153 +63,89 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
   Widget build(BuildContext context) {
     final filteredUsers = _filterUsers();
 
-    return WillPopScope(
-      onWillPop: () async {
-        await refreshFriendshipStatuses(); // ✅ Refresh statuses before leaving (optional)
-        return true;
-      },
-      child: Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.deepPurple.shade900, Colors.purple, Colors.black],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.black, Colors.deepPurple, Colors.black],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(height: 10),
-                    BannerAdWidget(),
-                    SizedBox(height: 10),
-                    Text(
-                      "Soul Connections",
-                      style: TextStyle(
-                        fontSize: 28,
-                        color: Colors.amberAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      "Find kindred souls 🌌 Grow your spiritual tribe 🌿",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
-                          icon: Icon(Icons.home, color: Colors.white),
-                          label: Text("Home"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            shape: StadiumBorder(),
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => SoulMatchPage()),
-                            );
-                          },
-                          icon: Icon(Icons.favorite, color: Colors.white),
-                          label: Text("Soul Match"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.pinkAccent,
-                            shape: StadiumBorder(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-                    _isLoading
-                        ? Center(child: CircularProgressIndicator())
-                        : GridView.builder(
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 0.7,
-                      ),
-                      itemCount: filteredUsers.length,
-                      itemBuilder: (context, index) {
-                        final user = filteredUsers[index];
-                        final status = friendshipStatuses[user.id] ?? "not_friends";
-                        return _buildUserCard(user, status);
-                      },
-                    ),
-                    SizedBox(height: 30),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildHeader(context),
+                  const SizedBox(height: 10),
 
-                    // ✅ Add manual refresh button (optional)
-                    ElevatedButton.icon(
-                      onPressed: refreshFriendshipStatuses,
-                      icon: Icon(Icons.refresh),
-                      label: Text("Refresh Friend Statuses"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orangeAccent,
-                        shape: StadiumBorder(),
-                      ),
+                  // 🔸 Banner Ad
+                  BannerAdWidget(),
+                  const SizedBox(height: 12),
+
+                  // 🔸 Soul Connections Title (Smaller + Clean)
+                  const Text(
+                    "Soul Connections",
+                    style: TextStyle(
+                      fontSize: 22,
+                      color: Colors.amberAccent,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(height: 6),
 
-                    _dropdown("Filter by Zodiac", selectedZodiac, [
-                      "All",
-                      "Aries",
-                      "Taurus",
-                      "Gemini",
-                      "Cancer",
-                      "Leo",
-                      "Virgo",
-                      "Libra",
-                      "Scorpio",
-                      "Sagittarius",
-                      "Capricorn",
-                      "Aquarius",
-                      "Pisces"
-                    ], (val) => setState(() => selectedZodiac = val)),
+                  const Text(
+                    "Find kindred souls 🌌 Grow your spiritual tribe 🌿",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
 
-                    _dropdown("Filter by Element", selectedElement, [
-                      "All",
-                      "Fire 🔥",
-                      "Water 💧",
-                      "Earth 🌿",
-                      "Air 🌬️",
-                      "Spirit 🌌"
-                    ], (val) => setState(() => selectedElement = val)),
+                  // 🔸 Navigation Buttons under Banner
+                  _topNavButtons(context),
 
-                    _dropdown("Filter by Path", selectedSpiritualPath, [
-                      "All",
-                      "Mystic",
-                      "Shaman",
-                      "Lightworker",
-                      "Astrologer",
-                      "Healer",
-                      "Diviner"
-                    ], (val) => setState(() => selectedSpiritualPath = val)),
+                  const SizedBox(height: 20),
 
-                    SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: _shareInviteLink,
-                      icon: Icon(Icons.share),
-                      label: Text("Invite Friends"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        shape: StadiumBorder(),
-                      ),
+                  // 🔸 User Grid or Loading
+                  _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                      : _buildUserGrid(filteredUsers),
+
+                  const SizedBox(height: 30),
+
+                  // 🔸 Filters
+                  _dropdown("Filter by Zodiac", selectedZodiac, [
+                    "All",
+                    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+                  ], (val) => setState(() => selectedZodiac = val)),
+
+                  _dropdown("Filter by Element", selectedElement, [
+                    "All", "Fire 🔥", "Water 💧", "Earth 🌿", "Air 🌬️", "Spirit 🌌"
+                  ], (val) => setState(() => selectedElement = val)),
+
+                  _dropdown("Filter by Path", selectedSpiritualPath, [
+                    "All", "Mystic", "Shaman", "Lightworker", "Astrologer", "Healer", "Diviner"
+                  ], (val) => setState(() => selectedSpiritualPath = val)),
+
+                  const SizedBox(height: 20),
+
+                  // 🔸 Invite Friends
+                  ElevatedButton.icon(
+                    onPressed: _shareInviteLink,
+                    icon: const Icon(Icons.share, color: Colors.white),
+                    label: const Text("Invite Friends"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      shape: const StadiumBorder(),
                     ),
-                    SizedBox(height: 30),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 30),
+                ],
               ),
             ),
           ),
@@ -280,83 +154,136 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
     );
   }
 
-  Widget _dropdown(String label, String? value, List<String> options, Function(String?) onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader(BuildContext context) {
+    return Row(
       children: [
-        Text(label, style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
-        Container(
-          margin: EdgeInsets.only(bottom: 12, top: 6),
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(10),
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        const Expanded(
+          child: Center(
+            child: Text(
+              "Aurana",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
-          child: DropdownButton<String>(
-            isExpanded: true,
-            value: value ?? 'All',
-            dropdownColor: Colors.black87,
-            iconEnabledColor: Colors.white,
-            underline: SizedBox(),
-            onChanged: onChanged,
-            items: options.map((opt) {
-              return DropdownMenuItem(
-                value: opt,
-                child: Text(opt, style: TextStyle(color: Colors.white)),
-              );
-            }).toList(),
+        ),
+        const SizedBox(width: 48),
+      ],
+    );
+  }
+
+  Widget _topNavButtons(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+          icon: const Icon(Icons.home, color: Colors.white, size: 16),
+          label: const Text("Home"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueGrey,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+        ElevatedButton.icon(
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => SoulMatchPage()),
+          ),
+          icon: const Icon(Icons.favorite, color: Colors.white, size: 16),
+          label: const Text("Soul Match"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurpleAccent,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildUserCard(UserModel user, String status) {
+  Widget _buildUserGrid(List<UserModel> users) {
+    if (users.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 50),
+          child: Text(
+            'No connections found 🌙',
+            style: TextStyle(color: Colors.white70, fontSize: 16),
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return _buildUserCard(user);
+      },
+    );
+  }
+
+  Widget _buildUserCard(UserModel user) {
     return GestureDetector(
       onTap: () async {
         await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => ProfileScreen(userId: user.id)),
         );
-        await refreshFriendshipStatuses(); // ✅ Refresh after returning from ProfileScreen
       },
       child: Container(
-        height: 240,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.red.shade700, Colors.black],
+          gradient: const LinearGradient(
+            colors: [Colors.deepPurple, Colors.black87],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.redAccent.withOpacity(0.4),
-              blurRadius: 8,
+              color: Colors.deepPurpleAccent.withOpacity(0.4),
+              blurRadius: 10,
               spreadRadius: 1,
             ),
           ],
         ),
-        padding: EdgeInsets.all(12),
+        padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             CircleAvatar(
-              radius: 30,
+              radius: 35,
               backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
                   ? NetworkImage(user.avatar!)
-                  : AssetImage("assets/default_avatar.png") as ImageProvider,
+                  : const AssetImage("assets/default_avatar.png") as ImageProvider,
             ),
-            SizedBox(height: 8),
-            Text(user.name,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center),
-            Spacer(),
+            const SizedBox(height: 10),
+            Text(
+              user.name,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 Flexible(child: _buildBlockButton(user.id)),
-                Flexible(child: _buildFriendButton(status, user.id)),
                 Flexible(child: _buildMessageButton(user)),
               ],
             ),
@@ -366,55 +293,20 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
     );
   }
 
-  Widget _buildFriendButton(String status, String userId) {
-    IconData icon;
-    Color color;
-
-    switch (status) {
-      case "not_friends":
-        icon = FontAwesomeIcons.userPlus;
-        color = Colors.greenAccent;
-        break;
-      case "request_sent":
-        icon = FontAwesomeIcons.userClock;
-        color = Colors.amber;
-        break;
-      case "request_received":
-        icon = FontAwesomeIcons.userCheck;
-        color = Colors.green;
-        break;
-      case "friends":
-        icon = FontAwesomeIcons.solidCheckCircle;
-        color = Colors.blueAccent;
-        break;
-      default:
-        icon = FontAwesomeIcons.userPlus;
-        color = Colors.greenAccent;
-    }
-
-    return IconButton(
-      padding: EdgeInsets.zero,
-      iconSize: 20,
-      icon: Icon(icon, color: color),
-      onPressed: () async {
-        await _handleFriendButton(userId);
-      },
-    );
-  }
-
   Widget _buildMessageButton(UserModel user) {
     return IconButton(
       padding: EdgeInsets.zero,
       iconSize: 20,
-      icon: Icon(FontAwesomeIcons.solidCommentDots, color: Colors.amberAccent),
+      icon: const Icon(FontAwesomeIcons.solidCommentDots, color: Colors.amberAccent),
       onPressed: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (_) => MessageScreen(
-                receiverId: user.id,
-                receiverName: user.name,
-              )),
+            builder: (_) => MessageScreen(
+              receiverId: user.id,
+              receiverName: user.name,
+            ),
+          ),
         );
       },
     );
@@ -424,12 +316,48 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
     return IconButton(
       padding: EdgeInsets.zero,
       iconSize: 20,
-      icon: Icon(FontAwesomeIcons.userSlash, color: Colors.redAccent),
+      icon: const Icon(FontAwesomeIcons.userSlash, color: Colors.redAccent),
       onPressed: () async {
         await supabaseService.blockUser(supabase.auth.currentUser!.id, userId);
-        _showMessage("🚫 User blocked");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("🚫 User blocked")),
+        );
         setState(() {});
       },
+    );
+  }
+
+  Widget _dropdown(String label, String? value, List<String> options, Function(String?) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+        ),
+        Container(
+          margin: const EdgeInsets.only(bottom: 12, top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButton<String>(
+            isExpanded: true,
+            value: value ?? 'All',
+            dropdownColor: Colors.black87,
+            iconEnabledColor: Colors.white,
+            underline: const SizedBox(),
+            onChanged: onChanged,
+            items: options.map((opt) {
+              return DropdownMenuItem(
+                value: opt,
+                child: Text(opt, style: const TextStyle(color: Colors.white)),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 }

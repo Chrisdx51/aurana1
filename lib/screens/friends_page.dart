@@ -5,7 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'profile_screen.dart';
 import 'chat_screen.dart';
-import 'notification_page.dart';
+
 
 class FriendsPage extends StatefulWidget {
   @override
@@ -207,12 +207,7 @@ class _FriendsPageState extends State<FriendsPage> {
                           color: Colors.white,
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.notifications, color: Colors.white),
-                        onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationPage()));
-                        },
-                      ),
+
                     ],
                   ),
                 ),

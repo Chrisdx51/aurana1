@@ -19,6 +19,8 @@ import 'submit_service_page.dart';
 import 'all_ads_page.dart';
 import '../widgets/banner_ad_widget.dart'; // ✅ BannerAdWidget import
 import 'feedback_screen.dart'; // 👈 Add this with the other imports
+import 'horoscope_screen.dart';
+import 'package:confetti/confetti.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -33,13 +35,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final supabase = Supabase.instance.client;
   final supabaseService = SupabaseService();
   final _audioPlayer = AudioPlayer();
+  String _mysticReadingResult = '';
+  bool _isLoadingBirthChart = false;
+
+// Animation controllers for the Mystic Card
+  late AnimationController _cardController;
+  late Animation<Offset> _cardOffsetAnimation;
+
+// Confetti controller for celebration 🎉
+  final ConfettiController _confettiController = ConfettiController(duration: Duration(seconds: 2));
+
 
   UserModel? user;
   bool _isLoading = true;
   bool _hasError = false;
   bool _isAffirmationLoading = true;
   bool _adsLoading = true;
-
   Timer? _inactivityTimer;
   Map<String, dynamic>? _affirmation;
   List<Map<String, dynamic>> _ads = [];
@@ -51,6 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'assets/images/catcher.png',
     'assets/images/misc.png',
   ];
+
+  DateTime? _selectedMysticDOB;
 
   late AnimationController _pulseController;
 
@@ -68,6 +81,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: Duration(seconds: 2),
     )..repeat(reverse: true);
+    _cardController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 800),
+    );
+
+    _cardOffsetAnimation = Tween<Offset>(
+      begin: Offset(0, 1), // Starts off-screen
+      end: Offset(0, 0), // Ends on-screen
+    ).animate(CurvedAnimation(
+      parent: _cardController,
+      curve: Curves.easeOutBack,
+    ));
 
     _loadUserProfile();
     _fetchTodaysAffirmation();
@@ -75,15 +100,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fetchLatestUsers();
     _startInactivityTimer();
     _updateOnlineStatus(true);
+
+    // ✅ Fetch achievements cleanly
+    supabaseService.fetchUserAchievements(userId).then((result) {
+      setState(() {
+        _achievements = result;
+      });
+    });
   }
+
 
   @override
   void dispose() {
     _pulseController.dispose();
     _inactivityTimer?.cancel();
+    _cardController.dispose();
+    _confettiController.dispose();
     super.dispose();
     _updateOnlineStatus(false);
   }
+
+
 
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
@@ -150,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
 
       try {
-        await _audioPlayer.play(AssetSource('sounds/affirmation_chime.mp3'));
+       // await _audioPlayer.play(AssetSource('sounds/affirmation_chime.mp3'));
       } catch (e) {
         print("🔇 Sound error: $e");
       }
@@ -198,6 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
     return backgroundImages[(day ~/ 3) % backgroundImages.length];
   }
+
   Future<void> _fetchLatestUsers() async {
     try {
       final latestUsers = await supabaseService.getLatestUsers(limit: 10);
@@ -211,6 +249,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       print('❌ Error fetching latest users: $error');
     }
   }
+
+  Future<void> _pickMysticDOB(BuildContext context) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime(2000),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+
+    if (pickedDate != null) {
+      setState(() {
+        _selectedMysticDOB = pickedDate;
+        _mysticReadingResult = ''; // clear previous reading
+
+      });
+    }
+  }
+
+
+  Future<void> _submitMysticBirthChart() async {
+    if (_selectedMysticDOB == null) return;
+
+    final dobString = '${_selectedMysticDOB!.year}-${_selectedMysticDOB!.month.toString().padLeft(2, '0')}-${_selectedMysticDOB!.day.toString().padLeft(2, '0')}';
+
+    // Show loading
+    setState(() {
+      _isLoadingBirthChart = true;
+      _mysticReadingResult = ''; // Clear previous
+    });
+
+    try {
+      final reading = await supabaseService.getMysticBirthReading(dobString);
+
+      setState(() {
+        _mysticReadingResult = reading;
+        _isLoadingBirthChart = false;
+      });
+
+      _cardController.forward();   // Slide up!
+      _confettiController.play();  // 🎉 Party!
+    } catch (e) {
+      print('❌ Error: $e');
+      setState(() => _isLoadingBirthChart = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to get reading.')));
+    }
+  }
+
+
+  List<Map<String, dynamic>> _achievements = [];
+
 
 
   @override
@@ -234,57 +322,173 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: Text(
-              'Welcome to Aurana 🌌',
+              'Aurana 🌌',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
             centerTitle: false,
-            actions: [
-              IconButton(
-                icon: Icon(Icons.notifications, color: Colors.white),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsPage())),
-              ),
-            ],
+
           ),
         ),
       ),
 
       // ✅ The ad comes here!
-      body: Column(
+      body: Stack(
         children: [
-          BannerAdWidget(), // ✅ AD BANNER HERE, NO AD UNIT REQUIRED!
-          Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator())
-                : Container(
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(getRotatingBackground()),
-                  fit: BoxFit.cover,
+          // ✅ 1. Background Image at the bottom
+          Positioned.fill(
+            child: Image.asset(
+              getRotatingBackground(), // Your dynamic background function!
+              fit: BoxFit.cover,
+            ),
+          ),
+
+          // ✅ 2. Main UI content layered above
+          Column(
+            children: [
+              // ✅ Banner Ad + Confetti on top
+              Stack(
+                children: [
+                  BannerAdWidget(), // ⬅️ Your Ad at the top
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConfettiWidget(
+                      confettiController: _confettiController,
+                      blastDirectionality: BlastDirectionality.explosive,
+                      emissionFrequency: 0.05,
+                      numberOfParticles: 30,
+                      gravity: 0.2,
+                      colors: [Colors.amber, Colors.purpleAccent, Colors.cyanAccent],
+                    ),
+                  ),
+                ],
+              ),
+
+              // ✅ Scrollable Content
+              Expanded(
+                child: _isLoading
+                    ? Center(child: CircularProgressIndicator())
+                    : SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _buildGreetingSection(),
+                      SizedBox(height: 20),
+                      _buildAnimatedButtons(),
+                      SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Expanded(child: _soulMatchButton()),
+                          SizedBox(width: 10),
+                          Expanded(child: _spiritualGuidanceButton()),
+                        ],
+                      ),
+                      SizedBox(height: 20),
+                      _adCarousel(),
+                      SizedBox(height: 20),
+                      _affirmationSection(),
+                      SizedBox(height: 20),
+                      _spiritualServicesButton(),
+                      SizedBox(height: 20),
+                      _buildMysticBirthChartBox(),
+                      SizedBox(height: 20),
+                      _buildLatestSoulTribeSection(),
+                      SizedBox(height: 20),
+                      _buildAchievementsAndQuestTab(),
+                      SizedBox(height: 20),
+                      _buildFeedbackFooter(context),
+                    ],
+                  ),
                 ),
               ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildGreetingSection(),
-                    SizedBox(height: 20),
-                    _buildAnimatedButtons(),
-                    SizedBox(height: 20),
-                    _affirmationSection(),
-                    SizedBox(height: 20),
-                    _spiritualServicesButton(),
-                    SizedBox(height: 20),
-                    _adCarousel(),
-                    SizedBox(height: 20),
-                    _buildLatestSoulTribeSection(),
-                    SizedBox(height: 20),
-                    _buildFeedbackFooter(context),
+            ],
+          ),
+        ],
+      ),
 
-                  ],
+
+    );
+  }
+
+  Widget _loadingCard() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: CircularProgressIndicator(color: Colors.amberAccent),
+      ),
+    );
+  }
+
+  Widget _animatedMysticCard(String readingText) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurpleAccent, Colors.blueAccent],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withOpacity(0.6),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Main content
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: 10), // space for the close button
+              Text(
+                '🌟 Mystic Reading',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                readingText,
+                style: TextStyle(color: Colors.white70),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton.icon(
+                onPressed: () => Share.share('Check out my Mystic Birth Chart!\n\n$readingText'),
+                icon: Icon(Icons.share, color: Colors.white),
+                label: Text('Share'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+
+          // Close (X) button
+          Positioned(
+            right: 0,
+            top: 0,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _mysticReadingResult = ''; // Clear the reading and hide the card
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.close, color: Colors.white, size: 20),
               ),
             ),
           ),
@@ -292,29 +496,112 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildMysticBirthChartBox() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: 20),
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.indigo.shade900.withOpacity(0.8),
+                Colors.deepPurple.shade800.withOpacity(0.8),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.purpleAccent.withOpacity(0.4),
+                blurRadius: 12,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '🔮 Mystic Birth Chart',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Discover the spiritual meaning of any date of birth. Enter a date and reveal its hidden wisdom!',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              SizedBox(height: 16),
+
+              // Date Picker Row
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _pickMysticDOB(context),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _selectedMysticDOB == null
+                              ? 'Select a Date of Birth'
+                              : '${_selectedMysticDOB!.day}/${_selectedMysticDOB!.month}/${_selectedMysticDOB!.year}',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _selectedMysticDOB == null ? null : _submitMysticBirthChart,
+                    icon: Icon(Icons.auto_awesome, color: Colors.white),
+                    label: Text('Reveal'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.tealAccent.shade400,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 20),
+
+              // The result card (if available)
+              SlideTransition(
+
+              position: _cardOffsetAnimation,
+                child: _mysticReadingResult.isNotEmpty
+                    ? _animatedMysticCard(_mysticReadingResult)
+                    : SizedBox.shrink(),
+              ),
+
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
 // 🟣 ADD THIS METHOD BELOW _buildLatestSoulTribeSection()
 
   Widget _buildAchievementsAndQuestTab() {
-    // Dummy achievements for display; in real case, you would fetch from Supabase
-    final List<Map<String, dynamic>> earnedAchievements = [
-      {
-        'title': 'First Quest Complete',
-        'description': 'You completed your first quest!',
-        'icon': Icons.emoji_events,
-      },
-      {
-        'title': 'Aura Boost I',
-        'description': 'Your aura reached level 1!',
-        'icon': Icons.bolt,
-      },
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(height: 20),
 
-        // ⭐ Medals / Achievements Section
+        // ⭐ Achievements Section
         Container(
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -325,15 +612,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               Text(
                 '🏅 Your Achievements',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               SizedBox(height: 10),
 
-              // Achievements Display
-              SingleChildScrollView(
+              _achievements.isEmpty
+                  ? Text('No achievements yet!', style: TextStyle(color: Colors.white70))
+                  : SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: earnedAchievements.map((achievement) {
+                  children: _achievements.map((achievement) {
                     return GestureDetector(
                       onTap: () {
                         Share.share('I just earned the "${achievement['title']}" badge on Aurana! 🌟');
@@ -357,14 +645,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              achievement['icon'],
-                              color: Colors.yellowAccent,
-                              size: 40,
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: Colors.white,
+                              backgroundImage: achievement['icon_url'] != null
+                                  ? NetworkImage(achievement['icon_url'])
+                                  : AssetImage('assets/images/default_icon.png') as ImageProvider,
                             ),
                             SizedBox(height: 8),
                             Text(
-                              achievement['title'],
+                              achievement['title'] ?? 'Achievement',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -384,74 +674,58 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         SizedBox(height: 20),
 
-        // 🟣 Spiritual Quest Button
-        GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(context, '/mystic-quests'); // Or use MaterialPageRoute if not yet in routes
-          },
-          child: Container(
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.tealAccent.shade400, Colors.teal.shade600],
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.tealAccent.withOpacity(0.6),
-                  blurRadius: 10,
-                  offset: Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.auto_awesome, color: Colors.white, size: 24),
-                SizedBox(width: 10),
-                Text(
-                  'Spiritual Quest',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
 
 
+
   Widget _buildGreetingSection() {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundImage: user?.avatar != null && user!.avatar!.isNotEmpty
-                ? NetworkImage(user!.avatar!)
-                : AssetImage("assets/images/default_avatar.png") as ImageProvider,
-          ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Welcome back, ${user?.name ?? "Guest"}!',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+    return GestureDetector(
+      onTap: () {
+        final userId = supabase.auth.currentUser?.id;
+
+        if (userId != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProfileScreen(userId: userId),
             ),
-          ),
-        ],
+          );
+        } else {
+          print("❌ No user ID found.");
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundImage: user?.avatar != null && user!.avatar!.isNotEmpty
+                  ? NetworkImage(user!.avatar!)
+                  : AssetImage("assets/images/default_avatar.png") as ImageProvider,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Welcome back, ${user?.name ?? "Guest"}!',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+          ],
+        ),
       ),
     );
   }
+
+
+
 
   Widget _buildAnimatedButtons() {
     return Column(
@@ -463,13 +737,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               "Aura Catcher",
               LinearGradient(
                 colors: [
-                  Color(0xFFFFEB3B), // Yellow (Solar Plexus)
-                  Color(0xFF4CAF50), // Green (Heart Chakra)
+                  Color(0xFFFFEB3B), // Yellow
+                  Color(0xFF4CAF50), // Green
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               AuraCatcherScreen(),
+            ),
+            _animatedButton(
+              "Tribe Finder",
+              LinearGradient(
+                colors: [
+                  Color(0xFF2196F3), // Blue
+                  Color(0xFF3F51B5), // Indigo
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              SoulConnectionsScreen(),
             ),
           ],
         ),
@@ -478,42 +764,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _animatedButton(
-              "Tribe Finder",
-              LinearGradient(
-                colors: [
-                  Color(0xFF2196F3), // Blue (Throat Chakra)
-                  Color(0xFF3F51B5), // Indigo (Third Eye Chakra)
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              SoulConnectionsScreen(),
-            ),
-            _animatedButton(
               "Tarot",
               LinearGradient(
                 colors: [
-                  Color(0xFF9C27B0), // Violet (Crown Chakra)
-                  Color(0xFFFFFFFF), // White (Spirit)
+                  Color(0xFF9C27B0), // Violet
+                  Color(0xFFFFFFFF),  // White
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               TarotReadingScreen(),
             ),
+            _animatedButton(
+              "Horoscope",
+              LinearGradient(
+                colors: [
+                  Color(0xFFFF9800), // Orange
+                  Color(0xFFFF5722), // Deep Orange
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              HoroscopeScreen(), // ✅ Your new Horoscope screen
+            ),
           ],
         ),
-        SizedBox(height: 20),
 
-        // Keep your orbs as they are.
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _soulMatchButton(),
-            SizedBox(width: 20),
-            _spiritualGuidanceButton(),
-          ],
-        ),
       ],
     );
   }
@@ -668,7 +944,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(icon: Icon(Icons.favorite, color: Colors.pinkAccent), onPressed: () {}),
-              IconButton(icon: Icon(Icons.share, color: Colors.lightBlueAccent), onPressed: () {}),
+              IconButton(
+                icon: Icon(Icons.share, color: Colors.lightBlueAccent),
+                onPressed: () {
+                  if (_affirmation != null && _affirmation!['text'] != null) {
+                    Share.share('✨ Today\'s Affirmation on Aurana: \n\n"${_affirmation!['text']}" 🌟');
+                  } else {
+                    print("⚠️ No affirmation to share.");
+                  }
+                },
+              ),
+
             ],
           )
         ],
@@ -815,6 +1101,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               return GestureDetector(
                 onTap: () {
                   // Navigate to their profile or show details
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(userId: user['id']), // ✅ Add this line
+                    ),
+                  );
                 },
                 child: Container(
                   width: 100,

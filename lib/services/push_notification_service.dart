@@ -1,50 +1,46 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class PushNotificationService {
-  static final String? _firebaseKey = dotenv.env['FCM_SERVER_KEY'];
+  // ✅ REPLACE this URL with your actual Firebase Function URL!
+  static const String functionUrl = 'https://sendpushnotification-ipsp2tle2q-uc.a.run.app';
 
   static Future<void> sendPushNotification({
     required String fcmToken,
     required String title,
     required String body,
   }) async {
-    if (_firebaseKey == null || _firebaseKey!.isEmpty) {
-      print('❌ FCM Server Key is missing!');
+    if (fcmToken.isEmpty) {
+      print('❌ FCM token is missing!');
       return;
     }
 
-    final url = Uri.parse('https://fcm.googleapis.com/fcm/send');
+    print('📦 Sending push notification...');
+    print('🔑 FCM Token: $fcmToken');
+    print('📝 Title: $title');
+    print('📨 Body: $body');
 
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'key=$_firebaseKey',
-    };
 
     final payload = {
-      'to': fcmToken, // This is the user's device token
-      'notification': {
-        'title': title,
-        'body': body,
-      },
-      'priority': 'high',
+      'fcmToken': fcmToken,
+      'title': title,
+      'body': body,
     };
 
     try {
       final response = await http.post(
-        url,
-        headers: headers,
+        Uri.parse(functionUrl),
+        headers: {'Content-Type': 'application/json'},
         body: json.encode(payload),
       );
 
       if (response.statusCode == 200) {
-        print('✅ Push notification sent!');
+        print('✅ Push notification sent successfully via Firebase Function!');
       } else {
-        print('❌ Failed to send push notification: ${response.body}');
+        print('❌ Failed to send notification via Firebase Function: ${response.body}');
       }
     } catch (e) {
-      print('❌ Error sending push notification: $e');
+      print('❌ Error calling Firebase Function: $e');
     }
   }
 }
