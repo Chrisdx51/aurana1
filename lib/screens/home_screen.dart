@@ -13,7 +13,6 @@ import 'tarot_reading_screen.dart';
 import 'aura_catcher.dart';
 import 'moon_cycle_screen.dart';
 import 'soul_connections_screen.dart'; // ✅ New Import!
-import 'friends_page.dart';
 import 'business_profile_page.dart';
 import 'submit_service_page.dart';
 import 'all_ads_page.dart';
@@ -31,7 +30,7 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   final supabase = Supabase.instance.client;
   final supabaseService = SupabaseService();
   final _audioPlayer = AudioPlayer();
@@ -67,9 +66,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   late AnimationController _pulseController;
 
+  // ✅ Auto Carousel Controllers
+  late PageController _pageController;
+  int _currentPage = 0;
+  Timer? _carouselTimer;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final userId = supabase.auth.currentUser?.id;
 
     if (userId == null) {
@@ -79,12 +84,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: Duration(seconds: 2),
+      duration: Duration(seconds: 4),
     )..repeat(reverse: true);
+
     _cardController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 800),
     );
+
+    _pageController = PageController(initialPage: 0);
 
     _cardOffsetAnimation = Tween<Offset>(
       begin: Offset(0, 1), // Starts off-screen
@@ -100,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fetchLatestUsers();
     _startInactivityTimer();
     _updateOnlineStatus(true);
+    _startCarouselAutoScroll();
 
     // ✅ Fetch achievements cleanly
     supabaseService.fetchUserAchievements(userId).then((result) {
@@ -116,10 +125,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _inactivityTimer?.cancel();
     _cardController.dispose();
     _confettiController.dispose();
+    _pageController.dispose();
+    _carouselTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this); // Clean up
+    print("🔵 HomeScreen Observer Detached");
     super.dispose();
     _updateOnlineStatus(false);
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print("🟢 AppLifecycleState changed: $state");
+
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    if (state == AppLifecycleState.resumed) {
+      print("✅ App resumed - mark user ONLINE");
+      supabase.from('profiles').update({
+        'is_online': true,
+        'last_seen': null,
+      }).eq('id', userId);
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+      print("⛔ App paused/inactive/detached - mark user OFFLINE");
+      supabase.from('profiles').update({
+        'is_online': false,
+        'last_seen': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+    }
+  }
 
 
   Future<void> _loadUserProfile() async {
@@ -142,6 +176,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     }
   }
+
+  void _startCarouselAutoScroll() {
+    _carouselTimer = Timer.periodic(Duration(seconds: 4), (timer) {
+      if (_pageController.hasClients) {
+        _currentPage++;
+        if (_currentPage >= _ads.length + 1) {
+          _currentPage = 0;
+        }
+        _pageController.animateToPage(
+          _currentPage,
+          duration: Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   void _startInactivityTimer() {
     // Cancel any previous timer to avoid duplicates
     _inactivityTimer?.cancel();
@@ -211,10 +262,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _adsLoading = true);
 
     try {
-      final fetchedAds = await supabaseService.fetchBusinessAds();
+      final fetchedAds = await supabase
+          .from('service_ads')
+          .select('''
+      id,
+      user_id,
+      name,
+      tagline,
+      description,
+      profile_image_url,
+      rating,
+      created_at,
+      expiry_date,
+      service_ads_categories (
+        service_categories (
+          id,
+          name
+        )
+      )
+    ''')
+          .order('created_at', ascending: false);
+
       final now = DateTime.now();
 
-      final activeAds = fetchedAds.where((ad) {
+      final activeAds = fetchedAds.map<Map<String, dynamic>>((ad) {
+        final categories = (ad['service_ads_categories'] as List)
+            .map((item) => item['service_categories']['name'] as String)
+            .toList();
+
+        return {
+          ...ad,
+          'categories': categories, // ✅ Add categories to the ad object
+        };
+      }).where((ad) {
         final expiry = DateTime.tryParse(ad['expiry_date'] ?? '');
         return expiry == null || expiry.isAfter(now);
       }).toList();
@@ -222,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       activeAds.shuffle();
 
       setState(() {
-        _ads = activeAds.take(4).toList();
+        _ads = activeAds.take(4).toList(); // ✅ Or however many you want to show
         _adsLoading = false;
       });
     } catch (e) {
@@ -230,6 +310,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() => _adsLoading = false);
     }
   }
+
 
   String getRotatingBackground() {
     int day = DateTime.now().difference(DateTime(2025, 1, 1)).inDays;
@@ -389,9 +470,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       SizedBox(height: 20),
                       _adCarousel(),
                       SizedBox(height: 20),
-                      _affirmationSection(),
-                      SizedBox(height: 20),
                       _spiritualServicesButton(),
+                      SizedBox(height: 20),
+                      _affirmationSection(),
                       SizedBox(height: 20),
                       _buildMysticBirthChartBox(),
                       SizedBox(height: 20),
@@ -1006,51 +1087,95 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _adCarousel() {
     return Container(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
+      height: 220,
+      child: PageView.builder(
+        controller: _pageController,
         itemCount: _ads.length + 1,
         itemBuilder: (context, index) {
-          if (index < _ads.length) return _adCard(_ads[index]);
+          if (index < _ads.length) {
+            return _adCard(_ads[index]);
+          }
           return _ctaAdCard();
         },
       ),
     );
   }
 
+
   Widget _adCard(Map<String, dynamic> ad) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => BusinessProfilePage(
-          name: ad['name'],
-          serviceType: ad['service_type'],
-          tagline: ad['tagline'],
-          description: ad['description'],
-          profileImageUrl: ad['profile_image_url'],
-          rating: ad['rating'] ?? 4.5,
-          adCreatedDate: ad['created_at'],
-          userId: ad['user_id'],
+          name: ad['name'] ?? '',
+          serviceType: (ad['categories'] as List<dynamic>).join(', '),
+          tagline: ad['tagline'] ?? '',
+          description: ad['description'] ?? '',
+          profileImageUrl: ad['profile_image_url'] ?? '',
+          rating: (ad['rating'] as num?)?.toDouble() ?? 0.0,
+          adCreatedDate: ad['created_at'] ?? '',
+          userId: ad['user_id'] ?? '',
+          adId: ad['id'] ?? '',
         )),
       ),
       child: Container(
-        width: 140,
+        width: 160,
+        height: 220,
         margin: EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.6),
           borderRadius: BorderRadius.circular(16),
         ),
+        clipBehavior: Clip.hardEdge, // ✅ Stops overflow issues!
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              child: ad['profile_image_url'] != null
-                  ? Image.network(ad['profile_image_url'], height: 100, fit: BoxFit.cover)
-                  : Image.asset('assets/images/serv1.png', height: 100, fit: BoxFit.cover),
+              child: ad['profile_image_url'] != null && ad['profile_image_url'] != ''
+                  ? Image.network(
+                ad['profile_image_url'],
+                width: double.infinity,
+                height: 120,
+                fit: BoxFit.cover,
+              )
+                  : Image.asset(
+                'assets/images/serv1.png',
+                width: double.infinity,
+                height: 120,
+                fit: BoxFit.cover,
+              ),
             ),
             Expanded(
-              child: Center(
-                child: Text(ad['service_type'] ?? 'Service', style: TextStyle(color: Colors.white)),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), // ✅ Less vertical padding
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      ad['name'] ?? 'Service',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      (ad['categories'] as List<dynamic>).join(', '),
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1063,7 +1188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SubmitYourServicePage())),
       child: Container(
-        width: 140,
+        width: 150,
         margin: EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [Colors.amberAccent, Colors.purpleAccent]),
@@ -1075,7 +1200,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               Icon(Icons.add_circle_outline, size: 40, color: Colors.white),
               SizedBox(height: 10),
-              Text("Place Your Ad Here!", style: TextStyle(color: Colors.white)),
+              Text("Place Your Service Here!", style: TextStyle(color: Colors.white)),
             ],
           ),
         ),

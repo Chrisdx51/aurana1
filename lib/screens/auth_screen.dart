@@ -95,6 +95,13 @@ class _AuthScreenState extends State<AuthScreen> {
           await saveFCMToken();
           subscribeToTopics();
 
+          // ✅ Mark user as online & update last_seen after signup
+          await supabase.from('profiles').update({
+            'is_online': true,
+            'last_seen': DateTime.now().toIso8601String(),
+          }).eq('id', userId);
+
+
           _showMessage("Welcome! Let's complete your profile...");
           Navigator.pushReplacement(
             context,
@@ -117,6 +124,13 @@ class _AuthScreenState extends State<AuthScreen> {
           // ✅ Save FCM token & Subscribe after login
           await saveFCMToken();
           subscribeToTopics();
+
+          // ✅ Mark user as online & update last_seen after login
+          await supabase.from('profiles').update({
+            'is_online': true,
+            'last_seen': DateTime.now().toIso8601String(),
+          }).eq('id', userId);
+
 
           if (profileComplete) {
             _showMessage("Welcome back!");

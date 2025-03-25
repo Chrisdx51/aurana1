@@ -40,9 +40,11 @@ class _MatchesScreenState extends State<MatchesScreen> {
     try {
       final response = await supabase
           .from('soul_matches')
-          .select('matched_user_id, profiles!matched_user_id(name, avatar, dob, soul_match_message, is_online)')
+          .select('matched_user_id, profiles!matched_user_id(*)')
           .eq('user_id', userId)
           .eq('status', 'matched');
+
+      print('✅ Matches fetched: ${response.length}');
 
       setState(() {
         matchedSouls = List<Map<String, dynamic>>.from(response);
@@ -57,6 +59,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
       setState(() => isLoading = false);
     }
   }
+
 
   // ✅ Navigate to ChatScreen (message screen)
   void _goToChat(String userId, String name) {

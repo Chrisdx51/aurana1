@@ -410,28 +410,31 @@ class SupabaseService {
   // ✅ Fetch All Business Ads for the Home Page or Discovery Page
   Future<List<Map<String, dynamic>>> fetchBusinessAds() async {
     try {
-      final response = await supabase
+      final response = await Supabase.instance.client
           .from('service_ads')
           .select('''
+      id,
+      user_id,
+      name,
+      business_name,
+      tagline,
+      description,
+      price,
+      phone_number,
+      profile_image_url,
+      show_profile,
+      created_at,
+      expiry_date,
+      rating,
+      service_ads_categories (
+        service_categories (
           id,
-          user_id,
-          name,
-          business_name,
-          service_type,
-          tagline,
-          description,
-          price,
-          phone_number,
-          profile_image_url,
-          show_profile,
-          created_at
-        ''')
+          name
+        )
+      )
+    ''')
           .order('created_at', ascending: false);
 
-      if (response.isEmpty) {
-        print("⚠️ No business ads found.");
-        return [];
-      }
 
       print("✅ Fetched ${response.length} ads from service_ads.");
       return List<Map<String, dynamic>>.from(response);
@@ -440,6 +443,7 @@ class SupabaseService {
       return [];
     }
   }
+
 
   Future<List<String>> fetchFriendsIds(String userId) async {
     final response = await supabase
@@ -625,6 +629,82 @@ class SupabaseService {
       }
     } catch (error) {
       print("❌ Error generating affirmations: $error");
+    }
+  }
+
+  Future<void> submitRating(int ratingValue, String businessId) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        print("❌ User not logged in!");
+        return;
+      }
+
+      await supabase.from('ratings').upsert({
+        'user_id': userId,
+        'business_id': businessId,
+        'rating': ratingValue,
+        'created_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id, business_id');
+
+      print("✅ Rating submitted!");
+
+      await updateAverageRating(businessId); // ⬅️ Update after submit
+    } catch (error) {
+      print("❌ Error submitting rating: $error");
+    }
+  }
+
+
+  Future<void> updateAverageRating(String businessId) async {
+    try {
+      final response = await supabase
+          .from('ratings')
+          .select('rating')
+          .eq('business_id', businessId);
+
+      if (response.isEmpty) {
+        print("⚠️ No ratings found for business $businessId");
+        return;
+      }
+
+      double total = 0;
+      for (var rating in response) {
+        total += rating['rating'];
+      }
+
+      final double average = total / response.length;
+
+      await supabase.from('service_ads').update({
+        'rating': average,
+      }).eq('user_id', businessId);
+
+      print("✅ Average rating updated: $average ⭐");
+    } catch (error) {
+      print("❌ Error updating average rating: $error");
+    }
+  }
+
+  Future<double> fetchAverageRating(String businessId) async {
+    try {
+      final response = await supabase
+          .from('service_ads')
+          .select('rating')
+          .eq('user_id', businessId)
+          .single();
+
+      if (response == null || response['rating'] == null) {
+        print("⚠️ No average rating found.");
+        return 0.0;
+      }
+
+      final avgRating = response['rating'] as double;
+      print("✅ Average rating fetched: $avgRating ⭐");
+
+      return avgRating;
+    } catch (error) {
+      print("❌ Error fetching average rating: $error");
+      return 0.0;
     }
   }
 
@@ -1027,21 +1107,6 @@ class SupabaseService {
   }
 
 
-// ✅ Fetch limited reports (Excluding Superadmin-related reports)
-  Future<List<Map<String, dynamic>>> _fetchLimitedReports() async {
-    try {
-      final response = await supabase
-          .from('reports')
-          .select('*')
-          .neq('reporter_id', 'superadmin') // Exclude reports by superadmins
-          .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      print("❌ Error fetching limited reports: $e");
-      return [];
-    }
-  }
-
 // ✅ Fetch limited notifications (Exclude notifications related to admins or superadmins)
   Future<List<Map<String, dynamic>>> _fetchLimitedNotifications() async {
     try {
@@ -1097,17 +1162,15 @@ class SupabaseService {
       final response = await supabase
           .from('friends')
           .select('status')
-          .or('and(user_id.eq.$userId, friend_id.eq.$targetUserId), and(user_id.eq.$targetUserId, friend_id.eq.$userId)')
-          .eq('status', 'accepted')
-          .maybeSingle();
+          .or('and(user_id.eq.$userId,friend_id.eq.$targetUserId),and(user_id.eq.$targetUserId,friend_id.eq.$userId)')
+          .eq('status', 'accepted');
 
-      return response != null;
+      return response != null && response.isNotEmpty;
     } catch (error) {
       print("❌ Error in checkIfFriends: $error");
       return false;
     }
   }
-
 // ✅ Send a Friend Request
   Future<bool> sendFriendRequest(String senderId, String receiverId) async {
     try {
@@ -1151,37 +1214,19 @@ class SupabaseService {
   // ✅ Accept a Friend Request
   Future<bool> acceptFriendRequest(String userId, String friendId) async {
     try {
-      // ✅ Update friend request status to accepted
+      // ✅ Step 1: Update request to 'accepted'
       await supabase
           .from('friend_requests')
           .update({'status': 'accepted'})
           .match({'sender_id': friendId, 'receiver_id': userId});
 
-      // ✅ Insert friendship ONLY if it doesn't exist
-      final existingFriendship = await supabase
-          .from('friends')
-          .select('id')
-          .or('and(user_id.eq.$userId, friend_id.eq.$friendId), and(user_id.eq.$friendId, friend_id.eq.$userId)')
-          .maybeSingle();
-
-      if (existingFriendship != null) {
-        print("⚠️ Friendship already exists!");
-        return false;
-      }
-
-      // ✅ Insert both records for each user
+      // ✅ Step 2: Insert both directions into friends table
       await supabase.from('friends').insert([
         {'user_id': userId, 'friend_id': friendId, 'status': 'accepted'},
         {'user_id': friendId, 'friend_id': userId, 'status': 'accepted'},
       ]);
 
-      // ✅ Delete the friend request (optional cleanup)
-      await supabase
-          .from('friend_requests')
-          .delete()
-          .match({'sender_id': friendId, 'receiver_id': userId});
-
-      // ✅ Notify friend
+      // ✅ Step 3: Send notification
       await createAndSendNotification(
         recipientId: friendId,
         title: '🎉 Friend Request Accepted!',
@@ -1189,16 +1234,13 @@ class SupabaseService {
         type: 'friend_accept',
       );
 
-      print("✅ Friend request accepted, friendship established.");
+      print("✅ Friend request accepted and friendship created.");
       return true;
     } catch (error) {
       print("❌ Error accepting friend request: $error");
       return false;
     }
   }
-
-
-
 
   // ✅ Remove a Friend
   Future<bool> removeFriend(String userId, String friendId) async {
@@ -1451,7 +1493,8 @@ class SupabaseService {
     try {
       final response = await supabase
           .from('friends')
-          .select('friend_id, profiles(name, avatar)')
+          .select('friend_id, profile:profiles!fk_friend_profile(name, avatar)')
+
           .eq('user_id', userId)
           .eq('status', 'accepted');
 

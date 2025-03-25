@@ -62,18 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => isLoading = false);
   }
 
-  Future<bool> _checkIfAdmin(String? userId) async {
-    if (userId == null) return false;
 
-    final response = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-    final role = response['role'] ?? 'user';
-    return role == 'admin' || role == 'superadmin';
-  }
 
   Future<void> _loadUserProfile() async {
     try {
@@ -134,12 +123,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _checkFriendStatus() async {
     try {
+      print("🟡 Checking friendship status...");
+
       final sentRequest = await supabaseService
           .checkSentFriendRequest(currentUserId, widget.userId);
+      print("📤 Sent request: $sentRequest");
+
       final receivedRequest = await supabaseService
           .checkReceivedFriendRequest(currentUserId, widget.userId);
-      final isFriend =
-      await supabaseService.checkIfFriends(currentUserId, widget.userId);
+      print("📥 Received request: $receivedRequest");
+
+      final isFriend = await supabaseService.checkIfFriends(currentUserId, widget.userId);
+      print("🫂 Is friend: $isFriend");
 
       setState(() {
         if (isFriend) friendStatus = 'friends';
@@ -147,10 +142,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         else if (receivedRequest) friendStatus = 'received';
         else friendStatus = 'not_friends';
       });
+
+      print("✅ friendStatus set to: $friendStatus");
     } catch (error) {
       print('⚠️ Error checking friend status: $error');
     }
   }
+
 
   Future<void> _checkIfBlocked() async {
     isBlocked =
@@ -610,11 +608,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icons.person_add,
           Colors.deepPurple,
               () async {
-            await supabaseService.sendFriendRequest(currentUserId, widget.userId);
-            await _checkFriendStatus(); // Refresh status!
-            setState(() {});
-            _showMessage("✅ Friend request sent!");
-          },
+            final alreadySent = await supabaseService.checkSentFriendRequest(currentUserId, widget.userId);
+            final alreadyFriends = await supabaseService.checkIfFriends(currentUserId, widget.userId);
+
+            if (alreadySent || alreadyFriends) {
+              await _checkFriendStatus();
+              _showMessage("⚠️ Request already sent or you're already friends.");
+              return;
+            }
+
+            final success = await supabaseService.sendFriendRequest(currentUserId, widget.userId);
+            if (success) {
+              await _initializeProfile();
+              _showMessage("✅ Friend request cancelled!");
+            }
+
+              },
         ));
         break;
 
@@ -624,11 +633,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icons.cancel,
           Colors.grey,
               () async {
-            await supabaseService.cancelFriendRequest(currentUserId, widget.userId);
-            await _checkFriendStatus(); // Refresh status!
-            setState(() {});
-            _showMessage("✅ Friend request cancelled!");
-          },
+            final success = await supabaseService.cancelFriendRequest(currentUserId, widget.userId);
+            if (success) {
+              await _initializeProfile();
+              _showMessage("✅ Friend request sent!");
+            }
+
+              },
         ));
         break;
 
@@ -638,11 +649,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icons.check_circle,
           Colors.green,
               () async {
-            await supabaseService.acceptFriendRequest(currentUserId, widget.userId);
-            await _checkFriendStatus(); // Refresh status!
-            setState(() {});
-            _showMessage("✅ Friend request accepted!");
-          },
+            final accepted = await supabaseService.acceptFriendRequest(currentUserId, widget.userId);
+            if (accepted) {
+              _confettiController.play();
+              _audioPlayer.play(AssetSource('sounds/friend_accepted.mp3'));
+
+              print("🔁 Re-checking friend status...");
+              await _initializeProfile(); // 🔁 FULL reload instead of just _checkFriendStatus()
+              _showMessage("🎉 Friend request accepted!");
+            }
+
+              },
         ));
         break;
 
@@ -668,11 +685,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icons.person_remove,
           Colors.redAccent,
               () async {
-            await supabaseService.removeFriend(currentUserId, widget.userId);
-            await _checkFriendStatus(); // Refresh status!
-            setState(() {});
-            _showMessage("✅ Friend removed.");
-          },
+            final removed = await supabaseService.removeFriend(currentUserId, widget.userId);
+            if (removed) {
+              await _initializeProfile();
+              _showMessage("✅ Friend removed.");
+            }
+
+              },
         ));
         break;
     }
@@ -689,6 +708,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
 
   Widget _buildProfileFooter(BuildContext context) {
     return Column(
@@ -773,7 +793,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
+              final user = supabase.auth.currentUser;
+
+              if (user != null) {
+                // ✅ Update status to offline & set last seen
+                await supabase.from('profiles').update({
+                  'is_online': false,
+                  'last_seen': DateTime.now().toIso8601String(),
+                }).eq('id', user.id);
+
+                print("✅ User set to offline before logout");
+              }
+
+              // ✅ Now sign out
               await supabase.auth.signOut();
+
+              // ✅ Navigate to login screen
               Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
             },
             child: Text('Log Out'),
@@ -782,6 +817,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
 
   Widget _buildHelpButton(BuildContext context) {
     return Padding(
@@ -838,6 +874,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<bool> _checkIfAdmin(String? userId) async {
+    if (userId == null) return false;
+
+    final response = await Supabase.instance.client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+    final role = response['role'] ?? 'user';
+    return role == 'admin' || role == 'superadmin';
   }
 
   int calculateAge(DateTime dob) {

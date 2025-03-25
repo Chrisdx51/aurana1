@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'matches_screen.dart'; // Make sure the path is correct!
 import '../services/push_notification_service.dart';
+import '../models/user_model.dart';
 
 class SoulMatchPage extends StatefulWidget {
   @override
@@ -20,6 +21,9 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
   List<Map<String, dynamic>> matchedSouls = [];
   bool isLoading = true;
   bool showMatchesTab = false;
+
+  UserModel? currentUserProfile;
+
   String selectedGender = 'All';
   String swipeMessage = '';
 
@@ -32,6 +36,7 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
     _fetchPotentialMatches();
     _fetchMatches();
     _initBannerAd();
+    _loadUserProfile();
   }
 
   @override
@@ -58,6 +63,27 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
     );
     _bannerAd.load();
   }
+
+  Future<void> _loadUserProfile() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final profile = await supabase
+        .from('profiles')
+        .select('name, avatar, fcm_token')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (profile != null) {
+      setState(() {
+        currentUserProfile = UserModel.fromJson(profile);
+
+      });
+    }
+
+    print('✅ Current user profile loaded: $currentUserProfile');
+  }
+
 
   Future<void> _fetchPotentialMatches() async {
     final userId = supabase.auth.currentUser?.id ?? '';
@@ -128,12 +154,16 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
     final userId = supabase.auth.currentUser!.id;
     final matchedUserId = user['id'];
 
+    print('👉 Swiping YES on: $matchedUserId');
+
+    // Insert swipe
     await supabase.from('soul_matches').insert({
       'user_id': userId,
       'matched_user_id': matchedUserId,
       'status': 'liked',
     });
 
+    // Check for mutual like
     final mutual = await supabase
         .from('soul_matches')
         .select()
@@ -142,39 +172,39 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
         .eq('status', 'liked')
         .maybeSingle();
 
+    print('🔥 Mutual like response: $mutual');
+
     if (mutual != null) {
-      await supabase.from('soul_matches')
-          .update({'status': 'matched'})
-          .match({'user_id': userId, 'matched_user_id': matchedUserId});
-      await supabase.from('soul_matches')
-          .update({'status': 'matched'})
-          .match({'user_id': matchedUserId, 'matched_user_id': userId});
+      print('✅ MATCH! Updating both users to "matched".');
+
+      // Update both records to matched
+      await supabase.from('soul_matches').update({'status': 'matched'}).match({
+        'user_id': userId,
+        'matched_user_id': matchedUserId,
+      });
+
+      await supabase.from('soul_matches').update({'status': 'matched'}).match({
+        'user_id': matchedUserId,
+        'matched_user_id': userId,
+      });
 
       _confettiController.play();
       setState(() {
         swipeMessage = "🌟 It's a soul match! 🌟";
       });
+
       _fetchMatches();
 
-      // Fetch matched user's FCM token
-      final matchedUserProfile = await supabase
-          .from('profiles')
-          .select('fcm_token, name')
-          .eq('id', matchedUserId)
-          .maybeSingle();
-
-      if (matchedUserProfile != null && matchedUserProfile['fcm_token'] != null) {
-        await PushNotificationService.sendPushNotification(
-          fcmToken: matchedUserProfile['fcm_token'],
-          title: "✨ It's a Soul Match! ✨",
-          body: "You and ${matchedUserProfile['name']} are now matched! Start chatting!",
-        );
-      }
+      // OPTIONAL: Send notifications if you like
     } else {
+      print('❌ No mutual like. Waiting for them to like you back.');
       setState(() {
         swipeMessage = "✨ You feel a cosmic pull... ✨";
       });
     }
+
+    // Refresh potential matches (remove this one from swipes)
+    _fetchPotentialMatches();
   }
 
   Future<void> swipeNo(Map<String, dynamic> user) async {

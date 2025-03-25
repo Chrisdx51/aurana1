@@ -40,6 +40,7 @@ void _showNotification(RemoteMessage message) async {
     'Aurana Notifications',
     importance: Importance.high,
     priority: Priority.high,
+    sound: RawResourceAndroidNotificationSound('aurana_tranquil'), // 👈 This line!
   );
 
   const NotificationDetails details = NotificationDetails(android: androidDetails);
@@ -193,26 +194,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    if (state == AppLifecycleState.resumed) {
-      await Supabase.instance.client.from('profiles').update({
-        'is_online': true,
-        'last_seen': null,
-      }).eq('id', user.id);
-    } else {
-      await Supabase.instance.client.from('profiles').update({
-        'is_online': false,
-        'last_seen': DateTime.now().toIso8601String(),
-      }).eq('id', user.id);
-    }
   }
 
   Future<void> _checkSession() async {
@@ -271,6 +253,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+
+
   int _selectedIndex = 0;
   late List<Widget> _screens;
 
@@ -330,161 +314,224 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
+
 class MoreMenuScreen extends StatelessWidget {
+  final List<_ToolItem> tools = [
+    _ToolItem(
+      title: "Aura Catcher",
+      description: "Discover the energy fields around you.",
+      icon: Icons.light_mode,
+      color: Colors.deepPurpleAccent,
+      destination: AuraCatcherScreen(),
+    ),
+    _ToolItem(
+      title: "Spiritual Guidance",
+      description: "Receive messages from your higher self.",
+      icon: Icons.self_improvement,
+      color: Colors.indigoAccent,
+      destination: SpiritualGuidanceScreen(),
+    ),
+    _ToolItem(
+      title: "Tarot Reading",
+      description: "Unveil the wisdom of the tarot cards.",
+      icon: Icons.style,
+      color: Colors.pinkAccent,
+      destination: TarotReadingScreen(),
+    ),
+    _ToolItem(
+      title: "Horoscope",
+      description: "Explore your cosmic insights today.",
+      icon: Icons.auto_awesome,
+      color: Colors.tealAccent,
+      destination: HoroscopeScreen(),
+    ),
+    _ToolItem(
+      title: "Moon Cycle",
+      description: "Track the moon phases and energy shifts.",
+      icon: Icons.wb_sunny,
+      color: Colors.amberAccent,
+      destination: MoonCycleScreen(),
+    ),
+    _ToolItem(
+      title: "Sacred Journal",
+      description: "Reflect and write your soul’s journey.",
+      icon: Icons.book,
+      color: Colors.greenAccent,
+      destination: JournalScreen(),
+    ),
+    _ToolItem(
+      title: "Sacred Services (Ads)",
+      description: "Explore offerings to support your path.",
+      icon: Icons.campaign,
+      color: Colors.redAccent,
+      destination: AllAdsPage(),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text("Sacred Tools ✨"),
+        title: Text(
+          "Sacred Tools ✨",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/guide.png'),
-            fit: BoxFit.cover,
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/misc2.png'),
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _glowingCard(
-                context,
-                title: "Spiritual Guidance",
-                icon: Icons.self_improvement,
-                color: Colors.indigoAccent,
-                destination: SpiritualGuidanceScreen(),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 20, 16, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _introText(),
+                  SizedBox(height: 20),
+                  ...tools.map((tool) => _buildFeatureCard(context, tool)).toList(),
+                  SizedBox(height: 40),
+                  _closingMessage(),
+                ],
               ),
-              _glowingCard(
-                context,
-                title: "Tarot Reading",
-                icon: Icons.style,
-                color: Colors.pinkAccent,
-                destination: TarotReadingScreen(),
-              ),
-              _glowingCard(
-                context,
-                title: "Horoscope",
-                icon: Icons.auto_awesome,
-                color: Colors.tealAccent,
-                destination: HoroscopeScreen(),
-              ),
-              _glowingCard(
-                context,
-                title: "Moon Cycle",
-                icon: Icons.wb_sunny,
-                color: Colors.amberAccent,
-                destination: MoonCycleScreen(),
-              ),
-              _glowingCard(
-                context,
-                title: "Journal",
-                icon: Icons.book,
-                color: Colors.greenAccent,
-                destination: JournalScreen(),
-              ),
-              _glowingCard(
-                context,
-                title: "Sacred Services (Ads)",
-                icon: Icons.campaign,
-                color: Colors.redAccent,
-                destination: AllAdsPage(),
-              ),
-              SizedBox(height: 40),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      "This sacred space offers more than features. 🌿",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      "Each path here is part of your spiritual journey, guiding you closer to your higher self and cosmic purpose. ✨",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.amberAccent,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 40),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
       backgroundColor: Colors.black,
     );
   }
 
-  Widget _glowingCard(BuildContext context,
-      {required String title,
-        required IconData icon,
-        required Color color,
-        required Widget destination}) {
+  Widget _introText() {
+    return Column(
+      children: [
+        Text(
+          "Welcome to your Sacred Space",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 10),
+        Text(
+          "Explore tools crafted for your spiritual journey. Let them guide you toward clarity, healing, and inner peace. ✨",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard(BuildContext context, _ToolItem tool) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => destination));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => tool.destination));
       },
-      child: Container(
-        margin: EdgeInsets.symmetric(vertical: 10),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+        margin: EdgeInsets.symmetric(vertical: 12),
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: RadialGradient(
-            colors: [
-              color.withOpacity(0.8),
-              color.withOpacity(0.4),
-            ],
-            radius: 1.0,
-          ),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.black.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: tool.color.withOpacity(0.7), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.7),
-              blurRadius: 20,
-              spreadRadius: 5,
+              color: tool.color.withOpacity(0.6),
+              blurRadius: 12,
+              spreadRadius: 2,
             ),
           ],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 32, color: Colors.white),
+            CircleAvatar(
+              backgroundColor: tool.color.withOpacity(0.8),
+              radius: 28,
+              child: Icon(tool.icon, size: 30, color: Colors.white),
+            ),
             SizedBox(width: 20),
             Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tool.title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    tool.description,
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
+            Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
           ],
         ),
       ),
     );
   }
+
+  Widget _closingMessage() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            "This isn't just a menu. It's your gateway to the divine tools that illuminate your soul's journey. 🌿",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            "Use these sacred tools with love and intention. Your path unfolds with each step you take here. ✨",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.amberAccent,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolItem {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final Widget destination;
+
+  _ToolItem({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.destination,
+  });
 }

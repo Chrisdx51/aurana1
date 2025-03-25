@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/supabase_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'business_profile_page.dart';
 
 class AllAdsPage extends StatefulWidget {
@@ -11,6 +12,8 @@ class _AllAdsPageState extends State<AllAdsPage> {
   List<Map<String, dynamic>> _ads = [];
   bool _isLoading = true;
   String _selectedFilter = 'All';
+  late BannerAd _bannerAd;
+  bool _isAdLoaded = false;
 
   final List<String> _serviceTypes = [
     'All',
@@ -22,311 +25,381 @@ class _AllAdsPageState extends State<AllAdsPage> {
     'Energy Worker',
   ];
 
-  final Map<String, Color> _filterColors = {
-    'All': Colors.lightBlue,
-    'Psychic': Colors.deepPurple,
-    'Tarot Reader': Colors.indigo,
-    'Healer': Colors.teal,
-    'Medium': Colors.pinkAccent,
-    'Astrologer': Colors.amber,
-    'Energy Worker': Colors.green,
-  };
+  final List<Color> chakraColors = [
+    Colors.redAccent,
+    Colors.orangeAccent,
+    Colors.yellowAccent,
+    Colors.greenAccent,
+    Colors.blueAccent,
+    Colors.indigoAccent,
+    Colors.purpleAccent,
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadAds();
+    _initBannerAd();
   }
 
   Future<void> _loadAds() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    final ads = await SupabaseService().fetchBusinessAds();
+    try {
+      final response = await Supabase.instance.client
+          .from('service_ads')
+          .select('''
+            id,
+            user_id,
+            name,
+            tagline,
+            description,
+            profile_image_url,
+            rating,
+            created_at,
+            expiry_date,
+            service_ads_categories (
+              service_categories (
+                id,
+                name
+              )
+            )
+          ''')
+          .order('created_at', ascending: false);
 
-    final now = DateTime.now();
+      final now = DateTime.now();
 
-    final activeAds = ads.where((ad) {
-      final expiry = DateTime.tryParse(ad['expiry_date'] ?? '');
-      return expiry == null || expiry.isAfter(now);
-    }).toList();
+      final ads = response.map<Map<String, dynamic>>((ad) {
+        final categories = (ad['service_ads_categories'] as List)
+            .map((item) => item['service_categories']['name'] as String)
+            .toList();
 
-    activeAds.shuffle();
+        return {
+          ...ad,
+          'categories': categories,
+        };
+      }).toList();
 
-    setState(() {
-      _ads = activeAds;
-      _isLoading = false;
-    });
+      final activeAds = ads.where((ad) {
+        final expiryDate = DateTime.tryParse(ad['expiry_date'] ?? '');
+        return expiryDate == null || expiryDate.isAfter(now);
+      }).toList();
+
+      setState(() {
+        _ads = activeAds;
+        _isLoading = false;
+      });
+    } catch (error) {
+      print('❌ Error fetching ads: $error');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _initBannerAd() async {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) => setState(() => _isAdLoaded = true),
+        onAdFailedToLoad: (ad, error) => ad.dispose(),
+      ),
+    );
+    await _bannerAd.load();
   }
 
   List<Map<String, dynamic>> get _filteredAds {
     if (_selectedFilter == 'All') return _ads;
-    return _ads.where((ad) => ad['service_type'] == _selectedFilter).toList();
-  }
 
-  Future<void> _showReportDialog(String adId) async {
-    final TextEditingController _reasonController = TextEditingController();
-
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Report This Ad'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Why are you reporting this ad?'),
-              SizedBox(height: 10),
-              TextField(
-                controller: _reasonController,
-                decoration: InputDecoration(
-                  hintText: 'Enter reason...',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              child: Text('Submit Report'),
-              onPressed: () async {
-                final reason = _reasonController.text.trim();
-                if (reason.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please provide a reason.')),
-                  );
-                  return;
-                }
-
-                await SupabaseService().submitReport(
-                  reporterId: SupabaseService().supabase.auth.currentUser?.id ?? '',
-                  targetId: adId,
-                  targetType: 'ad',
-                  reason: reason,
-                );
-
-                Navigator.of(context).pop();
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('✅ Report submitted successfully!')),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
+    return _ads.where((ad) {
+      final categories = ad['categories'] as List<String>;
+      return categories.contains(_selectedFilter);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Spiritual Experts Marketplace',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.lightBlue, Colors.white],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/bg2.png'),
+            image: AssetImage('assets/images/misc2.png'),
             fit: BoxFit.cover,
           ),
         ),
-        child: Column(
-          children: [
-            SizedBox(height: 10),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              _isAdLoaded
+                  ? Container(
+                width: _bannerAd.size.width.toDouble(),
+                height: _bannerAd.size.height.toDouble(),
+                margin: EdgeInsets.symmetric(vertical: 8),
+                child: AdWidget(ad: _bannerAd),
+              )
+                  : SizedBox(height: 0),
+              _buildFilterBoxes(),
+              Expanded(
+                child: _isLoading
+                    ? Center(child: CircularProgressIndicator(color: Colors.amberAccent))
+                    : _buildScrollableContent(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            // Filter Chips
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: _serviceTypes.map((type) {
-                  final isSelected = _selectedFilter == type;
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: Text(
+              'Aurana Sacred Marketplace',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12, // Made smaller for sleekness
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  return Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 5),
-                    child: ChoiceChip(
-                      label: Text(type),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = type;
-                        });
-                      },
-                      selectedColor: _filterColors[type] ?? Colors.blue,
-                      backgroundColor: Colors.black.withOpacity(0.3),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                }).toList(),
+  Widget _buildFilterBoxes() {
+    return Container(
+      height: 48, // Slightly smaller height
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 12),
+        itemCount: _serviceTypes.length,
+        itemBuilder: (context, index) {
+          final type = _serviceTypes[index];
+          final isSelected = _selectedFilter == type;
+          final chakraColor = chakraColors[index % chakraColors.length];
+
+          return GestureDetector(
+            onTap: () => setState(() => _selectedFilter = type),
+            child: Container(
+              margin: EdgeInsets.only(right: 8),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), // Slightly smaller padding
+              decoration: BoxDecoration(
+                color: isSelected ? chakraColor.withOpacity(0.8) : Colors.black.withOpacity(0.4),
+                border: Border.all(
+                  color: isSelected ? chakraColor : Colors.white24,
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: isSelected
+                    ? [
+                  BoxShadow(
+                    color: chakraColor.withOpacity(0.7),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  )
+                ]
+                    : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 3,
+                    spreadRadius: 1,
+                  )
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  type,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13, // Reduced font size for sleekness
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
 
-            SizedBox(height: 10),
+  Widget _buildScrollableContent() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _filteredAds.isEmpty
+              ? _emptyState()
+              : Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: _filteredAds.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.65,
+              ),
+              itemBuilder: (context, index) {
+                final ad = _filteredAds[index];
+                return _buildAdCard(ad);
+              },
+            ),
+          ),
+          _footerDescriptionBox(),
+        ],
+      ),
+    );
+  }
 
-            // GridView Ads
-            Expanded(
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator())
-                  : _filteredAds.isEmpty
-                  ? Center(
-                child: Text(
-                  'No ads available for $_selectedFilter.',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+  Widget _buildAdCard(Map<String, dynamic> ad) {
+    final categories = (ad['categories'] as List<String>).join(', ');
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BusinessProfilePage(
+            name: ad['name'] ?? '',
+            serviceType: categories.isNotEmpty ? categories : 'Unknown',
+            tagline: ad['tagline'] ?? '',
+            description: ad['description'] ?? '',
+            profileImageUrl: ad['profile_image_url'] ?? '',
+            rating: (ad['rating'] as num?)?.toDouble() ?? 0.0,
+            adCreatedDate: ad['created_at'] ?? '',
+            userId: ad['user_id'] ?? '',
+            adId: ad['id'] ?? '',
+          ),
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.deepPurpleAccent, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.9),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.redAccent.withOpacity(0.4),
+              blurRadius: 20,
+              spreadRadius: 1,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              child: Image.network(
+                ad['profile_image_url'] ?? '',
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  'assets/images/default_avatar.png',
+                  height: 120,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
                 ),
-              )
-                  : Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: GridView.builder(
-                  itemCount: _filteredAds.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.65,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: [
+                  Text(
+                    ad['name'] ?? '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  itemBuilder: (context, index) {
-                    final ad = _filteredAds[index];
-                    final adId = ad['id'];
-
-                    return Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => BusinessProfilePage(
-                                  name: ad['name'] ?? '',
-                                  serviceType: ad['service_type'] ?? '',
-                                  tagline: ad['tagline'] ?? '',
-                                  description: ad['description'] ?? '',
-                                  profileImageUrl: ad['profile_image_url'] ?? '',
-                                  rating: ad['rating'] != null
-                                      ? double.tryParse(ad['rating'].toString()) ?? 0.0
-                                      : 0.0,
-                                  adCreatedDate: ad['created_at'] ?? 'Unknown Date',
-                                  userId: ad['user_id'] ?? '',
-                                ),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 6,
-                                  offset: Offset(2, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                                  child: ad['profile_image_url'] != null &&
-                                      ad['profile_image_url'].isNotEmpty
-                                      ? Image.network(
-                                    ad['profile_image_url'],
-                                    height: 120,
-                                    fit: BoxFit.cover,
-                                  )
-                                      : Image.asset(
-                                    'assets/images/serv1.png',
-                                    height: 120,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        ad['name'] ?? 'No Name',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        ad['service_type'] ?? 'Unknown',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        ad['tagline'] ?? '',
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: Colors.white60,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: IconButton(
-                            icon: Icon(Icons.flag, color: Colors.redAccent),
-                            onPressed: () => _showReportDialog(adId),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                  SizedBox(height: 6),
+                  Text(
+                    categories,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _emptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, color: Colors.white24, size: 80),
+          SizedBox(height: 12),
+          Text(
+            'No ads available for $_selectedFilter.',
+            textAlign: TextAlign.center, // Center text!
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footerDescriptionBox() {
+    return Container(
+      margin: EdgeInsets.all(12),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepPurpleAccent, width: 1),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 28),
+          SizedBox(height: 8),
+          Text(
+            'Welcome to the Aurana Sacred Marketplace.\nExplore and connect with trusted spiritual guides ready to assist you on your personal journey of healing, clarity, and growth.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bannerAd.dispose();
+    super.dispose();
   }
 }

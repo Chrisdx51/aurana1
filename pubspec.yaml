@@ -101,6 +101,8 @@ flutter:
     - assets/images/misc2.png
     - assets/images/profile.png
     - assets/sounds/level_up.mp3
+    - assets/sounds/friend_accepted.mp3
+    - assets/sounds/aurana_tranquil.mp3
     - assets/zodiac/aries.png
     - assets/zodiac/taurus.png
     - assets/zodiac/gemini.png
@@ -115,6 +117,7 @@ flutter:
     - assets/zodiac/pisces.png
     - assets/images/default_avatar.png
     - assets/images/yinyang.png
+    - assets/images/champagne_bottle.png
 
 
   fonts:

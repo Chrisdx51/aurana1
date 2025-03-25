@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
+import '../services/supabase_service.dart';
 
 class ConnectionsAndNotificationsScreen extends StatefulWidget {
   final String userId;
@@ -32,8 +33,8 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
   @override
   void initState() {
     super.initState();
-    _fetchAllData(); // Initial data load
-    _setupRealtime(); // Realtime listeners
+    _fetchAllData();
+    _setupRealtime();
   }
 
   @override
@@ -43,10 +44,8 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     super.dispose();
   }
 
-  // ✅ Main fetch function (stops infinite loop)
   Future<void> _fetchAllData() async {
     setState(() => isLoading = true);
-
     try {
       await Future.wait([
         fetchPendingRequests(),
@@ -56,15 +55,13 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     } catch (e) {
       print('❌ Error fetching data: $e');
     }
-
-    setState(() => isLoading = false); // ✅ Stop spinner!
+    setState(() => isLoading = false);
   }
 
-  // ✅ Fetch pending requests
   Future<void> fetchPendingRequests() async {
     final response = await supabase
         .from('friend_requests')
-        .select('*, sender:profiles(id, name, avatar)')
+        .select('*, sender:profiles!fk_sender(id, name, avatar)')
         .eq('receiver_id', widget.userId)
         .eq('status', 'pending');
 
@@ -73,22 +70,35 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     });
   }
 
-  // ✅ Fetch confirmed friends
   Future<void> fetchConfirmedFriends() async {
-    final response = await supabase
-        .from('friends')
-        .select('*, profile:profiles!friends_friend_id_fkey(id, name, avatar, is_online)')
-        .or('user_id.eq.${widget.userId},friend_id.eq.${widget.userId}')
-        .eq('status', 'accepted');
+    try {
+      final response = await supabase
+          .from('friends')
+          .select('user_id, friend_id')
+          .or('user_id.eq.${widget.userId},friend_id.eq.${widget.userId}')
+          .eq('status', 'accepted');
 
-    setState(() {
-      confirmedFriends = response.map<Map<String, dynamic>>(
-            (friend) => Map<String, dynamic>.from(friend['profile']),
-      ).toList();
-    });
+      final friendIds = response.map<String>((friend) {
+        return friend['user_id'] == widget.userId ? friend['friend_id'] : friend['user_id'];
+      }).toSet().toList();
+
+      if (friendIds.isEmpty) {
+        setState(() => confirmedFriends = []);
+        return;
+      }
+
+      final profiles = await supabase
+          .from('profiles')
+          .select('id, name, avatar, is_online')
+          .inFilter('id', friendIds);
+
+      setState(() => confirmedFriends = List<Map<String, dynamic>>.from(profiles));
+    } catch (e) {
+      print('❌ Error fetching confirmed friends: $e');
+      setState(() => confirmedFriends = []);
+    }
   }
 
-  // ✅ Fetch notifications
   Future<void> fetchNotifications() async {
     final response = await supabase
         .from('notifications')
@@ -101,10 +111,8 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     });
   }
 
-  // ✅ Realtime updates
   void _setupRealtime() {
     _realtimeChannel = supabase.channel('aurana_notifications_channel');
-
     _realtimeChannel
       ..onPostgresChanges(
         event: PostgresChangeEvent.insert,
@@ -127,40 +135,38 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
       ..subscribe();
   }
 
-  // ✅ Accept friend request
   Future<void> acceptFriendRequest(String requestId, String senderId) async {
-    await supabase.from('friend_requests').update({'status': 'accepted'}).eq('id', requestId);
-
-    await supabase.from('friends').insert({
-      'user_id': widget.userId,
-      'friend_id': senderId,
-      'status': 'accepted',
-    });
-
-    _confettiController.play();
-    _fetchAllData();
+    try {
+      final success = await SupabaseService().acceptFriendRequest(widget.userId, senderId);
+      if (success) {
+        _confettiController.play();
+        await _fetchAllData();
+      }
+    } catch (e) {
+      print('❌ Error accepting friend request: $e');
+    }
   }
 
-  // ✅ Reject friend request
   Future<void> rejectFriendRequest(String requestId) async {
     await supabase.from('friend_requests').delete().eq('id', requestId);
     _fetchAllData();
   }
 
-  // ✅ Remove friend
   Future<void> removeFriend(String friendId) async {
     await supabase.from('friends').delete().or(
         'and(user_id.eq.${widget.userId}, friend_id.eq.$friendId), and(user_id.eq.$friendId, friend_id.eq.${widget.userId})');
     _fetchAllData();
   }
 
-  // ✅ Mark notification as read
-  Future<void> markNotificationAsRead(String notificationId) async {
-    await supabase.from('notifications').update({'read': true}).eq('id', notificationId);
-    fetchNotifications();
+  Future<void> deleteAllNotifications() async {
+    final idsToDelete = notifications.map((n) => n['id']).toList();
+    await supabase.from('notifications').delete().filter('id', 'in', idsToDelete);
+    await fetchNotifications();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('All notifications deleted')),
+    );
   }
 
-  // ✅ Share invite link
   void _shareInviteLink() {
     Share.share("🌟 Join me on Aurana! 🌌 https://aurana.app/invite");
     _confettiController.play();
@@ -172,9 +178,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
       backgroundColor: Colors.black,
       floatingActionButton: notifications.isNotEmpty
           ? FloatingActionButton(
-        onPressed: () {
-          notifications.forEach((notif) => markNotificationAsRead(notif['id']));
-        },
+        onPressed: deleteAllNotifications,
         backgroundColor: Colors.deepPurpleAccent,
         child: Icon(Icons.notifications_off),
         tooltip: 'Clear Notifications',
@@ -247,9 +251,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
   }
 
   Widget _buildPendingRequests() {
-    if (pendingRequests.isEmpty) {
-      return _sectionTitle('No Pending Requests');
-    }
+    if (pendingRequests.isEmpty) return _sectionTitle('No Pending Requests');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,7 +261,6 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
           final sender = request['sender'];
           return Card(
             color: Colors.white.withOpacity(0.1),
-            elevation: 5,
             child: ListTile(
               leading: CircleAvatar(
                 backgroundImage: sender['avatar'] != null
@@ -292,7 +293,10 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
           shrinkWrap: true,
           physics: NeverScrollableScrollPhysics(),
           itemCount: confirmedFriends.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.65, // ⬅️ smaller cards
+          ),
           itemBuilder: (context, index) {
             final friend = confirmedFriends[index];
             return GestureDetector(
@@ -346,7 +350,6 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
         _sectionTitle('Notifications'),
         ...notifications.map((note) {
           final isRead = note['read'] ?? false;
-
           return Card(
             color: isRead ? Colors.grey.withOpacity(0.4) : Colors.white.withOpacity(0.8),
             child: ListTile(
@@ -391,5 +394,10 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(text, style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
     );
+  }
+
+  Future<void> markNotificationAsRead(String notificationId) async {
+    await supabase.from('notifications').update({'read': true}).eq('id', notificationId);
+    fetchNotifications();
   }
 }
