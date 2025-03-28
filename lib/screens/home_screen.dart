@@ -403,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: Text(
-              'Aurana 🌌',
+              'Aurana',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -468,11 +468,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         ],
                       ),
                       SizedBox(height: 20),
+                      _exploreRealmsButton(), // ⬅️ Insert this right after any section
+                      SizedBox(height: 20),
                       _adCarousel(),
                       SizedBox(height: 20),
                       _spiritualServicesButton(),
-                      SizedBox(height: 20),
-                      _exploreRealmsButton(), // ⬅️ Insert this right after any section
                       SizedBox(height: 20),
                       _affirmationSection(),
                       SizedBox(height: 20),
@@ -796,8 +796,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Welcome back, ${user?.name ?? "Guest"}!',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+                'Your Journey Continues, ${user?.name ?? "Guest"}!',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
               ),
             ),
             Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),

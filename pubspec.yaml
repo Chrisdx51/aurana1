@@ -121,6 +121,163 @@ flutter:
     - assets/images/default_avatar.png
     - assets/images/yinyang.png
     - assets/images/champagne_bottle.png
+    - assets/images/tarot/ace-of-cups-gilded-tarot.png
+    - assets/images/tarot/ace-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/ace-of-swords-gilded-tarot.png
+    - assets/images/tarot/ace-of-wands-gilded-tarot.png
+    - assets/images/tarot/eight-of-cups-gilded-tarot.png
+    - assets/images/tarot/eight-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/eight-of-swords-gilded-tarot.png
+    - assets/images/tarot/eight-of-wands-gilded-tarot.png
+    - assets/images/tarot/five-of-cups-gilded-tarot.png
+    - assets/images/tarot/five-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/five-of-swords-gilded-tarot.png
+    - assets/images/tarot/five-of-wands-gilded-tarot.png
+    - assets/images/tarot/four-of-cups-gilded-tarot.png
+    - assets/images/tarot/four-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/four-of-swords-gilded-tarot.png
+    - assets/images/tarot/four-of-wands-gilded-tarot.png
+    - assets/images/tarot/king-of-cups-gilded-tarot.png
+    - assets/images/tarot/king-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/king-of-swords-gilded-tarot.png
+    - assets/images/tarot/king-of-wands-gilded-tarot.png
+    - assets/images/tarot/knight-of-cups-gilded-tarot.png
+    - assets/images/tarot/knight-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/knight-of-swords-gilded-tarot.png
+    - assets/images/tarot/knight-of-wands-gilded-tarot.png
+    - assets/images/tarot/nine-of-cups-gilded-tarot.png
+    - assets/images/tarot/nine-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/nine-of-swords-gilded-tarot.png
+    - assets/images/tarot/nine-of-wands-gilded-tarot.png
+    - assets/images/tarot/page-of-cups-gilded-tarot.png
+    - assets/images/tarot/page-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/page-of-swords-gilded-tarot.png
+    - assets/images/tarot/page-of-wands-gilded-tarot.png
+    - assets/images/tarot/queen-of-cups-gilded-tarot.png
+    - assets/images/tarot/queen-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/queen-of-swords-gilded-tarot.png
+    - assets/images/tarot/queen-of-wands-gilded-tarot.png
+    - assets/images/tarot/seven-of-cups-gilded-tarot.png
+    - assets/images/tarot/seven-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/seven-of-swords-gilded-tarot.png
+    - assets/images/tarot/seven-of-wands-gilded-tarot.png
+    - assets/images/tarot/six-of-cups-gilded-tarot.png
+    - assets/images/tarot/six-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/six-of-swords-gilded-tarot.png
+    - assets/images/tarot/six-of-wands-gilded-tarot.png
+    - assets/images/tarot/ten-of-cups-gilded-tarot.png
+    - assets/images/tarot/ten-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/ten-of-swords-gilded-tarot.png
+    - assets/images/tarot/ten-of-wands-gilded-tarot.png
+    - assets/images/tarot/the-chariot-gilded-tarot.png
+    - assets/images/tarot/the-death-gilded-tarot.png
+    - assets/images/tarot/the-devil-gilded-tarot-card.png
+    - assets/images/tarot/the-emperor-gilded-tarot.png
+    - assets/images/tarot/the-empress-gilded-tarot.png
+    - assets/images/tarot/the-fool-gilded-tarot.png
+    - assets/images/tarot/the-hanging-man-gilded-tarot.png
+    - assets/images/tarot/the-hermit-gilded-tarot.png
+    - assets/images/tarot/the-hierophant-gilded-tarot.png
+    - assets/images/tarot/the-high-priestess-gilded-tarot.png
+    - assets/images/tarot/the-judgement-gilded-tarot.png
+    - assets/images/tarot/the-justice-gilded-tarot.png
+    - assets/images/tarot/the-lovers-gilded-tarot.png
+    - assets/images/tarot/the-magician-gilded-tarot.png
+    - assets/images/tarot/the-moon-gilded-tarot.png
+    - assets/images/tarot/the-star-gilded-tarot.png
+    - assets/images/tarot/the-strength-gilded-tarot.png
+    - assets/images/tarot/the-sun-gilded-tarot.png
+    - assets/images/tarot/the-temperance-gilded-tarot.png
+    - assets/images/tarot/the-tower-gilded-tarot.png
+    - assets/images/tarot/the-wheel-of-fortune-gilded-tarot.png
+    - assets/images/tarot/the-world-gilded-tarot.png
+    - assets/images/tarot/three-of-cups-gilded-tarot.png
+    - assets/images/tarot/three-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/three-of-swords-gilded-tarot.png
+    - assets/images/tarot/three-of-wands-gilded-tarot.png
+    - assets/images/tarot/two-of-cups-gilded-tarot.png
+    - assets/images/tarot/two-of-pentacles-gilded-tarot.png
+    - assets/images/tarot/two-of-swords-gilded-tarot.png
+    - assets/images/tarot/two-of-wands-gilded-tarot.png
+    - assets/images/osho zen/ace-of-clouds-osho-zen.png
+    - assets/images/osho zen/ace-of-fire-wallpaper.png
+    - assets/images/osho zen/ace-of-rainbows-osho-zen.png
+    - assets/images/osho zen/ace-of-water-osho-zen.png
+    - assets/images/osho zen/beyond-illusion-osho-zen.png
+    - assets/images/osho zen/condition-osho-zen.png
+    - assets/images/osho zen/creativity-osho-zen-tarot.png
+    - assets/images/osho zen/eight-of-clouds-osho-zen.png
+    - assets/images/osho zen/eight-of-fire-osho-zen.png
+    - assets/images/osho zen/eight-of-rainbows-osho-zen.png
+    - assets/images/osho zen/eight-of-water-osho-zen.png
+    - assets/images/osho zen/existence-osho-zen-wallpaper.png
+    - assets/images/osho zen/five-of-clouds-osho-zen.png
+    - assets/images/osho zen/five-of-fire-osho-zen.png
+    - assets/images/osho zen/five-of-rainbows-osho-zen.png
+    - assets/images/osho zen/five-of-water-osho-zen.png
+    - assets/images/osho zen/four-of-clouds-osho-zen.png
+    - assets/images/osho zen/four-of-fire-osho-zen.png
+    - assets/images/osho zen/four-of-rainbows-osho-zen.png
+    - assets/images/osho zen/four-of-water-osho-zen.png
+    - assets/images/osho zen/inner-voice-osho-zen-tarot.png
+    - assets/images/osho zen/innocence-osho-zen.png
+    - assets/images/osho zen/integration-osho-zen.png
+    - assets/images/osho zen/king-of-clouds.png
+    - assets/images/osho zen/king-of-fire-osho-zen.png
+    - assets/images/osho zen/king-of-rainbows-osho-zen.png
+    - assets/images/osho zen/king-of-water-osho-zen.png
+    - assets/images/osho zen/knight-of-clouds-osho-zen.png
+    - assets/images/osho zen/knight-of-fire-osho-zen.png
+    - assets/images/osho zen/knight-of-rainbows-osho-zen.png
+    - assets/images/osho zen/knight-of-water-osho-zen.png
+    - assets/images/osho zen/new-vision-osho-zen.png
+    - assets/images/osho zen/nine-of-clouds-osho-zen.png
+    - assets/images/osho zen/nine-of-fire-osho-zen.png
+    - assets/images/osho zen/nine-of-rainbow-osho-zen.png
+    - assets/images/osho zen/nine-of-water-osho-zen.png
+    - assets/images/osho zen/no-thingness-osho-zen.png
+    - assets/images/osho zen/page-of-clouds-osho-zen.png
+    - assets/images/osho zen/page-of-fire-osho-zen.png
+    - assets/images/osho zen/page-of-rainbows-osho-zen.png
+    - assets/images/osho zen/page-of-water-osho-zen.png
+    - assets/images/osho zen/past-lives-osho-zen.png
+    - assets/images/osho zen/projections-osho-zen.png
+    - assets/images/osho zen/queen-of-clouds-osho-zen.png
+    - assets/images/osho zen/queen-of-fire-osho-zen.png
+    - assets/images/osho zen/queen-of-rainbows-osho-zen.png
+    - assets/images/osho zen/queen-of-water-osho-zen.png
+    - assets/images/osho zen/seven-of-clouds-osho-zen.png
+    - assets/images/osho zen/seven-of-fire-osho-zen.png
+    - assets/images/osho zen/seven-of-rainbows-osho-zen.png
+    - assets/images/osho zen/six-of-clouds-osho-zen.png
+    - assets/images/osho zen/six-of-fire-osho-zen.png
+    - assets/images/osho zen/six-of-rainbows-osho-zen.png
+    - assets/images/osho zen/six-of-water-osho-zen.png
+    - assets/images/osho zen/ten-of-clouds-osho-zen.png
+    - assets/images/osho zen/ten-of-fire-osho-zen.png
+    - assets/images/osho zen/ten-of-rainbows-osho-zen.png
+    - assets/images/osho zen/ten-of-water-osho-zen.png
+    - assets/images/osho zen/the-aloneness-osho-zen.png
+    - assets/images/osho zen/the-awareness-osho-zen.png
+    - assets/images/osho zen/the-breakthrough-osho-zen.png
+    - assets/images/osho zen/the-change-osho-zen.png
+    - assets/images/osho zen/the-completion-osho-zen.png
+    - assets/images/osho zen/the-courage-osho-zen.png
+    - assets/images/osho zen/the-fool-oshozentarot-wallpaper.png
+    - assets/images/osho zen/the-lovers-osho-zen.png
+    - assets/images/osho zen/the-master-osho-zen.png
+    - assets/images/osho zen/the-rebel-osho-zen-tarot.png
+    - assets/images/osho zen/the-silence-osho-zen.png
+    - assets/images/osho zen/three-of-clouds-osho-zen.png
+    - assets/images/osho zen/three-of-fire-osho-zen.png
+    - assets/images/osho zen/three-of-rainbows-osho-zen.png
+    - assets/images/osho zen/three-of-water-osho-zen.png
+    - assets/images/osho zen/thunderbolt-osho-zen.png
+    - assets/images/osho zen/transformation-osho-zen.png
+    - assets/images/osho zen/two-of-clouds-osho-zen.png
+    - assets/images/osho zen/two-of-fire-zen.png
+    - assets/images/osho zen/two-of-rainbow-osho-zen.png
+    - assets/images/osho zen/two-of-water-osho-zen.png
 
 
   fonts:

@@ -43,7 +43,7 @@ class _HoroscopeScreenState extends State<HoroscopeScreen> with TickerProviderSt
     flutterTts = FlutterTts();
     await flutterTts.setLanguage("en-GB");
     await flutterTts.setPitch(1.0);
-    await flutterTts.setSpeechRate(0.40);
+    await flutterTts.setSpeechRate(0.42);
 
     // 🌟 Find the best-sounding voice on the device
     List<dynamic> voices = await flutterTts.getVoices;
@@ -60,7 +60,13 @@ class _HoroscopeScreenState extends State<HoroscopeScreen> with TickerProviderSt
 
 
   Future<void> _speakHoroscope() async {
-    await flutterTts.speak(horoscopeText);
+    try {
+      await flutterTts.awaitSpeakCompletion(true); // 👈 makes sure speech isn't overlapped
+      await flutterTts.speak(horoscopeText);
+      print("✅ Horoscope spoken successfully");
+    } catch (e) {
+      print("❌ Error during TTS: $e");
+    }
   }
 
   Future<void> _loadZodiacAndHoroscope() async {
