@@ -3,17 +3,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+// ✅ Widgets
 import '../widgets/banner_ad_widget.dart';
+
+// ✅ Screens
 import 'help_and_features_screen.dart';
 import 'blocked_users_screen.dart';
-import '../services/supabase_service.dart';
-import 'chat_screen.dart';
 import 'edit_profile_screen.dart';
-import 'soul_messages_screen.dart';
 import 'message_screen.dart';
 import 'admin_panel_screen.dart';
 import 'about_us_screen.dart';
 import 'privacy_policy_screen.dart';
+
+// ✅ Services
+import '../services/supabase_service.dart';
+
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -41,8 +45,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeProfile();
-    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeProfile();
+    });
+  }
+
 
   @override
   void dispose() {
@@ -51,16 +59,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+
   Future<void> _initializeProfile() async {
     setState(() => isLoading = true);
     currentUserId = supabase.auth.currentUser?.id ?? "";
+
+    await _checkIfBlocked();
+
+    // 🚫 Stop right here if viewer is blocked
+    if (isBlocked) {
+      setState(() => isLoading = false);
+      return;
+    }
+
     await _loadUserProfile();
     await _checkFriendStatus();
     await _loadAchievements();
     await _loadFriendsList();
-    await _checkIfBlocked();
     setState(() => isLoading = false);
   }
+
+
+  Future<void> _checkIfBlocked() async {
+    try {
+      // 👇 I blocked this user?
+      isBlocked = await supabaseService.isUserBlocked(currentUserId, widget.userId);
+
+      print("🧱 Blocking status: I blocked them? $isBlocked");
+    } catch (error) {
+      print("❌ Error checking block status: $error");
+      isBlocked = false;
+    }
+  }
+
+
 
 
 
@@ -150,26 +182,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
-  Future<void> _checkIfBlocked() async {
-    isBlocked =
-    await supabaseService.isUserBlocked(currentUserId, widget.userId);
-    print("✅ Is user blocked? $isBlocked");
-  }
-
   Future<void> _loadAchievements() async {
     try {
-      final achievements =
-      await supabaseService.fetchUserAchievements(widget.userId);
-      userProfile ??= {};
-      userProfile!['achievements'] = achievements;
+      final achievements = await supabaseService.fetchUserAchievements(widget.userId);
+
+      setState(() {
+        userProfile ??= {};
+        userProfile!['achievements'] = achievements;
+      });
+
+      print("🏆 Achievements loaded: $achievements");
     } catch (error) {
       print('❌ Error loading achievements: $error');
     }
   }
 
+
   Future<void> _loadFriendsList() async {
     try {
-      final response = await supabaseService.getFriendsList(widget.userId);
+      final response = await supabaseService.getRecentFriends(widget.userId);
+      print("👥 Recent friends loaded: $response");
       setState(() {
         friendsList = response;
       });
@@ -268,6 +300,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileBody() {
+    if (isBlocked) {
+      return Center(
+        child: Text(
+          '🚫 You are blocked or have blocked this user.',
+          style: TextStyle(fontSize: 18, color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    if (userProfile == null) return _buildLoading();
+
     if (userProfile == null) return _buildLoading();
 
     String privacy = userProfile?['privacy_setting'] ?? 'public';
@@ -302,15 +346,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildProfileDetails(zodiac, age),
         _buildFriendsListDisplay(),
         if (!isMyProfile) _buildFriendActions(),
-        _buildHelpButton(context),
-        if (isMyProfile) _buildBlockedUsersButton(),
+        if (isMyProfile) _buildOrbButtonsGrid(),
         _buildProfileFooter(context), // 👈 Add this line
         if (isMyProfile) _buildDeleteProfileButton(),
+        if (!isMyProfile) _buildBlockPlaceholder()
 
-        SizedBox(height: 20),
+        ,SizedBox(height: 20),
 
 
       ],
+    );
+  }
+  Widget _buildBlockPlaceholder() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.block, color: Colors.redAccent),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Block feature coming soon",
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(
+              "We're working on this feature — you'll soon be able to block users from viewing your profile.",
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -320,30 +405,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildHeader(bool isOnline, bool isMyProfile, String displayName,
-      String zodiac, int age) {
+  Widget _buildHeader(bool isOnline, bool isMyProfile, String displayName, String zodiac, int age) {
     return Padding(
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 60,
-            backgroundImage: userProfile?['avatar'] != null
-                ? NetworkImage(userProfile!['avatar'])
-                : AssetImage('assets/images/default_avatar.png')
-            as ImageProvider,
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: isOnline
+                  ? [
+                BoxShadow(
+                  color: Colors.greenAccent.withOpacity(0.8),
+                  blurRadius: 20,
+                  spreadRadius: 3,
+                ),
+              ]
+                  : [],
+            ),
+            child: CircleAvatar(
+              radius: 60,
+              backgroundImage: userProfile?['avatar'] != null
+                  ? NetworkImage(userProfile!['avatar'])
+                  : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+            ),
           ),
           SizedBox(height: 8),
           Text(displayName,
-              style: TextStyle(fontSize: 24, color: Colors.white)),
-          SizedBox(height: 4),
-          Text('$zodiac, $age years old',
-              style: TextStyle(color: Colors.white70)),
-          SizedBox(height: 4),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text('$zodiac • $age years',
+              style: TextStyle(color: Colors.white70, fontSize: 16)),
           Text(isOnline ? '🟢 Online' : '🔴 Offline',
               style: TextStyle(color: Colors.white60)),
-          if (userProfile?['bio'] != null &&
-              userProfile!['bio'].toString().isNotEmpty)
+          if (userProfile?['bio'] != null && userProfile!['bio'].toString().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Text(
@@ -382,29 +476,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+
+
+
+
   Widget _buildXPBar() {
     int level = userProfile?['spiritual_level'] ?? 1;
     int xp = userProfile?['spiritual_xp'] ?? 0;
     int xpForNext = level * 100;
-    double progress = xp / xpForNext;
+    double progress = (xp / xpForNext).clamp(0.0, 1.0);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Level $level - XP: $xp / $xpForNext",
-              style: TextStyle(color: Colors.white)),
+          Text(
+            "Level $level - XP: $xp / $xpForNext",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+          ),
           SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            color: Colors.amberAccent,
-            backgroundColor: Colors.white12,
-            minHeight: 8,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 12,
+              backgroundColor: Colors.white24,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.amberAccent),
+            ),
           ),
         ],
       ),
     );
   }
+
+
 
   Widget _buildAchievements() {
     bool achievementsLoaded = userProfile?['achievements'] != null;
@@ -414,27 +520,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Text(
             'Achievements',
-            style:
-            TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
         ),
         achievementsLoaded && achievements.isNotEmpty
             ? SizedBox(
-          height: 150,
+          height: 160, // Increased height
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: achievements.length,
             itemBuilder: (context, index) {
               final achievement = achievements[index];
               return Container(
-                width: 120,
-                margin: EdgeInsets.symmetric(horizontal: 8),
+                width: 140, // Increased width
+                margin: EdgeInsets.symmetric(horizontal: 14),
+                padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white12,
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    colors: [Colors.black54, Colors.deepPurple.shade700],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.purpleAccent.withOpacity(0.4),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -442,15 +557,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     achievement['icon_url'] != null
                         ? Image.network(
                       achievement['icon_url'],
-                      width: 60,
-                      height: 60,
+                      width: 70,
+                      height: 70,
                     )
-                        : Icon(Icons.star,
-                        color: Colors.yellowAccent, size: 40),
-                    SizedBox(height: 8),
+                        : Icon(Icons.star, color: Colors.yellowAccent, size: 50),
+                    SizedBox(height: 10),
                     Text(
                       achievement['title'] ?? '',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      style: TextStyle(color: Colors.white, fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -461,12 +575,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         )
             : Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('No Achievements Yet!',
-              style: TextStyle(color: Colors.white70)),
+          child: Text(
+            'No Achievements Yet!',
+            style: TextStyle(color: Colors.white70),
+          ),
         ),
       ],
     );
   }
+
+
 
   Widget _buildProfileDetails(String zodiac, int age) {
     return Padding(
@@ -558,18 +676,100 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
   Widget _buildFriendsListDisplay() {
+    if (friendsList.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recent Friends', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            SizedBox(height: 12),
+            Text('You have no recent friends yet.', style: TextStyle(color: Colors.white70)),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.group, color: Colors.white70),
-          SizedBox(width: 8),
-          Text('${friendsList.length} Friends',
-              style: TextStyle(color: Colors.white)),
+          Text('Recent Friends', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+          SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.deepPurple.withOpacity(0.4),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            height: 130,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: friendsList.length,
+              itemBuilder: (context, index) {
+                final friend = friendsList[index];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProfileScreen(userId: friend['id']),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 90,
+                    margin: EdgeInsets.symmetric(horizontal: 8),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.purpleAccent.withOpacity(0.6),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            backgroundImage: friend['avatar'] != null
+                                ? NetworkImage(friend['avatar'])
+                                : AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                            radius: 35,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          friend['name'] ?? 'Unknown',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
+
+
 
   String _privacyDescription(String privacySetting) {
     switch (privacySetting.toLowerCase()) {
@@ -620,8 +820,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final success = await supabaseService.sendFriendRequest(currentUserId, widget.userId);
             if (success) {
               await _initializeProfile();
-              _showMessage("✅ Friend request cancelled!");
+              _showMessage("✅ Friend request sent!");
             }
+
 
               },
         ));
@@ -636,7 +837,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final success = await supabaseService.cancelFriendRequest(currentUserId, widget.userId);
             if (success) {
               await _initializeProfile();
-              _showMessage("✅ Friend request sent!");
+              _showMessage("❌ Friend request cancelled.");
             }
 
               },
@@ -672,7 +873,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ChatScreen(
+                builder: (_) => MessageScreen(
                   receiverId: widget.userId,
                   receiverName: userProfile?['name'] ?? 'User',
                 ),
@@ -714,57 +915,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       children: [
         Divider(color: Colors.white24, thickness: 1, indent: 16, endIndent: 16),
-        SizedBox(height: 8),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => AboutUsScreen()),
-              );
-            },
-            icon: Icon(Icons.info_outline, color: Colors.white),
-            label: Text('About Aurana', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal.shade700,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-
-        SizedBox(height: 8),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => PrivacyPolicyScreen()),
-              );
-            },
-            icon: Icon(Icons.privacy_tip_outlined, color: Colors.white),
-            label: Text('Privacy Policy & Terms', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueGrey.shade800,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-
-        SizedBox(height: 16),
-
-        Text(
-          'Aurana © 2025',
-          style: TextStyle(color: Colors.white24, fontSize: 12),
-        ),
-
-        SizedBox(height: 16),
+        SizedBox(height: 10),
+        Text('Aurana © 2025', style: TextStyle(color: Colors.white24, fontSize: 12)),
+        SizedBox(height: 20),
       ],
+    );
+  }
+
+  Widget _buildProfileButton({
+    required IconData icon,
+    required String text,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.4),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Container(
+            height: 56,
+            alignment: Alignment.center,
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white),
+                SizedBox(width: 12),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -785,96 +987,223 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _confirmLogout() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Log out?'),
-        content: Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final user = supabase.auth.currentUser;
+      builder: (_) => Dialog(
+        backgroundColor: Colors.deepPurple.shade800.withOpacity(0.95),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: 380), // 💡 Fixed height
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.exit_to_app_rounded, size: 48, color: Colors.amberAccent),
+              SizedBox(height: 16),
+              Text(
+                'Leaving the Light?',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 12),
+              Expanded( // 💬 Only this part scrolls!
+                child: SingleChildScrollView(
+                  child: Text(
+                    'You don’t need to log out to close the app.\n'
+                        'Just exit it—it’s faster and more peaceful 🌙.\n\n'
+                        'But if you really want to log out,\n'
+                        'you can do that below.',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.close, size: 16),
+                    label: Text("Stay"),
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade700,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      textStyle: TextStyle(fontSize: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.logout, size: 16),
+                    label: Text("Log Out"),
+                    onPressed: () async {
+                      final user = supabase.auth.currentUser;
+                      if (user != null) {
+                        await supabase.from('profiles').update({
+                          'is_online': false,
+                          'last_seen': DateTime.now().toIso8601String(),
+                        }).eq('id', user.id);
+                      }
+                      await supabase.auth.signOut();
+                      Navigator.pushNamedAndRemoveUntil(
+                          context, '/login', (route) => false);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple.shade200.withOpacity(0.9),
+                      foregroundColor: Colors.black87,
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      textStyle: TextStyle(fontSize: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              if (user != null) {
-                // ✅ Update status to offline & set last seen
-                await supabase.from('profiles').update({
-                  'is_online': false,
-                  'last_seen': DateTime.now().toIso8601String(),
-                }).eq('id', user.id);
 
-                print("✅ User set to offline before logout");
-              }
 
-              // ✅ Now sign out
-              await supabase.auth.signOut();
 
-              // ✅ Navigate to login screen
-              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-            },
-            child: Text('Log Out'),
+  Widget _buildOrbButtonsGrid() {
+    final isMyProfile = widget.userId == currentUserId;
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GridView.count(
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            physics: NeverScrollableScrollPhysics(),
+            children: [
+              _orbButton(
+                icon: Icons.help_outline,
+                label: 'Help & Features',
+                color: Colors.teal,
+                onTap: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => HelpAndFeaturesScreen()));
+                },
+              ),
+              _orbButton(
+                icon: Icons.block,
+                label: 'Blocked Users',
+                color: Colors.redAccent,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => BlockedUsersScreen()),
+                  );
+                },
+              ),
+              _orbButton(
+                icon: Icons.info_outline,
+                label: 'About Aurana',
+                color: Colors.green,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AboutUsScreen()),
+                  );
+                },
+              ),
+              _orbButton(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy & Terms',
+                color: Colors.blueGrey.shade700,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => PrivacyPolicyScreen()),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-
-  Widget _buildHelpButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => HelpAndFeaturesScreen()));
-        },
-        icon: Icon(Icons.help_outline, color: Colors.white),
-        label: Text('Help & Features', style: TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.teal.shade600,
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _orbButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [color.withOpacity(0.95), color.withOpacity(0.4)],
+                center: Alignment(-0.2, -0.2),
+                radius: 0.95,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.7),
+                  blurRadius: 18,
+                  spreadRadius: 4,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(icon, size: 32, color: Colors.white),
+            ),
+          ),
         ),
-      ),
+        SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.white70,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildBlockedUsersButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => BlockedUsersScreen()));
-        },
-        icon: Icon(Icons.block, color: Colors.white),
-        label: Text('Blocked Users'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.redAccent,
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-    );
-  }
+
+
 
   Widget _buildDeleteProfileButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ElevatedButton.icon(
-        onPressed: _deleteMyProfile,
-        icon: Icon(Icons.delete_forever, color: Colors.white),
-        label: Text('Delete My Profile'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.black12,
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
+    return _buildProfileButton(
+      icon: Icons.delete_forever,
+      text: 'Delete My Profile',
+      color: Colors.purple.shade800,
+      onTap: _deleteMyProfile,
     );
   }
+
 
   Future<bool> _checkIfAdmin(String? userId) async {
     if (userId == null) return false;

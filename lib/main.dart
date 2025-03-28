@@ -172,6 +172,7 @@ class AuranaApp extends StatelessWidget {
       routes: {
         '/': (context) => AuthGate(),
         '/login': (context) => AuthScreen(),
+        '/soul_match': (context) => SoulMatchPage(),
       },
     );
   }
@@ -257,6 +258,8 @@ class _MainScreenState extends State<MainScreen> {
 
   int _selectedIndex = 0;
   late List<Widget> _screens;
+
+
 
   @override
   void initState() {

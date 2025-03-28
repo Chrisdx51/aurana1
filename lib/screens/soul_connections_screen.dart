@@ -173,10 +173,22 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 48),
+        IconButton(
+          icon: const Icon(Icons.person, color: Colors.white),
+          onPressed: () {
+            final userId = supabase.auth.currentUser?.id;
+            if (userId != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ProfileScreen(userId: userId)),
+              );
+            }
+          },
+        ),
       ],
     );
   }
+
 
   Widget _topNavButtons(BuildContext context) {
     return Row(
@@ -281,15 +293,39 @@ class _SoulConnectionsScreenState extends State<SoulConnectionsScreen> {
             ),
             const Spacer(),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Flexible(child: _buildBlockButton(user.id)),
-                Flexible(child: _buildMessageButton(user)),
+                _buildAddFriendButton(user.id),
+                _buildMessageButton(user),
               ],
             ),
+
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAddFriendButton(String userId) {
+    return IconButton(
+      padding: EdgeInsets.zero,
+      iconSize: 20,
+      icon: const Icon(Icons.person_add_alt_1, color: Colors.lightGreenAccent),
+      onPressed: () async {
+        final currentUser = supabase.auth.currentUser;
+        if (currentUser != null) {
+          final success = await supabaseService.sendFriendRequest(currentUser.id, userId);
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("✅ Friend request sent")),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("⚠️ Already sent or you're already friends")),
+            );
+          }
+        }
+      },
     );
   }
 

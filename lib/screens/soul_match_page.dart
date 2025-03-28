@@ -3,6 +3,7 @@ import 'package:confetti/confetti.dart';
 import 'package:swipable_stack/swipable_stack.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:aurana/screens/message_screen.dart';
 import 'matches_screen.dart'; // Make sure the path is correct!
 import '../services/push_notification_service.dart';
 import '../models/user_model.dart';
@@ -21,11 +22,12 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
   List<Map<String, dynamic>> matchedSouls = [];
   bool isLoading = true;
   bool showMatchesTab = false;
-
+  bool _showSwipeOverlay = false;
   UserModel? currentUserProfile;
 
   String selectedGender = 'All';
   String swipeMessage = '';
+  String? _lastSwipeDirection;
 
   late BannerAd _bannerAd;
   bool _isAdLoaded = false;
@@ -33,6 +35,8 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
   @override
   void initState() {
     super.initState();
+
+    print("🧭 SoulMatchPage INIT - Page Loaded!");
     _fetchPotentialMatches();
     _fetchMatches();
     _initBannerAd();
@@ -114,6 +118,7 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
       }
 
       final response = await query.limit(20);
+      response.shuffle(); // ✅ Randomize results client-side
 
       setState(() {
         potentialMatches = List<Map<String, dynamic>>.from(response);
@@ -125,6 +130,7 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
           swipeMessage = ""; // Clear message if we found people
         }
       });
+
     } catch (e) {
       print('❌ Error fetching matches: $e');
       setState(() => isLoading = false);
@@ -169,8 +175,10 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
         .select()
         .eq('user_id', matchedUserId)
         .eq('matched_user_id', userId)
-        .eq('status', 'liked')
+        .filter('status', 'in', '("liked","matched")')
         .maybeSingle();
+
+
 
     print('🔥 Mutual like response: $mutual');
 
@@ -188,12 +196,95 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
         'matched_user_id': userId,
       });
 
+      // 🧠 Insert notification for the matched user (them)
+      await supabase.from('notifications').insert({
+        'user_id': matchedUserId,
+        'first_actor': userId,
+        'title': '💫 Soul Match!',
+        'body': '${currentUserProfile?.name ?? "Someone"} just matched with you!',
+        'type': 'match',
+        'read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+// 🧠 Insert notification for the current user (you)
+      await supabase.from('notifications').insert({
+        'user_id': userId,
+        'first_actor': matchedUserId,
+        'title': '💫 Soul Match!',
+        'body': 'You just matched with ${user['name'] ?? "someone"}!',
+        'type': 'match',
+        'read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+
       _confettiController.play();
+      _confettiController.play();
+
+// 🎉 Delay dialog to avoid build context issue
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showMatchPopup(user['name'] ?? 'your match');
+      });
+
+      // 🔔 Send push notification to matched user
+      final matchedProfile = await supabase
+          .from('profiles')
+          .select('fcm_token')
+          .eq('id', matchedUserId)
+          .maybeSingle();
+
+      final matchedToken = matchedProfile?['fcm_token'];
+      final myName = currentUserProfile?.name ?? 'Someone';
+
+      if (matchedToken != null && matchedToken.isNotEmpty) {
+        await PushNotificationService.sendPushNotification(
+          fcmToken: matchedToken,
+          title: "💫 Soul Match!",
+          body: "$myName just matched with you!",
+        );
+      }
       setState(() {
         swipeMessage = "🌟 It's a soul match! 🌟";
       });
-
       _fetchMatches();
+
+// ✅ Show popup with matched user's name
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: Colors.deepPurple.shade900,
+            title: Text('It\'s a Soul Match!', style: TextStyle(color: Colors.amberAccent)),
+            content: Text(
+              'You’ve matched with ${user['name']}! 💫\nWant to send them a message?',
+              style: TextStyle(color: Colors.white),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Close', style: TextStyle(color: Colors.grey)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MessageScreen(
+                        receiverId: user['id'],
+                        receiverName: user['name'],
+                      ),
+                    ),
+                  );
+                },
+                child: Text('Message', style: TextStyle(color: Colors.greenAccent)),
+              ),
+            ],
+          );
+        },
+      );
+
 
       // OPTIONAL: Send notifications if you like
     } else {
@@ -221,6 +312,46 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
       swipeMessage = "🌙 The journey continues... 🌙";
     });
   }
+
+  void _showMatchPopup(String name) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black.withOpacity(0.9),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.favorite, size: 48, color: Colors.pinkAccent),
+              SizedBox(height: 12),
+              Text(
+                'Soul Match!',
+                style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'You and $name have matched!\nOpen your heart and say hello 🌟',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.pinkAccent,
+                  shape: StadiumBorder(),
+                ),
+                child: Text('Got it!'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   void _reportUser(String reportedUserId) async {
     final currentUserId = supabase.auth.currentUser!.id;
@@ -327,10 +458,54 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
               colors: [Colors.purple, Colors.pinkAccent, Colors.cyan],
             ),
           ),
+          _buildSwipeOverlay(), // 👈 Add this line
         ],
       ),
     );
   }
+
+  Widget _buildSwipeOverlay() {
+    if (!_showSwipeOverlay || _lastSwipeDirection == null) return SizedBox.shrink();
+
+    String text = _lastSwipeDirection == 'right' ? "❤️ Liked!" : "❌ Not Now";
+    Color bgColor = _lastSwipeDirection == 'right' ? Colors.green.withOpacity(0.6) : Colors.red.withOpacity(0.6);
+
+    return Positioned.fill(
+      child: Container(
+        color: bgColor,
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 40,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 10,
+                  color: Colors.black,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  void _triggerSwipeOverlay(String direction) {
+    setState(() {
+      _lastSwipeDirection = direction;
+      _showSwipeOverlay = true;
+    });
+
+    Future.delayed(Duration(milliseconds: 500), () {
+      setState(() {
+        _showSwipeOverlay = false;
+      });
+    });
+  }
+
 
   Widget _genderDropdown() {
     return DropdownButton<String>(
@@ -359,10 +534,17 @@ class _SoulMatchPageState extends State<SoulMatchPage> {
         itemCount: potentialMatches.length,
         onSwipeCompleted: (index, direction) {
           if (index >= 0 && index < potentialMatches.length) {
-            if (direction == SwipeDirection.right) swipeYes(potentialMatches[index]);
-            if (direction == SwipeDirection.left) swipeNo(potentialMatches[index]);
+            if (direction == SwipeDirection.right) {
+              _triggerSwipeOverlay('right');
+              swipeYes(potentialMatches[index]);
+            }
+            if (direction == SwipeDirection.left) {
+              _triggerSwipeOverlay('left');
+              swipeNo(potentialMatches[index]);
+            }
           }
         },
+
         builder: (context, swipeProps) {
           if (swipeProps.index < 0 || swipeProps.index >= potentialMatches.length) return SizedBox();
           final user = potentialMatches[swipeProps.index];

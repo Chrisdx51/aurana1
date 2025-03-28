@@ -20,6 +20,7 @@ import '../widgets/banner_ad_widget.dart'; // ✅ BannerAdWidget import
 import 'feedback_screen.dart'; // 👈 Add this with the other imports
 import 'horoscope_screen.dart';
 import 'package:confetti/confetti.dart';
+import 'new_features_slider_screen.dart'; // ✅ Correct file import
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -29,7 +30,6 @@ class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
-
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   final supabase = Supabase.instance.client;
   final supabaseService = SupabaseService();
@@ -471,6 +471,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                       _adCarousel(),
                       SizedBox(height: 20),
                       _spiritualServicesButton(),
+                      SizedBox(height: 20),
+                      _exploreRealmsButton(), // ⬅️ Insert this right after any section
                       SizedBox(height: 20),
                       _affirmationSection(),
                       SizedBox(height: 20),
@@ -961,7 +963,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   Widget _soulMatchButton() {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SoulMatchPage())),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MoonCycleScreen())),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -991,7 +993,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           ),
           SizedBox(height: 10),
           Text(
-            'Soul Match',
+            'Moon Cycle',
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -1009,6 +1011,69 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       ),
     );
   }
+
+  Widget _exploreRealmsButton() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => NewFeaturesSliderScreen()),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.lightBlueAccent.withOpacity(0.9),
+                  Colors.deepPurpleAccent.withOpacity(0.8),
+                ],
+                radius: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyanAccent.withOpacity(0.7),
+                  blurRadius: 25,
+                  spreadRadius: 6,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.crisis_alert, // Looks like a glowing magical star 💫
+                size: 48,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Explore Realms',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  blurRadius: 10,
+                  color: Colors.cyanAccent,
+                  offset: Offset(0, 0),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
 
   Widget _affirmationSection() {
     if (_isAffirmationLoading) return CircularProgressIndicator();

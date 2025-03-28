@@ -4,6 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../main.dart'; // Your main screen
+import 'package:profanity_filter/profanity_filter.dart';
+import '../widgets/banner_ad_widget.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class EditProfileScreen extends StatefulWidget {
   final String userId;
@@ -37,16 +41,83 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _element;
   String _privacySetting = 'public';
   String _displayNameChoice = 'real_name';
-  String _journeyVisibility = 'public'; // Soul Journey visibility
   DateTime? _dob;
   String? _zodiacSign;
   bool _isLoading = true;
+  String userRole = 'user'; // default, will update during profile load
 
   final genders = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
-  final spiritualPaths = ['Mystic', 'Shaman', 'Lightworker', 'Astrologer', 'Healer'];
+  final spiritualPaths = [
+    'Mystic',
+    'Shaman',
+    'Lightworker',
+    'Astrologer',
+    'Healer'
+  ];
   final elements = ['Fire', 'Water', 'Earth', 'Air', 'Spirit'];
   final privacyOptions = ['public', 'friends_only', 'private'];
   final displayNameOptions = ['real_name', 'username'];
+
+  final List<String> countries = [
+    'United Kingdom',
+    'United States',
+    'Afghanistan',
+    'Albania',
+    'Algeria',
+    'Andorra',
+    'Angola',
+    'Argentina',
+    'Australia',
+    'Austria',
+    'Bangladesh',
+    'Belgium',
+    'Brazil',
+    'Canada',
+    'China',
+    'Colombia',
+    'Croatia',
+    'Denmark',
+    'Egypt',
+    'Finland',
+    'France',
+    'Germany',
+    'Greece',
+    'Hungary',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Iraq',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Japan',
+    'Kenya',
+    'Malaysia',
+    'Mexico',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nigeria',
+    'Norway',
+    'Pakistan',
+    'Philippines',
+    'Poland',
+    'Portugal',
+    'Russia',
+    'Saudi Arabia',
+    'South Africa',
+    'South Korea',
+    'Spain',
+    'Sri Lanka',
+    'Sweden',
+    'Switzerland',
+    'Thailand',
+    'Turkey',
+    'Ukraine',
+    'United Arab Emirates',
+    'Vietnam',
+    'Zimbabwe',
+  ];
 
   @override
   void initState() {
@@ -63,12 +134,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .eq('id', widget.userId)
           .maybeSingle();
 
+
       if (userProfile == null) {
         print("⚠️ Profile not found in Supabase.");
         _showMessage('⚠️ Profile not found.');
         setState(() => _isLoading = false);
         return;
       }
+
+      userRole = userProfile['role'] ?? 'user';
 
       print("✅ Profile loaded: $userProfile");
 
@@ -78,16 +152,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _bioController.text = userProfile['bio'] ?? '';
         _cityController.text = userProfile['city'] ?? '';
         _countryController.text = userProfile['country'] ?? '';
-        _soulMatchMessageController.text = userProfile['soul_match_message'] ?? '';
+        _soulMatchMessageController.text =
+            userProfile['soul_match_message'] ?? '';
 
         _gender = userProfile['gender'];
         _spiritualPath = userProfile['spiritual_path'];
         _element = userProfile['element'];
         _privacySetting = userProfile['privacy_setting'] ?? 'public';
         _displayNameChoice = userProfile['display_name_choice'] ?? 'real_name';
-        _journeyVisibility = userProfile['journey_visibility'] ?? 'public';
 
-        _dob = userProfile['dob'] != null ? DateTime.tryParse(userProfile['dob']) : null;
+        _dob = userProfile['dob'] != null
+            ? DateTime.tryParse(userProfile['dob'])
+            : null;
         _zodiacSign = _dob != null ? _getZodiacSign(_dob!) : null;
 
         _existingAvatarUrl = userProfile['avatar'];
@@ -118,12 +194,71 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     print("🔨 Saving profile...");
+    final filter = ProfanityFilter();
 
-    if (_nameController.text.trim().isEmpty ||
-        _usernameController.text.trim().isEmpty ||
+    String name = _nameController.text.trim().toLowerCase();
+    String username = _usernameController.text.trim().toLowerCase();
+    String bio = _bioController.text.trim().toLowerCase();
+
+    final blockedWords = [
+      'admin',
+      'mod',
+      'aurana',
+      'staff',
+      'team',
+      'fuck',
+      'shit',
+      'bitch',
+      'ass',
+      'dick',
+      'piss',
+      'cunt',
+      'bastard',
+      'damn',
+      'slut',
+      'fag',
+      'nigger',
+      'whore',
+      // add more if needed
+    ];
+
+// Custom word check
+    bool containsBlockedWord(String input) {
+      input = input.toLowerCase();
+      return blockedWords.any((word) =>
+      input == word || input.contains(word));
+    }
+
+// Block profanity or restricted words
+    bool isAdminUser = userRole == 'admin' || userRole == 'superadmin';
+
+    if (!isAdminUser) {
+      if (filter.hasProfanity(name) ||
+          filter.hasProfanity(username) ||
+          filter.hasProfanity(bio) ||
+          containsBlockedWord(name) ||
+          containsBlockedWord(username)) {
+        _showMessage(
+            '⚠️ Please choose a name and username without bad or restricted words.');
+        return;
+      }
+    }
+
+
+    if (_nameController.text
+        .trim()
+        .isEmpty ||
+        _usernameController.text
+            .trim()
+            .isEmpty ||
+
         _dob == null ||
-        _cityController.text.trim().isEmpty ||
-        _countryController.text.trim().isEmpty ||
+        _cityController.text
+            .trim()
+            .isEmpty ||
+        _countryController.text
+            .trim()
+            .isEmpty ||
         _gender == null) {
       _showMessage('⚠️ Please fill all required fields.');
       print("⚠️ Missing required fields. Cannot save.");
@@ -135,11 +270,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (_imageFile != null) {
       print("🔄 Uploading new avatar...");
-      final fileName = '${widget.userId}-${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName = '${widget.userId}-${DateTime
+          .now()
+          .millisecondsSinceEpoch}.png';
       final bytes = await _imageFile!.readAsBytes();
 
       try {
-        final response = await supabase.storage.from('avatar').uploadBinary(fileName, bytes);
+        final response = await supabase.storage.from('avatar').uploadBinary(
+            fileName, bytes);
         avatarUrl = supabase.storage.from('avatar').getPublicUrl(fileName);
         print("✅ Avatar uploaded successfully: $avatarUrl");
       } catch (e) {
@@ -158,7 +296,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'country': _countryController.text.trim(),
         'gender': _gender,
         'privacy_setting': _privacySetting,
-        'journey_visibility': _journeyVisibility,
         'dob': _dob!.toIso8601String(),
         'spiritual_path': _spiritualPath,
         'element': _element,
@@ -219,19 +356,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition();
-      print("✅ Location detected: ${position.latitude}, ${position.longitude}");
+      final latitude = position.latitude;
+      final longitude = position.longitude;
+      print("✅ Location: $latitude, $longitude");
 
+      // 🔄 Save to Supabase
       await supabase.from('profiles').update({
-        'latitude': position.latitude,
-        'longitude': position.longitude,
+        'latitude': latitude,
+        'longitude': longitude,
       }).eq('id', widget.userId);
 
-      _showMessage('📍 Location updated!');
+      // 🌍 Reverse geocode to get city + country
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?lat=$latitude&lon=$longitude&format=json');
+
+      final response = await http.get(url, headers: {
+        'User-Agent': 'AuranaApp/1.0' // required by Nominatim
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final address = data['address'];
+
+        final city = address['city'] ??
+            address['town'] ??
+            address['village'] ??
+            address['municipality'] ??
+            '';
+        final country = address['country'] ?? '';
+
+        if (city.isNotEmpty) _cityController.text = city;
+        if (country.isNotEmpty) _countryController.text = country;
+
+        _showMessage('📍 Detected: $city, $country');
+        print("🎯 Reverse geocoded: $city, $country");
+      } else {
+        _showMessage('⚠️ Could not detect city/country.');
+        print('❌ Failed to reverse geocode. Status: ${response.statusCode}');
+      }
     } catch (e) {
-      print("❌ Failed to detect/update location: $e");
-      _showMessage('❌ Failed to update location.');
+      print("❌ Error detecting location: $e");
+      _showMessage('❌ Failed to detect location.');
     }
   }
+
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -253,10 +421,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if ((month == 7 && day >= 23) || (month == 8 && day <= 22)) return "Leo";
     if ((month == 8 && day >= 23) || (month == 9 && day <= 22)) return "Virgo";
     if ((month == 9 && day >= 23) || (month == 10 && day <= 22)) return "Libra";
-    if ((month == 10 && day >= 23) || (month == 11 && day <= 21)) return "Scorpio";
-    if ((month == 11 && day >= 22) || (month == 12 && day <= 21)) return "Sagittarius";
-    if ((month == 12 && day >= 22) || (month == 1 && day <= 19)) return "Capricorn";
-    if ((month == 1 && day >= 20) || (month == 2 && day <= 18)) return "Aquarius";
+    if ((month == 10 && day >= 23) || (month == 11 && day <= 21))
+      return "Scorpio";
+    if ((month == 11 && day >= 22) || (month == 12 && day <= 21))
+      return "Sagittarius";
+    if ((month == 12 && day >= 22) || (month == 1 && day <= 19))
+      return "Capricorn";
+    if ((month == 1 && day >= 20) || (month == 2 && day <= 18))
+      return "Aquarius";
     return "Pisces";
   }
 
@@ -272,14 +444,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Edit Profile'),
+          title: Text(
+            'Edit Profile',
+            style: TextStyle(color: Colors.white),
+          ),
+          iconTheme: IconThemeData(color: Colors.white),
           flexibleSpace: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.lightBlue.shade200, Colors.white],
+                colors: [Colors.deepPurple, Colors.purple],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
+
           backgroundColor: Colors.transparent,
         ),
         body: Stack(
@@ -296,32 +475,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  BannerAdWidget(),
+                  SizedBox(height: 16),
                   // Avatar Picker with Glow
                   GestureDetector(
                     onTap: _pickImage,
                     child: Center(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.purpleAccent.withOpacity(0.6),
-                              blurRadius: 20,
-                              spreadRadius: 2,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purpleAccent.withOpacity(0.6),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 60,
-                          backgroundImage: _imageFile != null
-                              ? FileImage(_imageFile!)
-                              : (_existingAvatarUrl != null
-                              ? NetworkImage(_existingAvatarUrl!)
-                              : AssetImage('assets/images/default_avatar.png')) as ImageProvider,
-                        ),
+                            child: CircleAvatar(
+                              radius: 60,
+                              backgroundImage: _imageFile != null
+                                  ? FileImage(_imageFile!)
+                                  : (_existingAvatarUrl != null
+                                  ? NetworkImage(_existingAvatarUrl!)
+                                  : AssetImage(
+                                  'assets/images/default_avatar.png')) as ImageProvider,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 5,
+                                    offset: Offset(2, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(Icons.camera_alt, color: Colors.white,
+                                  size: 20),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+
                   SizedBox(height: 20),
 
                   // Username Field
@@ -329,19 +537,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _buildTextField('Name*', _nameController),
                   _buildTextField('Bio', _bioController, maxLines: 3),
 
-                  _buildDropdownField('Gender*', _gender, genders, (val) => setState(() => _gender = val)),
-                  _buildDropdownField('Spiritual Path', _spiritualPath, spiritualPaths, (val) => setState(() => _spiritualPath = val)),
-                  _buildDropdownField('Element', _element, elements, (val) => setState(() => _element = val)),
+                  _buildDropdownField('Gender*', _gender, genders, (val) =>
+                      setState(() => _gender = val)),
+                  _buildDropdownField(
+                      'Spiritual Path', _spiritualPath, spiritualPaths, (val) =>
+                      setState(() => _spiritualPath = val)),
+                  _buildDropdownField('Element', _element, elements, (val) =>
+                      setState(() => _element = val)),
 
                   _buildDatePickerField(),
 
                   _buildTextField('City*', _cityController),
-                  _buildTextField('Country*', _countryController),
-                  _buildTextField('Soul Match Message', _soulMatchMessageController),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0, bottom: 12),
+                    child: Container(
+                      padding: EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.deepPurpleAccent.withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Tap the Auto-detect button below to automatically fill in your city and country.',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
-                  _buildDropdownField('Privacy', _privacySetting, privacyOptions, (val) => setState(() => _privacySetting = val!)),
-                  _buildDropdownField('Journey Visibility', _journeyVisibility, privacyOptions, (val) => setState(() => _journeyVisibility = val!)),
-                  _buildDropdownField('Display Name', _displayNameChoice, displayNameOptions, (val) => setState(() => _displayNameChoice = val!)),
+
+
+                  _buildDropdownField(
+                    'Country*',
+                    countries.contains(_countryController.text)
+                        ? _countryController.text
+                        : null,
+                    countries,
+                        (val) =>
+                        setState(() => _countryController.text = val ?? ''),
+                  ),
+                  _buildTextField(
+                      'Soul Match Message', _soulMatchMessageController),
+
+                  _buildDropdownField(
+                      'Soul Privacy', _privacySetting, privacyOptions, (val) =>
+                      setState(() => _privacySetting = val!)),
+                  _buildDropdownField(
+                      'Display Name', _displayNameChoice, displayNameOptions, (
+                      val) => setState(() => _displayNameChoice = val!)),
 
                   SizedBox(height: 20),
 
@@ -355,7 +611,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       foregroundColor: Colors.white,
                       elevation: 4,
                       padding: EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
                   SizedBox(height: 16),
@@ -363,13 +620,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   // Save Button with Glow
                   ElevatedButton(
                     onPressed: _saveProfile,
-                    child: Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text('Save Changes', style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal.shade600,
                       foregroundColor: Colors.white,
                       elevation: 6,
                       padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                       shadowColor: Colors.tealAccent,
                     ),
                   ),
@@ -384,65 +643,187 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
+  Widget _buildTextField(String label, TextEditingController controller,
+      {int maxLines = 1, String? hintText}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.8),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purpleAccent.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: controller,
+              maxLines: maxLines,
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: TextStyle(color: Colors.white70),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+              ),
+            ),
+          ),
+          if (label.toLowerCase().contains('bio'))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Write a little about yourself...',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildDropdownField(String label, String? value, List<String> options, ValueChanged<String?> onChanged) {
+
+  Widget _buildDropdownField(String label,
+      String? value,
+      List<String> options,
+      ValueChanged<String?> onChanged, {
+        String? helperText,
+      }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: DropdownButtonFormField<String>(
-        value: options.contains(value) ? value : null,
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.8),
-        ),
-        items: options.map((option) => DropdownMenuItem(value: option, child: Text(option))).toList(),
-        onChanged: onChanged,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purpleAccent.withOpacity(0.4),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: DropdownButtonFormField<String>(
+              value: options.contains(value) ? value : null,
+              icon: Icon(Icons.expand_more, color: Colors.white),
+              dropdownColor: Colors.deepPurple.shade900,
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+              ),
+              items: options.map((option) {
+                return DropdownMenuItem(
+                  value: option,
+                  child: Text(option, style: TextStyle(color: Colors.white)),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+          if (helperText != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                helperText,
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ),
+        ],
       ),
     );
   }
+
 
   Widget _buildDatePickerField() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListTile(
-        tileColor: Colors.white.withOpacity(0.8),
-        title: Text(
-          _dob != null ? 'DOB: ${_dob!.toLocal().toIso8601String().substring(0, 10)}' : 'Select Date of Birth',
-        ),
-        trailing: Icon(Icons.calendar_today),
-        onTap: () async {
-          DateTime? picked = await showDatePicker(
-            context: context,
-            initialDate: _dob ?? DateTime(2000),
-            firstDate: DateTime(1900),
-            lastDate: DateTime.now(),
-          );
-          if (picked != null) {
-            setState(() {
-              _dob = picked;
-              _zodiacSign = _getZodiacSign(picked);
-            });
-          }
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Date of Birth*',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: () async {
+              DateTime? picked = await showDatePicker(
+                context: context,
+                initialDate: _dob ?? DateTime(2000),
+                firstDate: DateTime(1900),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) {
+                setState(() {
+                  _dob = picked;
+                  _zodiacSign = _getZodiacSign(picked);
+                });
+              }
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purpleAccent.withOpacity(0.4),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _dob != null
+                        ? '${_dob!.year}-${_dob!.month.toString().padLeft(
+                        2, '0')}-${_dob!.day.toString().padLeft(2, '0')}'
+                        : 'Select Date of Birth',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  Icon(Icons.calendar_today, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+

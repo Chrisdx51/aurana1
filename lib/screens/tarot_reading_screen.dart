@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -17,10 +18,28 @@ class TarotReadingScreen extends StatefulWidget {
 
 class _TarotReadingScreenState extends State<TarotReadingScreen> {
   final List<String> tarotCards = [
-    'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
-    'The Hierophant', 'The Lovers', 'The Chariot', 'Strength', 'The Hermit',
-    'Wheel of Fortune', 'Justice', 'The Hanged Man', 'Death', 'Temperance',
-    'The Devil', 'The Tower', 'The Star', 'The Moon', 'The Sun', 'Judgment', 'The World',
+    'The Fool',
+    'The Magician',
+    'The High Priestess',
+    'The Empress',
+    'The Emperor',
+    'The Hierophant',
+    'The Lovers',
+    'The Chariot',
+    'Strength',
+    'The Hermit',
+    'Wheel of Fortune',
+    'Justice',
+    'The Hanged Man',
+    'Death',
+    'Temperance',
+    'The Devil',
+    'The Tower',
+    'The Star',
+    'The Moon',
+    'The Sun',
+    'Judgment',
+    'The World',
   ];
 
   final Map<String, String> tarotInterpretations = {};
@@ -37,12 +56,31 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
   bool questionSubmitted = false;
   String userQuestion = "";
   bool showReadingAnimation = false;
+  late FlutterTts flutterTts;
 
   @override
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
     _loadLastReadingTime();
+    _initVoice();
+  }
+
+  void _initVoice() {
+    flutterTts = FlutterTts();
+    flutterTts.setLanguage("en-GB");
+    flutterTts.setPitch(1);
+    flutterTts.setSpeechRate(0.40);
+    flutterTts.setVoice({"name": "en-GB-Wavenet-C", "locale": "en-GB"});
+  }
+
+  Future<void> _speakTarotReadings() async {
+    for (String card in selectedCards) {
+      final intro = "The card is $card. Here is the reading:";
+      final reading = tarotInterpretations[card] ?? '';
+      await flutterTts.speak("$intro $reading");
+      await Future.delayed(Duration(seconds: 6)); // Wait for speech
+    }
   }
 
   @override
@@ -50,6 +88,7 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
     _questionController.dispose(); // ✅ Clean up the controller
     countdownTimer?.cancel();
     _audioPlayer.dispose();
+    flutterTts.stop();
     super.dispose();
   }
 
@@ -80,7 +119,9 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
     if (lastReadingTime != null) {
       final now = DateTime.now();
       final nextReadingTime = lastReadingTime!.add(Duration(hours: 4));
-      remainingTime = nextReadingTime.difference(now).isNegative
+      remainingTime = nextReadingTime
+          .difference(now)
+          .isNegative
           ? Duration.zero
           : nextReadingTime.difference(now);
     } else {
@@ -114,7 +155,8 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
       String prompt = "You are a mystical tarot expert giving a deep, insightful, and spiritual interpretation of the tarot card '$selectedCard'.";
 
       if (userQuestion.isNotEmpty) {
-        prompt += " The user asked: '$userQuestion'. Provide a personalized reading that connects with their question.";
+        prompt +=
+        " The user asked: '$userQuestion'. Provide a personalized reading that connects with their question.";
       }
 
       final response = await http.post(
@@ -172,12 +214,16 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
         tarotInterpretations[chosenCard] = aiReading;
         cardsSelected++;
       });
+      await flutterTts.speak(aiReading);
 
       if (selectedCards.length == 3) {
         _saveLastReadingTime();
         setState(() {
           showReadingAnimation = true;
         });
+
+        // 🗣️ Speak only AFTER all cards are revealed
+        Future.delayed(Duration(milliseconds: 500), _speakTarotReadings);
       }
     }
   }
@@ -228,7 +274,8 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
         ),
         title: Text(
           'Tarot Reading',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
         ),
       ),
       extendBodyBehindAppBar: true,
@@ -327,20 +374,24 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
       child: Column(
         children: [
           TextField(
-            controller: _questionController, // ✅ FIXED: use the controller at the top
+            controller: _questionController,
+            // ✅ FIXED: use the controller at the top
             style: TextStyle(color: Colors.white),
             decoration: InputDecoration(
               labelText: 'What would you like to ask?',
               labelStyle: TextStyle(color: Colors.white70),
               filled: true,
               fillColor: Colors.black54,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
           SizedBox(height: 10),
           ElevatedButton.icon(
             onPressed: () {
-              if (_questionController.text.trim().isEmpty) return;
+              if (_questionController.text
+                  .trim()
+                  .isEmpty) return;
 
               setState(() {
                 userQuestion = _questionController.text.trim();
@@ -353,7 +404,8 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
             label: Text('Submit Question'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.deepPurpleAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -367,35 +419,40 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(
         3,
-            (index) => Container(
-          height: 140,
-          width: 100,
-          margin: EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black45,
-                blurRadius: 8,
-                offset: Offset(2, 4),
+            (index) =>
+            Container(
+              height: 140,
+              width: 100,
+              margin: EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 8,
+                    offset: Offset(2, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: selectedCards.length > index
-              ? Image.asset(
-            'assets/images/tarot/${selectedCards[index].toLowerCase().replaceAll(" ", "_")}.png',
-            fit: BoxFit.cover,
-          )
-              : Container(
-            color: Colors.black26,
-            child: Center(
-              child: Text(
-                '?',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              child: selectedCards.length > index
+                  ? Image.asset(
+                'assets/images/tarot/${selectedCards[index]
+                    .toLowerCase()
+                    .replaceAll(" ", "_")}.png',
+                fit: BoxFit.cover,
+              )
+                  : Container(
+                color: Colors.black26,
+                child: Center(
+                  child: Text(
+                    '?',
+                    style: TextStyle(fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
       ),
     );
   }
@@ -414,7 +471,8 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
       ),
       child: Text(
         !_canStartNewReading()
-            ? 'Next Reading in ${remainingTime?.inHours ?? 0}h ${(remainingTime?.inMinutes ?? 0) % 60}m'
+            ? 'Next Reading in ${remainingTime?.inHours ?? 0}h ${(remainingTime
+            ?.inMinutes ?? 0) % 60}m'
             : cardsSelected >= 3
             ? 'Max Cards Selected'
             : 'Pick a Card',
@@ -453,19 +511,67 @@ class _TarotReadingScreenState extends State<TarotReadingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Your Reading:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('Your Reading:',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             SizedBox(height: 12),
-            ...selectedCards.map((card) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(card, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text(tarotInterpretations[card] ?? 'Loading...'),
-                ],
-              ),
-            )),
+
+            ...selectedCards.map((card) =>
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(card, style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 4),
+                      Text(tarotInterpretations[card] ?? 'Loading...'),
+                    ],
+                  ),
+                )),
+
+            SizedBox(height: 16),
+
+            // 🎤 Speak + Stop Buttons Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await flutterTts.awaitSpeakCompletion(true);
+                    for (var card in selectedCards) {
+                      final reading = tarotInterpretations[card];
+                      if (reading != null) {
+                        await flutterTts.speak("$card. $reading");
+                        await Future.delayed(Duration(seconds: 1));
+                      }
+                    }
+                  },
+                  icon: Icon(Icons.volume_up, color: Colors.white),
+                  label: Text(
+                      "Speak Again", style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                ),
+                SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    flutterTts.stop();
+                  },
+                  icon: Icon(Icons.stop_circle, color: Colors.white),
+                  label: Text("Stop", style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

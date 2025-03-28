@@ -4,7 +4,7 @@ import 'package:confetti/confetti.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shimmer/shimmer.dart';
 import '../widgets/banner_ad_widget.dart';
-import 'chat_screen.dart';
+import 'message_screen.dart';
 import 'profile_screen.dart';
 import '../services/supabase_service.dart';
 
@@ -135,6 +135,38 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
       ..subscribe();
   }
 
+  void _handleNotificationTap(Map<String, dynamic> notification) async {
+    await markNotificationAsRead(notification['id']);
+
+    final senderId = notification['sender_id'];
+    final type = notification['type'] ?? ''; // e.g. 'friend_request', 'message', 'match'
+
+    if (type == 'message' && senderId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MessageScreen(
+            receiverId: senderId,
+            receiverName: 'Friend', // Optional: pull name if needed
+          ),
+        ),
+      );
+    } else if ((type == 'friend_request' || type == 'match') && senderId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileScreen(userId: senderId),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✨ This notification has no linked page.'),
+      ));
+    }
+  }
+
+
+
   Future<void> acceptFriendRequest(String requestId, String senderId) async {
     try {
       final success = await SupabaseService().acceptFriendRequest(widget.userId, senderId);
@@ -241,7 +273,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
           child: Shimmer.fromColors(
             baseColor: Colors.yellow,
             highlightColor: Colors.white,
-            child: Text('Connections & Notifications',
+            child: Text('My Circle',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
           ),
         ),
@@ -256,7 +288,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Pending Friend Requests'),
+        _sectionTitle('Friend Requests'),
         ...pendingRequests.map((request) {
           final sender = request['sender'];
           return Card(
@@ -288,7 +320,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('My Friends'),
+        _sectionTitle('Friends'),
         GridView.builder(
           shrinkWrap: true,
           physics: NeverScrollableScrollPhysics(),
@@ -317,7 +349,7 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
                     SizedBox(height: 8),
                     Text(friend['name'], style: TextStyle(color: Colors.white)),
                     ElevatedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(receiverId: friend['id'], receiverName: friend['name']))),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MessageScreen(receiverId: friend['id'], receiverName: friend['name']))),
                       child: Text("Chat"),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent),
                     ),
@@ -350,21 +382,39 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
         _sectionTitle('Notifications'),
         ...notifications.map((note) {
           final isRead = note['read'] ?? false;
+          final createdAt = note['created_at'];
+          final senderId = note['sender_id']; // Make sure this is in your notification record
+
           return Card(
             color: isRead ? Colors.grey.withOpacity(0.4) : Colors.white.withOpacity(0.8),
             child: ListTile(
               title: Text(note['title'] ?? 'No Title'),
-              subtitle: Text(note['body'] ?? 'No Body'),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(note['body'] ?? 'No Body'),
+                  if (createdAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        formatTimestamp(createdAt),
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
               trailing: isRead
                   ? Icon(Icons.done, color: Colors.green)
                   : Icon(Icons.fiber_manual_record, color: Colors.red, size: 12),
-              onTap: () => markNotificationAsRead(note['id']),
+              onTap: () => _handleNotificationTap(note),
             ),
           );
         }).toList(),
       ],
     );
   }
+
+
 
   Widget _buildInviteButton() {
     return ElevatedButton.icon(
@@ -401,3 +451,12 @@ class _ConnectionsAndNotificationsScreenState extends State<ConnectionsAndNotifi
     fetchNotifications();
   }
 }
+String formatTimestamp(String timestamp) {
+  try {
+    final dateTime = DateTime.parse(timestamp).toLocal();
+    return "${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+  } catch (e) {
+    return '';
+  }
+}
+

@@ -115,18 +115,33 @@ class SupabaseService {
       await supabase.from('reports').insert({
         'reporter_id': reporterId,
         'target_id': targetId,
-        'target_type': targetType, // Now this matches your AllAdsPage call
+        'target_type': targetType,
         'reason': reason,
         'created_at': DateTime.now().toIso8601String(),
       });
 
       print('✅ Report submitted: $targetType reported by $reporterId');
+
+      // 🔔 Send notification to admin
+      const adminId = '9d1411b9-d486-40d8-89a0-9d0714a7afa6'; // 🔁 Replace with your actual admin UID
+      const adminName = 'Admin'; // (Optional)
+
+      await createAndSendNotification(
+        recipientId: adminId,
+        title: '🚨 New Report Submitted',
+        body: 'A new report was filed. Tap to review it in the Admin Panel.',
+        type: 'report_alert',
+      );
+
+      print('🔔 Admin notified of the new report.');
+
       return true;
     } catch (error) {
       print('❌ Error submitting report: $error');
       return false;
     }
   }
+
 
   // ✅ Check if you sent a friend request
   Future<bool> checkSentFriendRequest(String currentUserId, String targetUserId) async {
@@ -214,6 +229,41 @@ class SupabaseService {
     }
   }
 
+// ⬇️ DREAM JOURNAL
+
+  Future<bool> insertDreamEntry(String text) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await supabase.from('dream_journal').insert({
+        'user_id': user.id,
+        'dream_text': text,
+      });
+      return true;
+    } catch (e) {
+      print('❌ Error inserting dream: $e');
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchDreamEntries() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
+
+    try {
+      final response = await supabase
+          .from('dream_journal')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching dreams: $e');
+      return [];
+    }
+  }
 
 
   Future<bool> updateProfilePrivacy(String userId, String newPrivacySetting) async {
@@ -383,6 +433,14 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getRecentFriends(String userId) async {
+    final supabase = Supabase.instance.client;
+
+    final response = await supabase.rpc('get_confirmed_friends', params: {'uid': userId});
+    return (response as List).cast<Map<String, dynamic>>();
+  }
+
+
   Future<List<UserModel>> getRecentUsers(int limit) async {
     try {
       final response = await supabase
@@ -406,6 +464,8 @@ class SupabaseService {
       return [];
     }
   }
+
+
 
   // ✅ Fetch All Business Ads for the Home Page or Discovery Page
   Future<List<Map<String, dynamic>>> fetchBusinessAds() async {
@@ -511,21 +571,24 @@ class SupabaseService {
   }
 
   // ✅ CHECK IF BLOCKED
-  Future<bool> isUserBlocked(String blockerId, String blockedId) async {
+  Future<bool> isUserBlocked(String currentUserId, String targetUserId) async {
     try {
-      final existingBlock = await supabase
+      final result = await supabase
           .from('blocked_users')
           .select('id')
-          .eq('blocker_id', blockerId)
-          .eq('blocked_id', blockedId)
-          .maybeSingle();
+          .or('and(blocker_id.eq.$currentUserId,blocked_id.eq.$targetUserId),and(blocker_id.eq.$targetUserId,blocked_id.eq.$currentUserId)');
 
-      return existingBlock != null;
-    } catch (error) {
-      print("❌ Error checking block status: $error");
+      print("🔒 Block check result: $result");
+
+      return result.isNotEmpty;
+    } catch (e) {
+      print("❌ Error in isUserBlocked: $e");
       return false;
     }
   }
+
+
+
   // ✅ XP Scaling: Increases at a steady rate per level
   int _getXPThreshold(int level) {
     return 100 * level; // Keeps XP progression balanced
@@ -685,6 +748,36 @@ class SupabaseService {
     }
   }
 
+  Future<void> setActiveChat(String receiverId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase.from('active_chats').upsert({
+      'user_id': userId,
+      'chatting_with': receiverId,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> clearActiveChat() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase.from('active_chats').delete().eq('user_id', userId);
+  }
+
+  Future<bool> isUserChattingWith(String userId, String receiverId) async {
+    final result = await supabase
+        .from('active_chats')
+        .select()
+        .eq('user_id', receiverId)
+        .eq('chatting_with', userId)
+        .maybeSingle();
+
+    return result != null;
+  }
+
+
   Future<double> fetchAverageRating(String businessId) async {
     try {
       final response = await supabase
@@ -708,6 +801,12 @@ class SupabaseService {
     }
   }
 
+  Future<void> updateMessageStatus(String messageId, {bool seen = false, bool delivered = false}) async {
+    await supabase.from('messages').update({
+      if (seen) 'seen': true,
+      if (delivered) 'delivered': true,
+    }).eq('id', messageId);
+  }
 
   Future<void> markFirstMessagePopupShown(String userId, String receiverId) async {
     try {
@@ -849,6 +948,65 @@ class SupabaseService {
       return false;
     }
   }
+
+  // 🔮 1. Save Dream Journal Entry
+  Future<void> saveDream(String text) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase.from('dream_journal').insert({
+      'user_id': userId,
+      'text': text,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // 🧬 2. Save Past Life Journal Entry
+  Future<void> savePastLife(String text) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase.from('past_life_journal').insert({
+      'user_id': userId,
+      'text': text,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // 🌕 3. Log Moon Phase & Ritual
+  Future<void> logMoon(String phase, String ritual) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase.from('moon_logs').insert({
+      'user_id': userId,
+      'phase': phase,
+      'ritual': ritual,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // 🦉 4. Save Spirit Animal
+  Future<void> saveSpiritAnimal(String message) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase.from('spirit_animals').insert({
+      'user_id': userId,
+      'message': message,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // 📅 5. Save Calendar Event
+  Future<void> saveSpiritualEvent(String title, String date) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase.from('spiritual_events').insert({
+      'user_id': userId,
+      'event_title': title,
+      'event_date': date,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+
 
   Future<void> deleteBusinessAd(String ownerId) async {
     try {
@@ -1196,12 +1354,17 @@ class SupabaseService {
 
       print("✅ Friend request sent!");
       // ✅ Send notification after sending friend request
+      // 🔥 Fetch sender’s name
+      final senderProfile = await getUserProfile(senderId);
+      final senderName = senderProfile?.name ?? 'Someone';
+
       await createAndSendNotification(
         recipientId: receiverId,
         title: '👤 Friend Request',
-        body: 'You have a new friend request!',
+        body: '$senderName sent you a friend request!',
         type: 'friend_request',
       );
+
 
 
       print("✅ Friend request sent!");
@@ -1227,12 +1390,17 @@ class SupabaseService {
       ]);
 
       // ✅ Step 3: Send notification
+      // 🔥 Fetch the name of the user who accepted
+      final userProfile = await getUserProfile(userId);
+      final userName = userProfile?.name ?? 'Someone';
+
       await createAndSendNotification(
         recipientId: friendId,
         title: '🎉 Friend Request Accepted!',
-        body: 'You are now friends!',
+        body: '$userName accepted your friend request!',
         type: 'friend_accept',
       );
+
 
       print("✅ Friend request accepted and friendship created.");
       return true;
@@ -1284,34 +1452,18 @@ class SupabaseService {
     try {
       final response = await Supabase.instance.client
           .from('messages')
-          .select('id, sender_id, receiver_id, message, created_at') // ✅ fixed field name          .or('and(sender_id.eq.$userId,receiver_id.eq.$friendId),and(sender_id.eq.$friendId,receiver_id.eq.$userId)')
-          .order('created_at', ascending: true); // Show oldest first
+          .select('id, sender_id, receiver_id, message, created_at')
+          .or('and(sender_id.eq.$userId,receiver_id.eq.$friendId),and(sender_id.eq.$friendId,receiver_id.eq.$userId)')
+          .order('created_at', ascending: true);
 
       print("✅ Messages fetched: ${response.length}");
 
-      return response;
+      return List<Map<String, dynamic>>.from(response);
     } catch (error) {
       print("❌ Error fetching messages: $error");
       return [];
     }
   }
-  Future<List<Map<String, dynamic>>> fetchMessageThread(String userId, String receiverId) async {
-    try {
-      final response = await supabase
-          .from('messages')
-          .select('id, sender_id, receiver_id, message, created_at')
-          .or('and(sender_id.eq.$userId, receiver_id.eq.$receiverId), and(sender_id.eq.$receiverId, receiver_id.eq.$userId)')
-          .order('created_at', ascending: true);
-
-      print('✅ Fetched message thread. Count: ${response.length}');
-      return List<Map<String, dynamic>>.from(response);
-    } catch (error) {
-      print('❌ Error fetching message thread: $error');
-      return [];
-    }
-  }
-
-
 
   Future<String> getMysticBirthReading(String dob) async {
     final apiKey = dotenv.env['OPENROUTER_API_KEY'] ?? '';
@@ -1485,8 +1637,130 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchPastLifeEntries() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
 
+    try {
+      final response = await supabase
+          .from('past_life_journal')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
 
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching past life entries: $e');
+      return [];
+    }
+  }
+  Future<List<Map<String, dynamic>>> fetchMoonLogs() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
+
+    try {
+      final response = await supabase
+          .from('moon_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching moon logs: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSpiritAnimals() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
+
+    try {
+      final response = await supabase
+          .from('spirit_animals')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching spirit animal data: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchEventbriteEvents() async {
+    final apiKey = dotenv.env['EVENTBRITE_API_KEY'];
+
+    if (apiKey == null || apiKey.isEmpty) {
+      print("❌ No Eventbrite API Key found in .env");
+      return [];
+    }
+
+    try {
+      final url = Uri.parse(
+        'https://www.eventbriteapi.com/v3/events/search/?q=spirituality&location.address=london&token=$apiKey',
+      );
+
+      final response = await http.get(url);
+
+      print("📡 Status Code: ${response.statusCode}");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final events = List<Map<String, dynamic>>.from(data['events']);
+
+        print("✅ ${events.length} events fetched.");
+
+        return events.map((event) {
+          return {
+            'name': event['name']['text'] ?? 'Unnamed Event',
+            'startTime': event['start']['local'] ?? '',
+            'url': event['url'] ?? '',
+            'location': event['online_event'] == true ? 'Online' : 'In Person',
+          };
+        }).toList();
+      } else {
+        print("❌ Failed to fetch events: ${response.body}");
+        return [];
+      }
+    } catch (e) {
+      print("❌ Exception: $e");
+      return [];
+    }
+  }
+
+  Future<String> interpretDream(String dream) async {
+    final response = await http.post(
+      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${dotenv.env['OPENROUTER_API_KEY']}',
+      },
+      body: jsonEncode({
+        "model": "openai/gpt-3.5-turbo",
+        "messages": [
+          {
+            "role": "system",
+            "content":
+            "You are a spiritual dream interpreter. Given dream details, return a helpful and deep interpretation in under 100 words. Be clear and insightful."
+          },
+          {
+            "role": "user",
+            "content": dream
+          }
+        ]
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['choices'][0]['message']['content'];
+    } else {
+      throw Exception('Failed to interpret dream');
+    }
+  }
 
   // ✅ Fetch Friend List
   Future<List<Map<String, dynamic>>> getFriendsList(String userId) async {
@@ -1509,18 +1783,37 @@ class SupabaseService {
     try {
       final response = await supabase
           .from('blocked_users')
-          .select('blocked_id, profiles!blocked_id(name, avatar)')
+          .select('blocked_id, profiles:blocked_id (id, name, avatar)')
           .eq('blocker_id', userId);
 
-      // Debug output
       print('✅ Blocked users fetched: ${response.length} users.');
-
       return List<Map<String, dynamic>>.from(response);
     } catch (error) {
       print('❌ Error fetching blocked users: $error');
       return [];
     }
   }
+
+  Future<bool> isViewerBlocked(String viewerId, String profileOwnerId) async {
+    try {
+      final result = await Supabase.instance.client
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', profileOwnerId)  // Profile owner is the blocker
+          .eq('blocked_id', viewerId);       // Viewer is the blocked person
+
+      return result.isNotEmpty; // ✅ viewer has been blocked BY profile owner
+    } catch (e) {
+      print('❌ Error in isViewerBlocked: $e');
+      return false;
+    }
+  }
+
+
+
+
+
+
 
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     try {

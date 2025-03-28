@@ -304,7 +304,7 @@ class _AllAdsPageState extends State<AllAdsPage> {
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -325,22 +325,30 @@ class _AllAdsPageState extends State<AllAdsPage> {
               padding: const EdgeInsets.all(10),
               child: Column(
                 children: [
-                  Text(
-                    ad['name'] ?? '',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      ad['name'] ?? '',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   SizedBox(height: 6),
-                  Text(
-                    categories,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
+                  Flexible(
+                    child: Text(
+                      categories,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -351,6 +359,7 @@ class _AllAdsPageState extends State<AllAdsPage> {
       ),
     );
   }
+
 
   Widget _emptyState() {
     return Padding(

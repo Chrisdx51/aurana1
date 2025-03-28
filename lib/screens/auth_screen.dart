@@ -35,13 +35,31 @@ class _AuthScreenState extends State<AuthScreen> {
     if (response == null) return false;
 
     bool isComplete =
-        response['name'] != null && response['name'].toString().trim().isNotEmpty &&
-            response['bio'] != null && response['bio'].toString().trim().isNotEmpty &&
+        response['name'] != null && response['name']
+            .toString()
+            .trim()
+            .isNotEmpty &&
+            response['bio'] != null && response['bio']
+            .toString()
+            .trim()
+            .isNotEmpty &&
             response['dob'] != null &&
-            response['city'] != null && response['city'].toString().trim().isNotEmpty &&
-            response['country'] != null && response['country'].toString().trim().isNotEmpty &&
-            response['gender'] != null && response['gender'].toString().trim().isNotEmpty &&
-            response['privacy_setting'] != null && response['privacy_setting'].toString().trim().isNotEmpty;
+            response['city'] != null && response['city']
+            .toString()
+            .trim()
+            .isNotEmpty &&
+            response['country'] != null && response['country']
+            .toString()
+            .trim()
+            .isNotEmpty &&
+            response['gender'] != null && response['gender']
+            .toString()
+            .trim()
+            .isNotEmpty &&
+            response['privacy_setting'] != null && response['privacy_setting']
+            .toString()
+            .trim()
+            .isNotEmpty;
 
     return isComplete;
   }
@@ -106,15 +124,17 @@ class _AuthScreenState extends State<AuthScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => EditProfileScreen(
-                userId: userId,
-                forceComplete: true,
-              ),
+              builder: (context) =>
+                  EditProfileScreen(
+                    userId: userId,
+                    forceComplete: true,
+                  ),
             ),
           );
         }
       } else {
-        response = await supabase.auth.signInWithPassword(email: email, password: password);
+        response = await supabase.auth.signInWithPassword(
+            email: email, password: password);
 
         if (response.user != null) {
           final String userId = response.user!.id;
@@ -145,10 +165,11 @@ class _AuthScreenState extends State<AuthScreen> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => EditProfileScreen(
-                  userId: userId,
-                  forceComplete: true,
-                ),
+                builder: (context) =>
+                    EditProfileScreen(
+                      userId: userId,
+                      forceComplete: true,
+                    ),
               ),
             );
           }
@@ -156,7 +177,6 @@ class _AuthScreenState extends State<AuthScreen> {
           _showMessage("Couldn't log you in. Please check your credentials.");
         }
       }
-
     } on AuthException catch (e) {
       if (e.statusCode == 422 && e.message.contains('user_already_exists')) {
         _showMessage("This email is already registered. Try logging in.");
@@ -219,10 +239,12 @@ class _AuthScreenState extends State<AuthScreen> {
                   _typingEffect(),
                   const SizedBox(height: 20),
 
-                  _buildInputField(_emailController, "Email Address", Icons.email),
+                  _buildInputField(
+                      _emailController, "Email Address", Icons.email),
                   const SizedBox(height: 10),
 
-                  _buildInputField(_passwordController, "Password", Icons.lock, obscureText: true),
+                  _buildInputField(_passwordController, "Password", Icons.lock,
+                      obscureText: true),
                   const SizedBox(height: 20),
 
                   _isLoading
@@ -232,7 +254,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     height: 50,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.blue, Colors.white],
+                        colors: [
+                          Colors.black,
+                          Colors.deepPurple.withOpacity(0.8),
+                          Colors.white.withOpacity(0.85),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -260,7 +286,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 10),
 
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(10),
@@ -268,8 +295,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: TextButton(
                       onPressed: () => setState(() => _isSignUp = !_isSignUp),
                       child: Text(
-                        _isSignUp ? "Already a user? Log In" : "Don't have an account? Sign Up",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        _isSignUp
+                            ? "Already a user? Log In"
+                            : "Don't have an account? Sign Up",
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -294,8 +324,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildInputField(
-      TextEditingController controller,
+  Widget _buildInputField(TextEditingController controller,
       String label,
       IconData icon, {
         bool obscureText = false,
@@ -303,16 +332,23 @@ class _AuthScreenState extends State<AuthScreen> {
     return TextField(
       controller: controller,
       obscureText: obscureText,
+      style: TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: Colors.blue),
+        labelStyle: TextStyle(color: Colors.white70),
+        prefixIcon: Icon(icon, color: Colors.amberAccent),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.8),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        fillColor: Colors.black.withOpacity(0.4),
+        // 👈 transparent black
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
 }
+
 
 // ✅ Subscribing to notification topics
 void subscribeToTopics() {
